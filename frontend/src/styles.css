@@ -84,10 +84,15 @@ nav a:hover { background: #23271f; }
 .field > small { color: #7d8a6c; font-size: 10px; margin-top: 2px; line-height: 1.8; }
 .field label > small { display: block; color: #7a866b; font-size: 9px; margin-top: 5px; }
 .fields { display: grid; gap: 17px; }.fields.two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-.duration-options { display: flex; gap: 9px; }
+.duration-options { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 9px; }
 .duration-options button { flex: 1; font-size: 21px; font-weight: 450; padding: 13px 6px; background: #20261b; border-color: #38442e; }
 .duration-options button span { font-size: 10px; color: #8b9779; margin-left: 3px; }
 .duration-options button.selected { color: #e8c092; border-color: #9a8055; background: #393925; }
+.custom-duration { display: flex; align-items: center; gap: 12px; padding: 10px 13px; border: 1px solid #38442e; border-radius: 6px; background: #20261b; }
+.custom-duration.selected { border-color: #9a8055; }
+.custom-duration label, .custom-duration > span { flex-shrink: 0; font-size: 12px; color: #b7c1a5; }
+.custom-duration input { width: 150px; min-width: 0; margin-left: auto; padding: 8px 10px; }
+@media (max-width: 720px) { .duration-options { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
 .quality-options { display: grid; grid-template-columns: repeat(3, 1fr); gap: 9px; }
 .quality-options button { display: block; text-align: left; padding: 13px 11px; background: #20261b; border-color: #39452d; }
 .quality-options button.selected { border-color: #9b855c; background: #363a26; }

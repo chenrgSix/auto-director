@@ -113,9 +113,16 @@ def test_input_errors_secrets_and_cross_origin_protection(system):
     client, _, _ = system
     settings = client.get("/api/v1/settings").json()
     assert "llm_api_key" not in settings
+    assert settings["duration_policy"] == {
+        "min": 1,
+        "max": 600,
+        "presets": [5, 10, 15, 30, 60, 90],
+    }
     for payload in [
         {"idea": "  ", "target_duration": 5},
-        {"idea": "x", "target_duration": 31},
+        {"idea": "x", "target_duration": 0},
+        {"idea": "x", "target_duration": 601},
+        {"idea": "x", "target_duration": 600, "max_shot_duration": 600},
         {"idea": "x", "target_duration": 5, "width": 257, "height": 256},
     ]:
         assert client.post("/api/v1/episodes", json=payload).status_code == 422
@@ -143,7 +150,7 @@ def test_input_errors_secrets_and_cross_origin_protection(system):
     )
 
 
-@pytest.mark.parametrize("duration", [10, 15])
+@pytest.mark.parametrize("duration", [10, 15, 90])
 def test_longer_episode_exports_requested_duration(system, duration):
     client, _, _ = system
     id = client.post(
@@ -156,6 +163,36 @@ def test_longer_episode_exports_requested_duration(system, duration):
     assert abs(episode["final_duration"] - duration) <= 0.5
     assert len(episode["shots"]) == duration // 5
     assert all(shot["status"] == "PASSED" for shot in episode["shots"])
+
+
+def test_episode_duration_bounds_and_long_timeline_persist(system):
+    client, app, _ = system
+    for duration in [1, 5, 10, 15, 30, 31, 60, 90, 599.99, 600]:
+        response = client.post(
+            "/api/v1/episodes", json={"idea": "duration contract", "target_duration": duration}
+        )
+        assert response.status_code == 201, response.text
+        id = response.json()["id"]
+        assert client.get(f"/api/v1/episodes/{id}").json()["target_duration"] == duration
+    shots = [
+        {
+            "id": f"shot-{index}",
+            "index": index,
+            "duration": 1,
+            "enabled": True,
+            "transition_from_previous": "CUT",
+        }
+        for index in range(600)
+    ]
+    app.state.store.update("episode", id, {"shots": shots})
+    timeline = [{"id": shot["id"], "enabled": True} for shot in reversed(shots)]
+    changed = client.patch(f"/api/v1/episodes/{id}/timeline", json={"shots": timeline})
+    assert changed.status_code == 200, changed.text
+    saved = client.get(f"/api/v1/episodes/{id}").json()
+    assert len(saved["shots"]) == 600
+    assert saved["shots"][0]["id"] == "shot-599"
+    assert [shot["index"] for shot in saved["shots"]] == list(range(600))
+    assert saved["target_duration"] == 600
 
 
 def test_workflow_test_run_upload_and_default_protection(system):

@@ -145,6 +145,7 @@ async def compose(
     with tempfile.TemporaryDirectory(prefix="compose-", dir=output.parent) as temporary:
         root = Path(temporary)
         normalized = []
+        elapsed, previous_frame = Fraction(0), 0
         for index, (path, duration) in enumerate(clips):
             metadata = await probe(path)
             if not metadata["video"] or metadata["duration"] < duration - max(0.15, 1 / fps):
@@ -153,7 +154,11 @@ async def compose(
                     "视频片段短于镜头目标时长",
                     {"clip": index, "actual": metadata["duration"], "required": duration},
                 )
-            target = root / f"clip-{index:03d}.mp4"
+            elapsed += Fraction(str(duration))
+            end_frame = round(elapsed * fps)
+            frame_duration = (end_frame - previous_frame) / fps
+            previous_frame = end_frame
+            target = root / f"clip-{index:03d}.mov"
             args = [
                 "ffmpeg",
                 "-hide_banner",
@@ -173,11 +178,11 @@ async def compose(
                 "-map",
                 "0:a:0" if metadata["audio"] else "1:a:0",
                 "-vf",
-                f"scale={width}:{height}:force_original_aspect_ratio=decrease,pad={width}:{height}:(ow-iw)/2:(oh-ih)/2,setsar=1,fps={fps}",
+                f"scale={width}:{height}:force_original_aspect_ratio=decrease,pad={width}:{height}:(ow-iw)/2:(oh-ih)/2,setsar=1,setpts=PTS-STARTPTS,fps={fps},tpad=stop_mode=clone:stop_duration={1 / fps}",
                 "-af",
-                "aresample=48000,apad",
+                "aresample=48000,asetpts=PTS-STARTPTS,apad",
                 "-t",
-                str(duration),
+                str(frame_duration),
                 "-c:v",
                 "libx264",
                 "-preset",
@@ -187,7 +192,7 @@ async def compose(
                 "-pix_fmt",
                 "yuv420p",
                 "-c:a",
-                "aac",
+                "pcm_s16le",
                 "-ar",
                 "48000",
                 "-ac",
@@ -197,10 +202,13 @@ async def compose(
                 str(target),
             ]
             await run_process(*args, timeout=600)
-            normalized.append(target)
+            normalized.append((target, frame_duration))
         manifest = root / "concat.txt"
         await asyncio.to_thread(
-            manifest.write_text, "\n".join(f"file '{path.name}'" for path in normalized)
+            manifest.write_text,
+            "\n".join(
+                f"file '{path.name}'\nduration {duration:.9f}" for path, duration in normalized
+            ),
         )
         await run_process(
             "ffmpeg",
@@ -214,8 +222,12 @@ async def compose(
             "1",
             "-i",
             str(manifest),
-            "-c",
+            "-c:v",
             "copy",
+            "-c:a",
+            "aac",
+            "-t",
+            str(previous_frame / fps),
             "-movflags",
             "+faststart",
             str(output),

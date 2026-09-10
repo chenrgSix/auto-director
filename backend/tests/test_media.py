@@ -103,3 +103,36 @@ async def test_continuity_tail_uses_exported_duration_not_unused_video_frames(tm
     with Image.open(original_tail) as frame:
         red, _, blue = frame.convert("RGB").getpixel((32, 32))
         assert blue > 200 and red < 20
+
+
+@pytest.mark.parametrize("clip_duration", [5, 4.99])
+async def test_long_composition_does_not_accumulate_frame_or_audio_padding(tmp_path, clip_duration):
+    source = tmp_path / "source.mp4"
+    await run_process(
+        "ffmpeg",
+        "-v",
+        "error",
+        "-f",
+        "lavfi",
+        "-i",
+        "testsrc2=size=64x64:rate=16",
+        "-f",
+        "lavfi",
+        "-i",
+        "sine=frequency=440:sample_rate=48000",
+        "-t",
+        "5.2",
+        "-c:v",
+        "libx264",
+        "-c:a",
+        "aac",
+        str(source),
+    )
+    output = tmp_path / "long.mp4"
+    total = clip_duration * 120
+    result = await compose([(source, clip_duration)] * 120, output, 64, 64, 16)
+    assert abs(result["duration"] - total) < 0.1
+    assert int(result["video"]["nb_frames"]) == round(total * 16)
+    assert abs(float(result["audio"]["duration"]) - total) < 0.1
+    frame = await extract_frame(output, tmp_path / "last.png")
+    assert (await inspect_media(frame))["kind"] == "image"

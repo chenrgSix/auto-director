@@ -10,6 +10,7 @@ export type Workflow = {
   validation: { valid: boolean; issues: Problem[] } | null; workflow_hash: string; last_test_job_id: string | null;
 };
 export type Settings = {
+  duration_policy: { min: number; max: number; presets: number[] };
   comfyui_url: string; allow_public_comfyui: boolean; default_image: string; default_video: string;
   llm_base_url: string; llm_configured: boolean; llm_model: string; llm_api_key_configured: boolean;
   vlm_configured: boolean; vlm_model: string; max_asset_mb: number;

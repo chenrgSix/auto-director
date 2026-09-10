@@ -8,6 +8,7 @@ from fastapi import APIRouter, File, Query, Request, UploadFile
 from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel, Field
 
+from app.core.duration import DURATION_POLICY
 from app.core.errors import AppError
 from app.core.runtime_settings import SettingsPatch
 from app.db.store import uid
@@ -38,6 +39,7 @@ def settings(request: Request):
     return {
         "default_image": saved["default_image"],
         "default_video": saved["default_video"],
+        "duration_policy": DURATION_POLICY,
         **state.runtime_settings.public(),
     }
 

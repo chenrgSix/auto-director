@@ -1,20 +1,32 @@
 import json
 import math
+from collections.abc import Callable
+from fractions import Fraction
 
 from app.agents.provider import LLMProvider
-from app.agents.schemas import EpisodePlan, QAResult, ShotPrompts, Transition, VisualBible
+from app.agents.schemas import (
+    EpisodePlan,
+    PlanBatch,
+    QAResult,
+    ShotPrompts,
+    Transition,
+    VisualBible,
+)
+from app.core.duration import PLAN_BATCH_SHOTS
 from app.core.errors import AppError
 
 
-def normalize_plan(plan: EpisodePlan, total: float, maximum: float) -> EpisodePlan:
+def normalize_plan(
+    plan: EpisodePlan, total: float, maximum: float, *, first_segment: bool = True
+) -> EpisodePlan:
     """Allocate centiseconds within bounds, preserving feasible narrative proportions."""
     count = len(plan.shots)
-    target, limit = round(total * 100), math.floor(maximum * 100)
+    target, limit = round(total * 100), int(Fraction(str(maximum)) * 100)
     if count * 100 > target or count * limit < target:
         raise AppError(
             "LLM_INVALID_OUTPUT",
             "镜头数量无法满足每镜 1 秒至工作流上限及总时长",
-            {"min_shots": math.ceil(total / maximum), "max_shots": math.floor(total)},
+            {"min_shots": math.ceil(target / limit), "max_shots": target // 100},
         )
     durations = [100] * count
     remaining = target - sum(durations)
@@ -34,7 +46,8 @@ def normalize_plan(plan: EpisodePlan, total: float, maximum: float) -> EpisodePl
     for index, shot in enumerate(result.shots):
         shot.index = index
         shot.duration = durations[index] / 100
-    result.shots[0].transition_from_previous = Transition.ESTABLISHING_CUT
+    if first_segment:
+        result.shots[0].transition_from_previous = Transition.ESTABLISHING_CUT
     return result
 
 
@@ -82,25 +95,91 @@ class Directors:
     def __init__(self, provider: LLMProvider):
         self.provider = provider
 
-    async def plan(self, episode: dict, maximum: float) -> EpisodePlan:
+    async def plan(
+        self, episode: dict, maximum: float, *, check_cancel: Callable[[], None] = lambda: None
+    ) -> EpisodePlan:
+        total = round(episode["target_duration"] * 100)
+        limit = int(Fraction(str(maximum)) * 100)
+        count = math.ceil(total / limit)
+        if count * 100 > total:
+            raise AppError("LLM_INVALID_OUTPUT", "总时长无法按每镜至少 1 秒和工作流上限拆分")
+        length, remainder = divmod(total, count)
+        allocation = [length + (index < remainder) for index in range(count)]
+        segments = [
+            sum(allocation[index : index + PLAN_BATCH_SHOTS])
+            for index in range(0, count, PLAN_BATCH_SHOTS)
+        ]
+        shots, first = [], None
+        start = 0
+        for index, segment_duration in enumerate(segments):
+            check_cancel()
+            seconds = segment_duration / 100
+            context = {
+                "segment_index": index,
+                "segment_count": len(segments),
+                "episode_duration": episode["target_duration"],
+                "start_time": start / 100,
+                "is_final_segment": index == len(segments) - 1,
+                "previous_shots": [shot.model_dump(mode="json") for shot in shots[-3:]],
+            }
+            if first is not None:
+                context.update(episode_title=first.title, episode_logline=first.logline)
+            batch = await self.plan_segment(
+                {**episode, "target_duration": seconds}, limit / 100, context, check_cancel
+            )
+            check_cancel()
+            if first is None:
+                first = batch
+            for shot in batch.shots:
+                shot.index = len(shots)
+                shots.append(shot)
+            start += round(seconds * 100)
+        return EpisodePlan(
+            title=first.title,
+            logline=first.logline,
+            target_duration=episode["target_duration"],
+            shots=shots,
+        )
+
+    async def plan_segment(
+        self, episode: dict, maximum: float, segment: dict, check_cancel
+    ) -> EpisodePlan:
         context = {
             key: episode[key] for key in ("idea", "target_duration", "aspect_ratio", "style")
         }
         context.update(
-            min_shots=math.ceil(episode["target_duration"] / maximum),
-            max_shots=math.floor(episode["target_duration"]),
+            min_shots=math.ceil(
+                round(episode["target_duration"] * 100) / int(Fraction(str(maximum)) * 100)
+            ),
+            max_shots=min(PLAN_BATCH_SHOTS, math.floor(episode["target_duration"])),
             max_shot_duration=maximum,
+            **segment,
         )
         for attempt in range(2):
+            check_cancel()
             plan = await self.provider.generate_json(
-                "Act as Director. Plan a coherent single episode. One major visual action per shot. "
+                "Act as Director. Plan the current time segment of one coherent episode. "
+                "Use the entire idea and episode_duration for the overall story arc; keep title/logline about the whole episode. "
+                "Continue from previous_shots when present. Only resolve the full story in is_final_segment. "
+                "One major visual action per shot. "
                 "Choose camera variety and explicit transitions; do not force frame continuation across all shots. "
-                "Each shot must be at least one second and fit max_shot_duration. Match the target duration.",
+                "Each shot must be at least one second and fit max_shot_duration. Match this segment's target_duration.",
                 context,
-                EpisodePlan,
+                PlanBatch if segment["segment_count"] > 1 else EpisodePlan,
             )
             try:
-                return normalize_plan(plan, episode["target_duration"], maximum)
+                if len(plan.shots) > context["max_shots"]:
+                    raise AppError(
+                        "LLM_INVALID_OUTPUT",
+                        "单批镜头数量超出上限",
+                        {"max_shots": context["max_shots"]},
+                    )
+                return normalize_plan(
+                    plan,
+                    episode["target_duration"],
+                    maximum,
+                    first_segment=segment["segment_index"] == 0,
+                )
             except AppError as exc:
                 if attempt:
                     raise

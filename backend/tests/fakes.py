@@ -17,7 +17,7 @@ class FakeProvider:
 
     async def generate_json(self, system, context, schema, *, images=None):
         self.usage["calls"] += 1
-        if schema is EpisodePlan:
+        if issubclass(schema, EpisodePlan):
             count = context["min_shots"]
             data = {
                 "title": "Fixture episode",

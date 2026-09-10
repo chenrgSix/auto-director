@@ -3,11 +3,12 @@ import json
 import httpx
 import pytest
 
-from app.agents.directing import generation_budget, normalize_plan
+from app.agents.directing import Directors, generation_budget, normalize_plan
 from app.agents.provider import LLMProvider
-from app.agents.schemas import EpisodePlan, QAResult
+from app.agents.schemas import EpisodePlan, QAResult, Transition
 from app.core.config import Settings
 from app.core.errors import AppError
+from tests.fakes import FakeProvider
 
 
 def plan(count):
@@ -35,7 +36,8 @@ def plan(count):
 
 
 @pytest.mark.parametrize(
-    ("total", "maximum", "count"), [(5, 5, 2), (10, 3, 4), (15, 5, 5), (29.8, 3.2, 10)]
+    ("total", "maximum", "count"),
+    [(5, 5, 2), (10, 3, 4), (15, 5, 5), (29.8, 3.2, 10), (600, 5, 120), (600, 1, 600)],
 )
 def test_duration_allocation_exact_and_bounded(total, maximum, count):
     result = normalize_plan(plan(count), total, maximum)
@@ -94,3 +96,63 @@ def test_low_vram_changes_clip_budget():
     assert result["max_duration"] == 3
     assert result["low_memory"]
     assert result["width"] == 384
+
+
+class RecordingDirector(FakeProvider):
+    def __init__(self):
+        super().__init__()
+        self.contexts = []
+
+    async def generate_json(self, system, context, schema, *, images=None):
+        self.contexts.append(context.copy())
+        result = await super().generate_json(system, context, schema, images=images)
+        result.shots[0].transition_from_previous = Transition.CONTINUE_FRAME
+        return result
+
+
+@pytest.mark.parametrize(
+    ("total", "maximum"),
+    [(1, 5), (90, 5), (600, 5), (600, 1), (599, 1), (599.99, 3.2), (59.8, 1.15)],
+)
+async def test_long_plans_batch_with_continuity_and_exact_timeline(total, maximum):
+    provider = RecordingDirector()
+    result = await Directors(provider).plan(
+        {"idea": "A journey", "target_duration": total, "aspect_ratio": "9:16", "style": "film"},
+        maximum,
+    )
+    assert result.target_duration == total
+    assert sum(shot.duration for shot in result.shots) == pytest.approx(total)
+    assert all(1 <= shot.duration <= maximum for shot in result.shots)
+    assert [shot.index for shot in result.shots] == list(range(len(result.shots)))
+    assert result.shots[0].transition_from_previous == Transition.ESTABLISHING_CUT
+    elapsed, offset = 0, 0
+    for index, context in enumerate(provider.contexts):
+        assert context["episode_duration"] == total
+        assert context["start_time"] == pytest.approx(elapsed)
+        assert context["is_final_segment"] == (index == len(provider.contexts) - 1)
+        assert context["min_shots"] <= context["max_shots"] <= 12
+        if index:
+            assert context["episode_title"] == result.title
+            assert [shot["index"] for shot in context["previous_shots"]] == list(
+                range(offset - 3, offset)
+            )
+            assert result.shots[offset].transition_from_previous == Transition.CONTINUE_FRAME
+        offset += context["min_shots"]
+        elapsed += context["target_duration"]
+    assert elapsed == pytest.approx(total)
+
+
+async def test_cancel_during_batch_prevents_next_model_request():
+    provider = RecordingDirector()
+
+    def check_cancel():
+        if provider.contexts:
+            raise AppError("CANCELLED", "cancelled")
+
+    with pytest.raises(AppError, match="cancelled"):
+        await Directors(provider).plan(
+            {"idea": "journey", "target_duration": 600, "aspect_ratio": "9:16", "style": "film"},
+            5,
+            check_cancel=check_cancel,
+        )
+    assert len(provider.contexts) == 1

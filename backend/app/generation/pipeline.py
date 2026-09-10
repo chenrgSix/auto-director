@@ -342,7 +342,9 @@ class GenerationService:
                 id, "PLANNING", budget=budget, started_at=episode.get("started_at") or now()
             )
             if not episode["plan"]:
-                plan = await agents.plan(episode, budget["max_duration"])
+                plan = await agents.plan(
+                    episode, budget["max_duration"], check_cancel=lambda: self.check_cancel(id)
+                )
                 shots = [
                     {
                         **shot.model_dump(mode="json"),

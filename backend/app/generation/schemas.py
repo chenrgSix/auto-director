@@ -3,11 +3,12 @@ from typing import Any, Literal
 from pydantic import Field, model_validator
 
 from app.agents.schemas import StrictModel
+from app.core.duration import MAX_EPISODE_SECONDS, MAX_EPISODE_SHOTS, MIN_EPISODE_SECONDS
 
 
 class EpisodeCreate(StrictModel):
     idea: str = Field(min_length=1, max_length=2000)
-    target_duration: float = Field(ge=1, le=30)
+    target_duration: float = Field(ge=MIN_EPISODE_SECONDS, le=MAX_EPISODE_SECONDS)
     aspect_ratio: Literal["9:16", "16:9", "1:1"] = "9:16"
     style: str = Field(default="自然纪录片", max_length=200)
     quality: Literal["fast", "standard", "high"] = "standard"
@@ -42,7 +43,7 @@ class TimelineItem(StrictModel):
 
 
 class TimelineUpdate(StrictModel):
-    shots: list[TimelineItem] = Field(min_length=1, max_length=30)
+    shots: list[TimelineItem] = Field(min_length=1, max_length=MAX_EPISODE_SHOTS)
 
 
 class TestRun(StrictModel):

@@ -40,6 +40,10 @@ Binding 为 `{node_id, input, transform}`；`transform` 默认 `identity`，可�
 
 ## 调用示例
 
+`EpisodeCreate.target_duration` 接受 **1～600 秒**，与 `max_shot_duration` 分开校验。后者仍为 1～30 秒，并受所选工作流能力和显存预算进一步约束。总时长超出范围返回 422；600 秒请求通过多个镜头完成。
+
+`GET/PATCH /settings` 响应包含只读产品策略 `duration_policy: {"min":1,"max":600,"presets":[5,10,15,30,60,90]}`。首页据此生成预设和自定义输入边界；该字段不接受 PATCH 修改。
+
 请求体与响应字段的完整类型见运行中的 `/docs` 和 `/openapi.json`。生成为异步操作：
 
 ```http
@@ -53,7 +57,7 @@ Content-Type: application/json
 
 上传为 multipart 字段 `file`，返回 Asset；工作流试跑请求通过 `asset_bindings` 将角色关联到资产 ID，例如 `{"values":{"prompt":"A lion walking","duration":2,"fps":16},"asset_bindings":{"start_frame":"<asset_id>","end_frame":"<asset_id>"}}`。视频试跑要求相应首尾帧已上传。
 
-时间线 PATCH 必须提供全部镜头 ID，且不重复、至少启用一个，例如 `{"shots":[{"id":"<shot_id>","enabled":true}]}`。不直接编辑生成中的镜头；发生依赖失效后先重新生成，再 compose。
+时间线 PATCH 必须提供全部镜头 ID，且不重复、至少启用一个，例如 `{"shots":[{"id":"<shot_id>","enabled":true}]}`。当前最多 600 个镜头，按成片上限 / 每镜最短 1 秒推导；镜头索引为 0～599。不直接编辑生成中的镜头；发生依赖失效后先重新生成，再 compose。
 
 ## 状态与错误
 

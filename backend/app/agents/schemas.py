@@ -2,6 +2,15 @@ from enum import StrEnum
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.core.duration import (
+    MAX_EPISODE_SECONDS,
+    MAX_EPISODE_SHOTS,
+    MAX_SHOT_SECONDS,
+    MIN_EPISODE_SECONDS,
+    MIN_SHOT_SECONDS,
+    PLAN_BATCH_SHOTS,
+)
+
 
 class StrictModel(BaseModel):
     model_config = ConfigDict(extra="forbid", allow_inf_nan=False)
@@ -19,9 +28,9 @@ class Transition(StrEnum):
 
 
 class ShotPlan(StrictModel):
-    index: int = Field(ge=0, le=30)
+    index: int = Field(ge=0, lt=MAX_EPISODE_SHOTS)
     title: str = Field(min_length=1, max_length=200)
-    duration: float = Field(ge=1, le=30)
+    duration: float = Field(ge=MIN_SHOT_SECONDS, le=MAX_SHOT_SECONDS)
     purpose: str = Field(min_length=1, max_length=1000)
     action: str = Field(min_length=1, max_length=2000)
     camera: str = Field(min_length=1, max_length=1000)
@@ -33,8 +42,12 @@ class ShotPlan(StrictModel):
 class EpisodePlan(StrictModel):
     title: str = Field(min_length=1, max_length=200)
     logline: str = Field(min_length=1, max_length=2000)
-    target_duration: float = Field(ge=1, le=30)
-    shots: list[ShotPlan] = Field(min_length=1, max_length=30)
+    target_duration: float = Field(ge=MIN_EPISODE_SECONDS, le=MAX_EPISODE_SECONDS)
+    shots: list[ShotPlan] = Field(min_length=1, max_length=MAX_EPISODE_SHOTS)
+
+
+class PlanBatch(EpisodePlan):
+    shots: list[ShotPlan] = Field(min_length=1, max_length=PLAN_BATCH_SHOTS)
 
 
 class CharacterBible(StrictModel):
