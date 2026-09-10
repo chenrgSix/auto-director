@@ -13,6 +13,50 @@ from app.core.config import Settings
 from app.core.errors import AppError
 
 T = TypeVar("T", bound=BaseModel)
+MODEL_TIMEOUT_SECONDS = 120
+
+
+def model_request_error(exc: httpx.RequestError) -> AppError:
+    details = {"exception_type": type(exc).__name__}
+    if isinstance(exc, httpx.TimeoutException):
+        phase = next(
+            (
+                name
+                for kind, name in [
+                    (httpx.ConnectTimeout, "建立连接"),
+                    (httpx.ReadTimeout, "等待模型响应"),
+                    (httpx.WriteTimeout, "发送请求"),
+                    (httpx.PoolTimeout, "等待连接池"),
+                ]
+                if isinstance(exc, kind)
+            ),
+            "模型请求",
+        )
+        return AppError(
+            "LLM_TIMEOUT", f"{phase}超时，请稍后重试或检查模型服务负载", details, status=504
+        )
+    if isinstance(exc, httpx.ConnectError):
+        return AppError(
+            "LLM_CONNECT_ERROR",
+            "无法连接模型服务，请检查端点、网络与 TLS 证书",
+            details,
+            status=502,
+        )
+    return AppError(
+        "LLM_NETWORK_ERROR", "模型请求连接中断或通信失败，请稍后重试", details, status=502
+    )
+
+
+def model_http_error(status: int) -> AppError:
+    code, message = {
+        401: ("LLM_AUTH_FAILED", "模型服务鉴权失败，请检查 API 密钥"),
+        403: ("LLM_ACCESS_DENIED", "模型服务拒绝访问，请检查账号与模型权限"),
+        404: ("LLM_NOT_FOUND", "模型或接口不存在，请检查模型名称与 API 端点"),
+        429: ("LLM_RATE_LIMITED", "模型服务限流或额度不足，请检查配额后重试"),
+        400: ("LLM_REQUEST_REJECTED", "模型服务拒绝请求，请检查模型对 JSON/图像输入的支持"),
+        422: ("LLM_REQUEST_REJECTED", "模型服务拒绝请求，请检查模型对 JSON/图像输入的支持"),
+    }.get(status, ("LLM_UPSTREAM_ERROR", "模型服务响应异常，请检查端点或稍后重试"))
+    return AppError(code, f"{message}（HTTP {status}）", {"http_status": status}, status=502)
 
 
 def vision_data(path: Path) -> str:
@@ -34,7 +78,8 @@ class LLMProvider:
     async def generate_json(
         self, system: str, context: dict, schema: type[T], *, images: list[Path] | None = None
     ) -> T:
-        model = self.settings.vlm_model if images else self.settings.llm_model
+        settings = self.settings.model_copy(deep=True)
+        model = settings.vlm_model if images else settings.llm_model
         if not model:
             raise AppError(
                 "CONFIGURATION_REQUIRED",
@@ -67,12 +112,10 @@ class LLMProvider:
             {"role": "user", "content": content},
         ]
         headers = (
-            {"Authorization": f"Bearer {self.settings.llm_api_key}"}
-            if self.settings.llm_api_key
-            else {}
+            {"Authorization": f"Bearer {settings.llm_api_key}"} if settings.llm_api_key else {}
         )
         async with httpx.AsyncClient(
-            timeout=120,
+            timeout=MODEL_TIMEOUT_SECONDS,
             headers=headers,
             trust_env=False,
             follow_redirects=False,
@@ -81,7 +124,7 @@ class LLMProvider:
             for attempt in range(2):
                 try:
                     response = await client.post(
-                        self.settings.llm_base_url.rstrip("/") + "/chat/completions",
+                        settings.llm_base_url.rstrip("/") + "/chat/completions",
                         json={
                             "model": model,
                             "messages": messages,
@@ -89,15 +132,9 @@ class LLMProvider:
                         },
                     )
                 except httpx.RequestError as exc:
-                    raise AppError(
-                        "LLM_UNAVAILABLE", "模型服务无法连接或响应超时", status=502
-                    ) from exc
+                    raise model_request_error(exc) from exc
                 if response.status_code != 200:
-                    raise AppError(
-                        "LLM_UNAVAILABLE",
-                        f"模型服务返回 HTTP {response.status_code}，请检查端点、模型、JSON/vision 支持与凭据",
-                        status=502,
-                    )
+                    raise model_http_error(response.status_code)
                 try:
                     data = response.json()
                     usage = data.get("usage") or {}
@@ -113,7 +150,14 @@ class LLMProvider:
                     if not isinstance(raw, str) or len(raw) > 100000:
                         raise ValueError("invalid output size/type")
                     return schema.model_validate_json(raw)
-                except (ValueError, KeyError, IndexError, TypeError, ValidationError) as exc:
+                except (
+                    ValueError,
+                    KeyError,
+                    IndexError,
+                    TypeError,
+                    AttributeError,
+                    ValidationError,
+                ) as exc:
                     if attempt:
                         raise AppError(
                             "LLM_INVALID_OUTPUT",

@@ -4,6 +4,12 @@
 
 Base `/api/v1`，JSON；ID 由服务端生成；UTC ISO 时间。验证失败 422，不存在 404，状态冲突 409，外部执行失败提供可读 `error.code/message/details`。仅本地单用户使用，默认绑定 loopback；跨域与公网 ComfyUI 需要显式配置。
 
+### 模型测试（C09）
+
+`POST /models/test` 接收 `{ "kind": "director" | "vision" }`，只使用已保存的端点、模型和密钥，调用与生成相同的 JSON Provider。导演测试最小 JSON；视觉测试附带临时色块图片并校验识别结果，文件随后删除。模型诊断结果返回 200 / `{kind, model, success, elapsed_seconds, timeout_seconds, checks, error}`；未配置、鉴权/限流、请求错误和无效 JSON 记录在 error 中，非法请求字段仍返回 422。
+
+测试总截止时间为 120 秒，浏览器断开时取消下游等待。不保存配置、不创建 Episode/Job/Asset，不返回密钥、请求正文或上游原始报错。测试通过仅表示小请求的 JSON/图像输入检查成功，不代表长任务或视觉质量验收。
+
 ### 更换已创建短片的工作流（C08）
 
 `PATCH /episodes/{id}/workflows` 接收 `expected_version`（详情响应的 version）及显式 `image_workflow_id`、`reference_workflow_id`、`video_workflow_id`。参考项必须为 TEXT_TO_IMAGE，其余按媒体类型校验；全部要求本地绑定完整，不请求 AI/ComfyUI。版本过期、Episode 运行或仍有 QUEUED/RUNNING/UNKNOWN 作业返回 409，失败不修改数据。

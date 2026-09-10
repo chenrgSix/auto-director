@@ -8,6 +8,7 @@ from fastapi import APIRouter, File, Query, Request, UploadFile
 from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel, Field
 
+from app.agents.diagnostics import ModelTestRequest, check_model
 from app.core.errors import AppError
 from app.core.limits import DURATION_POLICY, LIMITS
 from app.core.runtime_settings import SettingsPatch
@@ -86,6 +87,33 @@ async def comfy_status(request: Request):
             {"id": profile["id"], "name": profile["name"], "validation": validated["validation"]}
         )
     return {"connected": True, "system": system, "node_count": len(info), "workflows": profiles}
+
+
+@router.post("/models/test")
+async def test_model(request: Request, body: ModelTestRequest):
+    async def disconnected():
+        while True:
+            if (await request.receive())["type"] == "http.disconnect":
+                return
+
+    state = resources(request)
+    probe = asyncio.create_task(
+        check_model(
+            state.config.model_copy(deep=True),
+            state.generation.provider_factory(),
+            body.kind,
+        )
+    )
+    disconnect = asyncio.create_task(disconnected())
+    try:
+        done, _ = await asyncio.wait({probe, disconnect}, return_when=asyncio.FIRST_COMPLETED)
+        if probe in done:
+            return probe.result()
+        raise AppError("REQUEST_CANCELLED", "已取消模型测试", status=499)
+    finally:
+        for task in (probe, disconnect):
+            task.cancel()
+        await asyncio.gather(probe, disconnect, return_exceptions=True)
 
 
 @router.get("/workflows")

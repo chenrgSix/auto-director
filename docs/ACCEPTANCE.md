@@ -186,3 +186,16 @@ P0 + Phase 1/2 MVP 的本地工程闭环已完成。ComfyUI/LLM/VLM 依赖使用
 - 确认正式服务没有活动 Episode/Job 后重启 8000；健康检查 200，OpenAPI 已注册更换接口。原失败短片实际显示旧绑定，当前默认填充为用户导入的图像/视频 ID，保存按钮可用；随后取消，原计划与 FAILED 状态未修改。1280px 视口无横向溢出。截图：[更换工作流表单](evidence/episode-workflow-rebinding.png)。
 
 测试依赖为模拟 ComfyUI/模型和合成媒体，FFmpeg 实际执行；本轮未进行真实模型生成、移动端专项验收或远端 CI。原失败短片需用户保存新绑定后再继续生成，真实工作流依赖与效果仍需实际运行验证。
+
+## C09 模型测试与错误诊断（2026-09-10）
+
+最终完整 `make check` 通过：**187 passed**、无跳过，pytest 63.30 秒；56 个 Python 文件 Ruff/格式、ESLint、TypeScript、Vite 构建通过。新增 22 项回归，既有 165 项全部保留；仅有既有 Starlette/httpx、AnyIO 弃用提醒。
+
+- 22 项新增回归：导演/视觉分别选择已保存模型与 Bearer 密钥，实际构造 Chat Completions JSON 请求；视觉传入可解码的 32×32 蓝色 JPEG。响应不含密钥，测试不新增或修改 settings/workflow/episode/job/asset。
+- HTTP 401/403/404/429/400/422/503 与 Connect/Read/Write/Pool timeout、ConnectError、RemoteProtocolError 分类验证；上游报错和异常中嵌入测试密钥，断言响应不泄露原文。
+- 无效 JSON、错误字段、错误色块识别及畸形响应外壳均失败，不误报成功；缺少模型和非法请求不发起请求。短截止时间与浏览器断开均取消等待并清理临时图片。
+- 隔离浏览器测试导演和视觉成功；修改模型立即清除旧结果并提示先保存。`TEST-AUTH-FAIL` 显示鉴权失败/HTTP 401，`TEST-SLOW` 等待中取消按钮可用，取消后按钮恢复；再次等待时编辑配置也会取消旧请求，不回填旧结果。
+- 正式服务重启后，在设置页使用现有端点 `https://open.bigmodel.cn/api/paas/v4` 和 `glm-5.3` 实际点击导演测试，**7.82 秒**收到符合 schema 的 JSON。截图：[真实模型测试](evidence/model-test-live.png)。视觉模型为空，按钮禁用并提供提示；没有改动端点、密钥或模型配置。
+- 原失败短片 `43a9ba95-46cb-4d97-b836-051c42de9c17` 仍为 FAILED，updated_at 仍为 `2026-09-10T15:09:22.206427+00:00`，渲染作业仍为 0。
+
+真实导演测试仅证明当次最小请求可用，不证明此前失败是何种网络异常，也不代表较大 Visual Bible 请求、真实视觉模型、ComfyUI 生成、移动端或远端 CI 已验收。

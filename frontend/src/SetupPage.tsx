@@ -6,6 +6,7 @@ import type { Notify } from './App';
 import type { Job, Settings } from './types';
 import { JobList } from './EpisodePage';
 import { ErrorNotice, Loading } from './ui';
+import { ModelTests } from './ModelTests';
 
 type Connection = { connected: boolean; node_count: number; system: { devices?: { name?: string; vram_total?: number; vram_free?: number }[] }; workflows: { id: string; name: string; validation: { valid: boolean; issues: { message?: string; code: string; class_type?: string; field?: string }[] } }[] };
 const editable = ['comfyui_url', 'allow_public_comfyui', 'llm_base_url', 'llm_model', 'vlm_model', 'render_timeout', 'request_timeout', 'max_asset_mb', 'poll_interval'] as const;
@@ -28,6 +29,8 @@ export default function SetupPage({ notify, onChange }: { notify: Notify; onChan
   const [problem, setProblem] = useState<string>();
   const [savedMessage, setSavedMessage] = useState(false);
   const [busy, setBusy] = useState<'save' | 'test' | null>(null);
+  const [modelTestVersion, setModelTestVersion] = useState(0);
+  const [modelTesting, setModelTesting] = useState(false);
 
   useEffect(() => {
     if (resource.data) { setSaved(resource.data); setDraft(resource.data); }
@@ -35,6 +38,7 @@ export default function SetupPage({ notify, onChange }: { notify: Notify; onChan
 
   const dirty = !!draft && !!saved && (editable.some(key => draft[key] !== saved[key]) || !!keyValue.trim() || clearKey);
   function change<K extends keyof Draft>(key: K, value: Draft[K]) {
+    setModelTestVersion(value => value + 1);
     setDraft(current => current ? { ...current, [key]: value } : current);
     setSavedMessage(false);
     setProblem(undefined);
@@ -42,7 +46,7 @@ export default function SetupPage({ notify, onChange }: { notify: Notify; onChan
 
   async function save(event: FormEvent) {
     event.preventDefault();
-    if (!draft || !saved || !dirty) return;
+    if (!draft || !saved || !dirty || modelTesting) return;
     setBusy('save'); setProblem(undefined); setSavedMessage(false);
     const changes: Record<string, unknown> = {};
     for (const key of editable) if (draft[key] !== saved[key]) changes[key] = draft[key];
@@ -51,6 +55,7 @@ export default function SetupPage({ notify, onChange }: { notify: Notify; onChan
     try {
       const updated = await api<Settings>('/settings', 'PATCH', changes);
       setSaved(updated); setDraft(updated); setKeyValue(''); setClearKey(false);
+      setModelTestVersion(value => value + 1);
       setConnection(undefined); setSavedMessage(true); onChange();
       notify('配置已保存并生效');
     } catch (error) { setProblem((error as Error).message); }
@@ -84,7 +89,7 @@ export default function SetupPage({ notify, onChange }: { notify: Notify; onChan
           </div>
           <label className="checkbox"><input type="checkbox" checked={draft.allow_public_comfyui} onChange={event => change('allow_public_comfyui', event.target.checked)} />允许公网 ComfyUI 地址</label>
           <div className="settings-test">
-            <button type="button" disabled={!!busy || dirty} onClick={() => void connect()}><Link2 size={16} />{busy === 'test' ? '正在检测…' : '检测 ComfyUI'}</button>
+            <button type="button" disabled={!!busy || dirty || modelTesting} onClick={() => void connect()}><Link2 size={16} />{busy === 'test' ? '正在检测…' : '检测 ComfyUI'}</button>
             {dirty && <small className="muted">先保存更改，再检测连接。</small>}
           </div>
           {connection && <div className="connection-result">
@@ -108,14 +113,15 @@ export default function SetupPage({ notify, onChange }: { notify: Notify; onChan
           <div className="field">
             <label htmlFor="vlm-model">视觉 QA 模型名称（可选）</label>
             <input id="vlm-model" maxLength={200} value={draft.vlm_model} onChange={event => change('vlm_model', event.target.value)} placeholder="支持图像输入的模型，留空跳过视觉 QA" />
-            <small>视觉模型共用上方端点和密钥；模型可用性在生成时验证。</small>
+            <small>视觉模型共用上方端点和密钥；可通过下方按钮测试图像输入。</small>
           </div>
           <div className="field">
             <label htmlFor="llm-api-key">API 密钥</label>
-            <input id="llm-api-key" type="password" autoComplete="new-password" maxLength={4096} value={keyValue} disabled={clearKey || !!busy} onChange={event => { setKeyValue(event.target.value); setSavedMessage(false); setProblem(undefined); }} placeholder={saved.llm_api_key_configured ? '已保存密钥，留空保持不变' : '无需认证的服务可留空'} />
+            <input id="llm-api-key" type="password" autoComplete="new-password" maxLength={4096} value={keyValue} disabled={clearKey || !!busy} onChange={event => { setKeyValue(event.target.value); setSavedMessage(false); setProblem(undefined); setModelTestVersion(value => value + 1); }} placeholder={saved.llm_api_key_configured ? '已保存密钥，留空保持不变' : '无需认证的服务可留空'} />
             <small>{saved.llm_api_key_configured ? '后端已有密钥。输入新值可替换，保存后输入框会清空。' : '密钥仅存储在本机后端，不会通过读取接口返回。'}</small>
-            {saved.llm_api_key_configured && <label className="checkbox"><input type="checkbox" checked={clearKey} onChange={event => { setClearKey(event.target.checked); setKeyValue(''); setSavedMessage(false); }} />清除已保存的密钥</label>}
+            {saved.llm_api_key_configured && <label className="checkbox"><input type="checkbox" checked={clearKey} onChange={event => { setClearKey(event.target.checked); setKeyValue(''); setSavedMessage(false); setModelTestVersion(value => value + 1); }} />清除已保存的密钥</label>}
           </div>
+          <ModelTests key={modelTestVersion} settings={saved} disabled={!!busy} dirty={dirty} onPending={setModelTesting} />
         </section>
         <details className="panel full-span settings-advanced">
           <summary><SlidersHorizontal size={16} />运行参数</summary>
@@ -129,7 +135,7 @@ export default function SetupPage({ notify, onChange }: { notify: Notify; onChan
         <div className="full-span settings-save">
           {problem && <ErrorNotice>{problem}</ErrorNotice>}
           {savedMessage && <div className="success-text" role="status"><CheckCircle2 size={16} />配置已保存并生效，无需重启。</div>}
-          <div className="settings-save-row"><p className="muted">{dirty ? '有尚未保存的更改。' : '页面配置会保留到下次启动。'} 任务执行中需等待结束后再保存。</p><button type="submit" className="primary" disabled={!!busy || !dirty}><Save size={16} />{busy === 'save' ? '正在保存…' : '保存配置'}</button></div>
+          <div className="settings-save-row"><p className="muted">{dirty ? '有尚未保存的更改。' : '页面配置会保留到下次启动。'} 任务执行中需等待结束后再保存。</p><button type="submit" className="primary" disabled={!!busy || !dirty || modelTesting}><Save size={16} />{busy === 'save' ? '正在保存…' : '保存配置'}</button></div>
         </div>
         <section className="panel full-span">
           <div className="panel-title">03 · 开始生成前</div>

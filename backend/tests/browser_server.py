@@ -12,7 +12,9 @@ from pathlib import Path
 
 import uvicorn
 
+from app.agents.diagnostics import DirectorProbe, VisionProbe
 from app.core.config import Settings
+from app.core.errors import AppError
 from app.main import create_app
 from app.media.service import run_process
 from app.workflows.recognition import WorkflowRecognition
@@ -20,7 +22,19 @@ from tests.fakes import FakeComfy, FakeProvider
 
 
 class BrowserProvider(FakeProvider):
+    def __init__(self, config):
+        super().__init__()
+        self.config = config
+
     async def generate_json(self, system, context, schema, *, images=None):
+        if schema in (DirectorProbe, VisionProbe):
+            # Explicit diagnostic fixtures, selected through the settings editor.
+            model = self.config.vlm_model if images else self.config.llm_model
+            if model == "TEST-SLOW":
+                await asyncio.Event().wait()
+            if model == "TEST-AUTH-FAIL":
+                raise AppError("LLM_AUTH_FAILED", "模型服务鉴权失败（HTTP 401）")
+            return schema.model_validate({"color": "blue"} if images else {"result": "ok"})
         if issubclass(schema, WorkflowRecognition):
             # Fixed UI-only response, never used by the real application's provider.
             if "slow_fixture" in context["workflow"]:
@@ -75,7 +89,11 @@ def main():
             poll_interval=0.02,
         )
         comfy = FakeComfy(config, clip.read_bytes())
-        app = create_app(config, client_factory=comfy.client, provider_factory=BrowserProvider)
+        app = create_app(
+            config,
+            client_factory=comfy.client,
+            provider_factory=lambda: BrowserProvider(app.state.config),
+        )
         print("BROWSER ACCEPTANCE FIXTURE: synthetic media, no real model service", flush=True)
         uvicorn.run(app, host="127.0.0.1", port=int(os.environ.get("AD_BROWSER_TEST_PORT", "8011")))
 
