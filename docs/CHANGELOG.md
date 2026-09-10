@@ -1,5 +1,11 @@
 # 迭代记录
 
+## 2026-09-10 · C04 Capability Router 与完整收尾
+
+- 新增 CapabilityRouter 基础层，按四类 default_capabilities 查询，保留显式 ID、旧媒体默认项和同能力回退；已创建 Episode 固定所选 ID。
+- 创建、生成和低显存替代入口接入路由；保持现有 UI 流程，缺失/错误能力映射明确报错。
+- 完整 `make check` 为 **119 passed**（56.50 秒，无跳过）；Ruff/格式、ESLint、TypeScript、Vite 构建通过。新增共 28 项用例，已有 91 项回归全部通过。真实模型和远端 CI 未执行。
+
 ## 2026-09-10 · C04 通用 AI-owned 动态参数
 
 - Bible/Shot 输出增加按 workflow ID 隔离的 `ai_parameters`，schema 及服务端只接受当前 owner=ai 的键，严格执行类型、范围和枚举约束。

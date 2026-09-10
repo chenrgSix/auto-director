@@ -101,3 +101,16 @@ P0 + Phase 1/2 MVP 的本地工程闭环已完成。ComfyUI/LLM/VLM 依赖使用
 截图：[默认模式](evidence/capability-default-mode.png)、[高级移动表单](evidence/capability-advanced-mobile.png)、[owner 与覆盖规则](evidence/workflow-owners.png)。默认/高级模式截图来自正式页面，owner 规则保存截图来自隔离夹具；生成媒体均为合成测试素材。
 
 未安装 ComfyUI/权重、未执行真实模型生成或视觉/性能验收；没有将四类 capability 支持等同于四套已验证的模型模板。内置仍为文生图和首尾帧视频，图生图/I2V 通过导入使用。远端 CI/生产准入未执行。
+
+## C04 能力分支、AI 参数与路由收尾（2026-09-10）
+
+完整 `make check` 成功：**119 passed**，无跳过，pytest 56.50 秒；50 个 Python 文件 Ruff/格式、前端 ESLint/TypeScript/Vite 构建全部通过。相对 C03 新增 28 项用例；保留原有 91 项，并加强 I2V 的资产/作业断言。仅有既有 Starlette/httpx 和 AnyIO 弃用提醒。
+
+- I2V 6 秒双镜生成断言没有 SHOT_END_FRAME 作业、没有 end_frame 素材绑定、每次关键帧 QA 仅一个资产；实际视频尾帧存在，下一镜仍继承它。转场 QA 失败只重新生成首帧和视频。
+- OOM 回归同时覆盖 I2V/FLF、重试预算不足、短分段和重命名节点的替代模板。I2V 不产生 SHOT_INTERMEDIATE_FRAME，分段仍继承上一段实际尾帧并保持时间线；FLF 保留目标首尾帧行为。
+- Bible/Shot 的自定义 `sampler.denoise` 在同名键的图像/视频 workflow 中分别生成不同值，最终 patched_workflow 与 ComfyUI 夹具实际接收的 JSON 一致；用户高级覆盖优先，默认模式下用户锁不妨碍 AI 自动填写，模板保持不变。
+- schema 与 Resolver 拒绝未知 workflow/key、错误 owner、数字字符串、布尔冒充数字、小数冒充整数、越界、非法枚举、null/嵌套对象、NaN/Infinity；非法 AI 值不能被有效用户覆盖掩盖。真实 Provider JSON 校验路径沿用一次纠正机会；两次非法则 Episode 失败，未提交任何镜头渲染。执行前 object_info 约束变化也会阻止 /prompt。
+- Router 验证四类能力默认项、显式 ID、旧媒体默认回退、只有能力映射的设置、缺失/错误能力拒绝。图生图 + I2V 路由集成在创建后更改默认项，仍使用原 Episode ID 选择完成真实 FFmpeg 合成。
+- 旧数据缺少 ai_parameters/ai_parameter_values 时按空映射处理，无数据库版本升级；原有迁移、UNKNOWN 恢复、60/90 秒规划及长视频 FFmpeg 回归全部通过。
+
+本轮未部署 ComfyUI/模型、未调用真实 AI 服务、未重跑浏览器验收，也未执行远端 CI 或生产验收。

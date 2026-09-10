@@ -4,7 +4,7 @@
 
 范围固定为：I2V 只生成首帧（包括 QA、重试与 OOM 分段）；Bible/Shot 输出受当前 workflow owner/type/min/max/enum 约束的 `ai_parameters`，进入最终 patch 且用户高级覆盖优先；新增按 `default_capabilities` 查询的基础路由，兼容显式 workflow ID。保持现有架构、UI、数据库记录与生成恢复逻辑。
 
-状态：**IN_PROGRESS**。验收覆盖 I2V 无尾帧/中间帧渲染、FLF 保留首尾帧、任意 AI-owned 参数与拒绝非法值、四类能力路由与显式 ID 优先，最后执行完整 `make check`。不扩展其他功能。
+状态：**VERIFIED（本地工程门禁）**。完整 `make check` 为 **119 passed**，无跳过；Ruff/格式、ESLint、TypeScript 与构建全部通过。新增 28 项用例，并加强既有 I2V 断言，覆盖无尾帧/中间目标帧渲染、FLF 首尾帧、通用 AI 参数最终 patch 与非法值拒绝、四类路由及显式 ID 优先。详细证据见 [C04 验收](ACCEPTANCE.md#c04-能力分支ai-参数与路由收尾2026-09-10)。未扩展其他功能，真实模型与远端 CI 仍未执行。
 
 ## 历史迭代 C03：Workflow Capability 与参数归属
 

@@ -24,6 +24,7 @@ from app.generation.schemas import ACTIVE, EpisodeCreate, TimelineUpdate
 from app.media.service import Assets, compose, extract_frame
 from app.workflows.analyzer import analyze
 from app.workflows.ownership import decorate_parameters, is_asset_role
+from app.workflows.router import CapabilityRouter
 from app.workflows.schema import WorkflowCapability
 
 logger = logging.getLogger(__name__)
@@ -40,6 +41,7 @@ class GenerationService:
         provider_factory=None,
     ):
         self.settings, self.store, self.engine, self.assets = settings, store, engine, assets
+        self.router = CapabilityRouter(store)
         self.provider_factory = provider_factory or (lambda: LLMProvider(settings))
         self.queue: asyncio.Queue[tuple[str, str]] = asyncio.Queue()
         self.worker: asyncio.Task | None = None
@@ -135,22 +137,14 @@ class GenerationService:
                 self.queue.task_done()
 
     def create(self, request: EpisodeCreate) -> dict:
-        defaults = self.store.get("settings", "settings")
         data = request.model_dump()
         for kind in ("image", "video"):
-            id = data[f"{kind}_workflow_id"] or defaults[f"default_{kind}"]
-            profile = self.store.get("workflow", id)
-            if profile["media_type"] != kind:
-                raise AppError("WORKFLOW_INVALID", f"{kind} 工作流类型不匹配")
-            data[f"{kind}_workflow_id"] = id
-        reference_id = data["reference_workflow_id"] or defaults.get(
-            "default_capabilities", {}
-        ).get("TEXT_TO_IMAGE")
-        if not reference_id:
-            raise AppError("WORKFLOW_INVALID", "请配置文生图工作流以生成初始参考资产")
-        reference_profile = self.store.get("workflow", reference_id)
-        if reference_profile["capability"] != "TEXT_TO_IMAGE":
-            raise AppError("WORKFLOW_INVALID", "参考资产的起始工作流必须是 TEXT_TO_IMAGE")
+            profile = self.router.select(kind, data[f"{kind}_workflow_id"])
+            data[f"{kind}_workflow_id"] = profile["id"]
+        reference_profile = self.router.resolve(
+            WorkflowCapability.TEXT_TO_IMAGE, data["reference_workflow_id"]
+        )
+        reference_id = reference_profile["id"]
         data["reference_workflow_id"] = reference_id
         selected_ids = {data["image_workflow_id"], data["video_workflow_id"], reference_id}
         if data["workflow_overrides"].keys() - selected_ids:
@@ -379,13 +373,10 @@ class GenerationService:
 
     async def generate(self, id: str) -> None:
         episode = self.store.get("episode", id)
-        image = self.store.get("workflow", episode["image_workflow_id"])
-        video = self.store.get("workflow", episode["video_workflow_id"])
-        defaults = self.store.get("settings", "settings")
-        reference_profile = self.store.get(
-            "workflow",
-            episode.get("reference_workflow_id")
-            or defaults["default_capabilities"]["TEXT_TO_IMAGE"],
+        image = self.router.select("image", episode.get("image_workflow_id"))
+        video = self.router.select("video", episode.get("video_workflow_id"))
+        reference_profile = self.router.resolve(
+            WorkflowCapability.TEXT_TO_IMAGE, episode.get("reference_workflow_id")
         )
         provider = self.provider_factory()
         agents = Directors(provider)
@@ -831,9 +822,7 @@ class GenerationService:
             retries["remaining"] -= 1
         alternative = video["capabilities"].get("low_memory_workflow_id")
         if alternative:
-            video = self.store.get("workflow", alternative)
-            if video["media_type"] != "video":
-                raise AppError("WORKFLOW_INVALID", "低显存 profile 必须是视频类型")
+            video = self.router.select("video", alternative)
         max_segment = min(2, video["capabilities"]["max_duration"])
         count = math.ceil(duration / max_segment)
         if count == 1 and not alternative:
