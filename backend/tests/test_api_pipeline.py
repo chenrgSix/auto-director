@@ -6,7 +6,7 @@ import httpx
 import pytest
 from fastapi.testclient import TestClient
 
-from app.agents.schemas import EpisodePlan
+from app.agents.schemas import EpisodePlan, QAResult
 from app.core.config import Settings
 from app.db.store import Store
 from app.main import create_app
@@ -274,3 +274,37 @@ def test_oom_fallback_obeys_budget_and_preserves_timeline(system, retries, expec
     else:
         assert len(videos) == 5  # two failed full clips, three successful shorter segments
         assert abs(episode["final_duration"] - 5) < 0.5
+
+
+def test_action_qa_retries_only_video_and_keeps_immutable_qa_records(system):
+    client, app, comfy = system
+
+    class FailOnceProvider(FakeProvider):
+        failed = False
+
+        async def generate_json(self, system, context, schema, *, images=None):
+            result = await super().generate_json(system, context, schema, images=images)
+            if schema is QAResult and context["stage"] == "video" and not self.failed:
+                self.failed = True
+                result.action_accuracy = 0.3
+            return result
+
+    app.state.generation.provider_factory = FailOnceProvider
+    id = client.post(
+        "/api/v1/episodes",
+        json={"idea": "QA fixture", "target_duration": 5, "width": 256, "height": 256},
+    ).json()["id"]
+    client.post(f"/api/v1/episodes/{id}/generate")
+    episode = wait_episode(client, id)
+    assert episode["status"] == "COMPLETED", episode.get("error")
+    assert (
+        sum(p["prompt"]["save"]["class_type"] == "SaveImage" for p in comfy.prompts.values()) == 5
+    )
+    assert (
+        sum(p["prompt"]["save"]["class_type"] == "SaveVideo" for p in comfy.prompts.values()) == 2
+    )
+    history = client.get(f"/api/v1/episodes/{id}/qa").json()
+    assert len(history) == 3
+    assert any(result["result"]["action_accuracy"] == 0.3 for result in history)
+    assert client.delete(f"/api/v1/episodes/{id}").status_code == 204
+    assert app.state.store.list("qa", id) == []

@@ -24,6 +24,7 @@ Base `/api/v1`，JSON；ID 由服务端生成；UTC ISO 时间。验证失败 42
 | `POST /episodes/{id}/generate`, `POST /episodes/{id}/cancel` | 入队/取消 |
 | `GET /episodes/{id}/progress`, `GET /episodes/{id}/events` | 快照/SSE 进度 |
 | `GET /episodes/{id}/shots`, `PATCH /episodes/{id}/timeline` | 镜头与排序/启用状态 |
+| `GET /episodes/{id}/qa` | 不可变质检历史，包含阶段、镜头、资产与原始得分；重试保留旧记录 |
 | `POST /shots/{id}/retry[-keyframes\|-video]` | 定向重试 |
 | `POST /episodes/{id}/compose` | 根据当前启用镜头重新导出 |
 | `POST /episodes/{id}/assets`, `GET /assets/{id}/file` | 有界媒体上传/本地预览下载 |

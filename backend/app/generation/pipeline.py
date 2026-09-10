@@ -200,6 +200,21 @@ class GenerationService:
 
         self.store.update("episode", id, update)
 
+    def record_qa(
+        self, episode_id: str, shot_id: str, stage: str, result, assets: list[str]
+    ) -> None:
+        self.store.create(
+            "qa",
+            {
+                "episode_id": episode_id,
+                "shot_id": shot_id,
+                "stage": stage,
+                "asset_ids": assets,
+                "result": result.model_dump(),
+            },
+            parent=episode_id,
+        )
+
     async def cancel(self, id: str) -> dict:
         episode = self.store.get("episode", id)
         if episode["status"] not in ACTIVE:
@@ -524,6 +539,9 @@ class GenerationService:
                                     [self.assets.path(result["id"])],
                                     "start_candidate",
                                 )
+                                self.record_qa(
+                                    id, sid, "start_candidate", candidate_qa, [result["id"]]
+                                )
                                 score = candidate_qa.score()
                             candidate_results.append((score, result["id"]))
                         best = max(candidate_results, key=lambda item: item[0])[1]
@@ -564,6 +582,13 @@ class GenerationService:
                         "keyframes",
                     )
                     scope = qa.retry_scope(high=episode["quality"] == "high")
+                    self.record_qa(
+                        id,
+                        sid,
+                        "keyframes",
+                        qa,
+                        [shot["start_frame_asset_id"], shot["end_frame_asset_id"]],
+                    )
                     self.update_shot(
                         id,
                         sid,
@@ -601,6 +626,7 @@ class GenerationService:
                         samples.append(self.assets.path(previous["actual_end_frame_asset_id"]))
                     qa = await agents.qa(episode["bible"], shot, samples, "video")
                     retry_scope = qa.retry_scope(high=episode["quality"] == "high")
+                    self.record_qa(id, sid, "video", qa, [shot["video_asset_id"]])
                     self.update_shot(
                         id,
                         sid,

@@ -237,6 +237,8 @@ async def delete_episode(request: Request, id: str, delete_assets: bool = False)
         await state.assets.delete_episode(id)
     for job in state.store.list("job", id):
         state.store.delete("job", job["id"])
+    for result in state.store.list("qa", id):
+        state.store.delete("qa", result["id"])
     state.store.delete("episode", id)
 
 
@@ -258,6 +260,12 @@ async def cancel(request: Request, id: str):
 @router.get("/episodes/{id}/shots")
 def shots(request: Request, id: str):
     return resources(request).store.get("episode", id)["shots"]
+
+
+@router.get("/episodes/{id}/qa")
+def qa_history(request: Request, id: str):
+    resources(request).store.get("episode", id)
+    return resources(request).store.list("qa", id)
 
 
 @router.patch("/episodes/{id}/timeline")
