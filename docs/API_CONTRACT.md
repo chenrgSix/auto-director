@@ -4,6 +4,12 @@
 
 Base `/api/v1`，JSON；ID 由服务端生成；UTC ISO 时间。验证失败 422，不存在 404，状态冲突 409，外部执行失败提供可读 `error.code/message/details`。仅本地单用户使用，默认绑定 loopback；跨域与公网 ComfyUI 需要显式配置。
 
+### 更换已创建短片的工作流（C08）
+
+`PATCH /episodes/{id}/workflows` 接收 `expected_version`（详情响应的 version）及显式 `image_workflow_id`、`reference_workflow_id`、`video_workflow_id`。参考项必须为 TEXT_TO_IMAGE，其余按媒体类型校验；全部要求本地绑定完整，不请求 AI/ComfyUI。版本过期、Episode 运行或仍有 QUEUED/RUNNING/UNKNOWN 作业返回 409，失败不修改数据。
+
+实际更换时增加 `workflow_binding_revision`，旧绑定、计划/Bible、镜头/参考/成片与相关覆盖归档到 `workflow_binding_history[].previous_state`。当前生成状态重置为 DRAFT，需另行调用 generate 重新规划；保留 Idea/时长/比例/风格与历史作业/素材文件。仅保留仍选中工作流的覆盖；已换走媒体的旧式参数覆盖清空。相同 ID 提交不重置进度。渲染缓存按绑定版本隔离，旧数据缺失版本按 0 处理，无数据库迁移。
+
 ## 已实现 API
 
 | 路径 | 行为 |

@@ -4,6 +4,7 @@ import { api, assetUrl, useResource } from './api';
 import { navigate, type Notify } from './App';
 import { ACTIVE, type Episode, type Job, type Shot } from './types';
 import { Badge, Empty, ErrorNotice, Loading, Media } from './ui';
+import { EpisodeWorkflows } from './EpisodeWorkflows';
 
 export function EpisodesPage({ notify }: { notify: Notify }) {
   const resource = useResource<Episode[]>('/episodes', 4000);
@@ -47,6 +48,7 @@ export function EpisodePage({ id, notify }: { id: string; notify: Notify }) {
     <button className="text-button back" onClick={() => navigate('episodes')}><ArrowLeft size={16} />我的短片</button>
     <div className="section-heading"><div><div className="eyebrow">EPISODE / {id.slice(0, 8)}</div><h1 className="episode-title">{episode.title || episode.idea}</h1><p>{episode.target_duration} 秒 · {episode.aspect_ratio} · {episode.style}</p></div><div className="actions"><Badge status={episode.status} />{active ? <button disabled={busy} onClick={() => void action(`/episodes/${id}/cancel`, '已请求取消，正在停止当前任务')}><Square size={14} />取消任务</button> : <><button disabled={busy || !total || passed !== total} onClick={() => void action(`/episodes/${id}/compose`, '已安排重新导出')}><RefreshCw size={15} />重新导出</button>{episode.status !== 'COMPLETED' && <button className="primary" disabled={busy} onClick={() => void action(`/episodes/${id}/generate`, '已继续生成')}><Play size={15} />继续生成</button>}</>}</div></div>
     {episode.error && <ErrorNotice><strong>{episode.error.message}</strong><small>{episode.error.code}</small>{episode.error.details != null && <details><summary>查看错误详情</summary><pre>{JSON.stringify(episode.error.details, null, 2)}</pre></details>}</ErrorNotice>}
+    <EpisodeWorkflows episode={episode} busy={busy} setBusy={setBusy} locked={active || !jobs.data || jobs.data.some(job => ['QUEUED', 'RUNNING', 'UNKNOWN'].includes(job.status))} onSaved={() => { resource.refresh(); jobs.refresh(); }} notify={notify} />
     {episode.warnings.map(message => <div className="notice" key={message}>{message}</div>)}
     {active && <div className="progress-panel"><div><span>正在推进创作</span><strong>{passed} / {total || '—'} 镜头</strong></div><div className="progress-track"><i style={{ width: `${total ? passed / total * 90 : 3}%` }} /></div><small>进度会自动更新，可以离开页面，稍后回来查看。</small></div>}
     {episode.final_video_asset_id && <section className="final-panel"><div><span className="eyebrow">IT'S A WRAP</span><h2>短片已完成。</h2><p>{episode.final_duration?.toFixed(2)} 秒 · MP4</p><a className="primary" href={assetUrl(episode.final_video_asset_id, true)} download><Download size={16} />下载成片</a></div><video src={assetUrl(episode.final_video_asset_id)} controls preload="metadata" aria-label="最终短片" /></section>}
@@ -55,7 +57,7 @@ export function EpisodePage({ id, notify }: { id: string; notify: Notify }) {
       {shot.prompts && <details className="panel details-panel"><summary>镜头提示词与质量记录</summary><label>视频提示词</label><pre>{shot.prompts.video_prompt}</pre><label>负面约束</label><pre>{shot.prompts.negative_prompt}</pre>{shot.qa.map((qa, index) => <div className="qa-result" key={index}><strong>{qa.stage} · {qa.retry_scope ? '需要重试' : '通过阈值'}</strong><span>角色 {Math.round(qa.character_consistency * 100)} · 场景 {Math.round(qa.scene_consistency * 100)} · 动作 {Math.round(qa.action_accuracy * 100)}</span><p>{qa.explanation}</p></div>)}</details>}</section>}
     </div>}
     {Object.keys(episode.references).length > 0 && <details className="panel details-panel"><summary>单集参考资产 · {Object.keys(episode.references).length}</summary><div className="reference-grid">{Object.entries(episode.references).map(([name, asset]) => <Media key={name} id={asset} kind="image" label={name} />)}</div></details>}
-    <details className="panel details-panel"><summary>作业记录与生成统计</summary><div className="metrics">{Object.entries(episode.metrics).map(([key, value]) => <div key={key}><strong>{value}</strong><span>{key}</span></div>)}</div><JobList jobs={jobs.data || []} notify={notify} onChange={jobs.refresh} /><details><summary>计划与视觉设定</summary><pre>{JSON.stringify({ plan: episode.plan, bible: episode.bible }, null, 2)}</pre></details></details>
+    <details className="panel details-panel"><summary>作业记录与生成统计</summary><div className="metrics">{Object.entries(episode.metrics).map(([key, value]) => <div key={key}><strong>{value}</strong><span>{key}</span></div>)}</div><JobList jobs={jobs.data || []} notify={notify} onChange={jobs.refresh} /><details><summary>计划与视觉设定</summary><pre>{JSON.stringify({ plan: episode.plan, bible: episode.bible }, null, 2)}</pre></details>{!!episode.workflow_binding_history?.length && <details><summary>更换前的计划与生成记录 · {episode.workflow_binding_history.length} 次</summary><pre>{JSON.stringify(episode.workflow_binding_history, null, 2)}</pre></details>}</details>
   </>;
 }
 

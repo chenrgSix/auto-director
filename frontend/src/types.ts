@@ -34,6 +34,8 @@ export type Shot = {
   error: Problem | null; qa: QA[];
 };
 export type Episode = {
+  version: number; image_workflow_id: string; video_workflow_id: string; reference_workflow_id: string;
+  workflow_binding_history?: unknown[];
   id: string; idea: string; title: string | null; target_duration: number; aspect_ratio: string; style: string; quality: string;
   status: string; shots: Shot[]; references: Record<string, string>; warnings: string[]; error: Problem | null;
   final_video_asset_id: string | null; final_duration?: number; created_at: string; metrics: Record<string, number>;

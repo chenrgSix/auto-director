@@ -1,5 +1,15 @@
 # 模块设计
 
+## C08 已创建短片的工作流更换
+
+`GenerationService.change_workflows` 在现有 Episode 原子更新中校验 `expected_version`、活动状态和未完成作业，然后经 CapabilityRouter 检查显式工作流身份、本地绑定和保留的高级覆盖。API 无网络等待，不调用 enqueue；表单保存后由用户单独继续生成。
+
+工作流切换可能改变单镜时长、素材条件与 AI 参数 schema，因此采用整体重置生成状态：旧状态存入 `workflow_binding_history`，当前 plan/bible/budget/shots/references/continuity/成片引用清空。原始创作参数与累计统计保留；旧作业、QA 与素材文件不删除，不改写已提交 ComfyUI JSON。历史快照不嵌套已有历史，避免递归膨胀。
+
+只保留仍被选中的 workflow ID 的 override，旧式 image/video 参数仅在对应媒体工作流未更换时保留；重新验证并计算允许的上传资产。`workflow_binding_revision` 为渲染 step_key 加前缀，防止图结构相同的新 profile 命中旧引用缓存；旧记录缺失版本继续原缓存语义。无需升级数据库或重做流水线架构。
+
+`EpisodeWorkflows.tsx` 提供名称概览、分媒体/能力选择和当前默认填充。默认填充点击时读取最新配置；编辑时保存 Episode 版本，不被定时刷新覆盖。运行/未完成作业时入口禁用，服务端仍独立校验；保存成功后详情回到 DRAFT，历史快照可在作业记录中查看。
+
 ## C06 快速导入与 AI 建议
 
 导入仅调用 Analyzer 做 JSON 结构、链接完整性和可写字段提取，并保存用户用途/显式绑定；既有 Input/Output 标签作为显式配置保留。删除 C05 `discovery.py` 规则推断。列表/详情从已存参数返回绑定状态，不重新分析拓扑，也不请求 ComfyUI 或模型服务。

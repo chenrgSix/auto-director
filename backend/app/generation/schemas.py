@@ -59,6 +59,13 @@ class EpisodeCreate(StrictModel):
         return self
 
 
+class EpisodeWorkflowsUpdate(StrictModel):
+    expected_version: int = Field(ge=1)
+    image_workflow_id: str = Field(min_length=1)
+    video_workflow_id: str = Field(min_length=1)
+    reference_workflow_id: str = Field(min_length=1)
+
+
 class TimelineItem(StrictModel):
     id: str
     enabled: bool = True

@@ -12,7 +12,13 @@ from app.core.errors import AppError
 from app.core.limits import DURATION_POLICY, LIMITS
 from app.core.runtime_settings import SettingsPatch
 from app.db.store import uid
-from app.generation.schemas import ACTIVE, EpisodeCreate, TestRun, TimelineUpdate
+from app.generation.schemas import (
+    ACTIVE,
+    EpisodeCreate,
+    EpisodeWorkflowsUpdate,
+    TestRun,
+    TimelineUpdate,
+)
 from app.media.service import AUDIO_EXT, IMAGE_EXT, VIDEO_EXT
 from app.workflows.ownership import required_asset_roles
 from app.workflows.recognition import recognize_workflow
@@ -286,6 +292,11 @@ async def delete_episode(request: Request, id: str, delete_assets: bool = False)
 @router.post("/episodes/{id}/generate", status_code=202)
 async def generate(request: Request, id: str):
     return resources(request).generation.enqueue(id)
+
+
+@router.patch("/episodes/{id}/workflows")
+async def update_episode_workflows(request: Request, id: str, body: EpisodeWorkflowsUpdate):
+    return resources(request).generation.change_workflows(id, body)
 
 
 @router.post("/episodes/{id}/compose", status_code=202)

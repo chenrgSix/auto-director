@@ -3,6 +3,7 @@ import contextlib
 import json
 import logging
 import math
+from copy import deepcopy
 
 from app.agents.directing import Directors, anchored_prompt, generation_budget
 from app.agents.provider import LLMProvider
@@ -20,9 +21,9 @@ from app.generation.parameters import (
     validate_strategy,
 )
 from app.generation.resolvers import AssetResolver, ContinuityManager
-from app.generation.schemas import ACTIVE, EpisodeCreate, TimelineUpdate
+from app.generation.schemas import ACTIVE, EpisodeCreate, EpisodeWorkflowsUpdate, TimelineUpdate
 from app.media.service import Assets, compose, extract_frame
-from app.workflows.analyzer import analyze
+from app.workflows.analyzer import analyze, validate_bindings
 from app.workflows.ownership import decorate_parameters, is_asset_role
 from app.workflows.router import CapabilityRouter
 from app.workflows.schema import WorkflowCapability
@@ -177,6 +178,97 @@ class GenerationService:
                 "budget": None,
             },
         )
+
+    def change_workflows(self, id: str, request: EpisodeWorkflowsUpdate) -> dict:
+        def change(episode):
+            if episode["version"] != request.expected_version:
+                raise AppError("CONFLICT", "短片已变更，请关闭编辑后重新打开", status=409)
+            if (
+                id in self.busy
+                or episode["status"] in ACTIVE
+                or any(
+                    job["status"] in {"QUEUED", "RUNNING", "UNKNOWN"}
+                    for job in self.store.list("job", id)
+                )
+            ):
+                raise AppError("CONFLICT", "请先停止生成并核对未完成作业，再更换工作流", status=409)
+            selection = request.model_dump(exclude={"expected_version"})
+            if all(episode.get(key) == value for key, value in selection.items()):
+                return
+            profiles = [
+                self.router.select("image", request.image_workflow_id),
+                self.router.select("video", request.video_workflow_id),
+                self.router.resolve(
+                    WorkflowCapability.TEXT_TO_IMAGE, request.reference_workflow_id
+                ),
+            ]
+            for profile in profiles:
+                issues = validate_bindings(profile)
+                if issues:
+                    raise AppError(
+                        "WORKFLOW_INVALID", f"{profile['name']} 的输入输出绑定不完整", issues
+                    )
+            candidate = {**episode, **selection}
+            candidate["workflow_overrides"] = {
+                key: value
+                for key, value in episode.get("workflow_overrides", {}).items()
+                if key in selection.values()
+            }
+            for media in ("image", "video"):
+                if episode.get(f"{media}_workflow_id") != selection[f"{media}_workflow_id"]:
+                    candidate[f"{media}_parameters"] = {}
+            allowed = set()
+            for profile in profiles:
+                overrides = parameter_overrides(candidate, profile)
+                validate_overrides(profile, overrides, candidate.get("advanced_mode", False))
+                for role, value in role_overrides(profile, overrides).items():
+                    if is_asset_role(role):
+                        AssetResolver(self.store, self.assets).validate(
+                            role, value, id, episode.get("allowed_asset_ids", [])
+                        )
+                        allowed.add(value)
+            reset = {
+                "status": "DRAFT",
+                "plan": None,
+                "bible": None,
+                "shots": [],
+                "references": {},
+                "continuity": {},
+                "budget": None,
+                "fixed_shot_duration": None,
+                "final_video_asset_id": None,
+                "final_duration": None,
+                "error": None,
+                "warnings": [],
+                "started_at": None,
+                "completed_at": None,
+                "queued_operation": None,
+            }
+            configuration = {
+                **selection,
+                "workflow_overrides": candidate["workflow_overrides"],
+                "image_parameters": candidate.get("image_parameters", {}),
+                "video_parameters": candidate.get("video_parameters", {}),
+                "allowed_asset_ids": sorted(allowed),
+            }
+            history = list(episode.get("workflow_binding_history", []))
+            history.append(
+                {
+                    "changed_at": now(),
+                    "revision": episode.get("workflow_binding_revision", 0),
+                    "previous_state": {
+                        key: deepcopy(episode.get(key)) for key in {*reset, *configuration, "title"}
+                    },
+                }
+            )
+            episode.update(
+                **configuration,
+                **reset,
+                workflow_binding_revision=episode.get("workflow_binding_revision", 0) + 1,
+                workflow_binding_history=history,
+            )
+
+        return self.store.update("episode", id, change)
 
     def enqueue(self, id: str, operation="episode") -> dict:
         if id in self.busy:
@@ -361,7 +453,9 @@ class GenerationService:
             shot_id,
             type,
             parameters,
-            key,
+            f"binding:{episode['workflow_binding_revision']}:{key}"
+            if episode.get("workflow_binding_revision")
+            else key,
             advanced_mode=episode.get("advanced_mode", False),
             budget=episode.get("budget"),
             allowed_asset_ids=episode.get("allowed_asset_ids", []),
