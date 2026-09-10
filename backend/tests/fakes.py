@@ -2,6 +2,7 @@
 
 import io
 import json
+from fractions import Fraction
 
 import httpx
 from PIL import Image
@@ -27,7 +28,7 @@ class FakeProvider:
                     {
                         "index": i,
                         "title": f"Shot {i + 1}",
-                        "duration": context["target_duration"] / count,
+                        "duration": float(Fraction(str(context["target_duration"])) / count),
                         "purpose": "explore",
                         "action": "walk",
                         "camera": "wide",

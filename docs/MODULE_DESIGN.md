@@ -126,3 +126,14 @@ C04：`agents/parameters.py` 为 Bible/Shot 构造按 workflow ID 隔离的 AI �
 `WorkflowManager.validate` 缓存节点执行信息：存在 `api_node=true` 为 cloud，所有节点类均已获取且未标记 API 为 local，否则 unknown。名称不参与判断；local 仅说明元数据未声明云端 API，不保证第三方节点不联网。导入与列表不增加远程请求。
 
 ComfyUI AUTOGROW 容器的必需输入检查识别其 template.names / prefix 声明的实际点分槽位，例如 `values.a` 可满足 `values` 最小数量；保留普通必填、链接索引及现有参数检查。不从动态槽位推断角色或修改原图。
+
+
+## C13 导演时长约束
+
+`Directors.plan` 继续读取 workflow/显存/用户上限的有效交集并分批规划，`segment_timing` 为每批产生同一份时间契约。以 `ceil(批次总时长 / 单镜有效上限)` 作为建议镜头数；默认最小时长争取 2.5 秒，当必要镜头数无法满足时下降到可行的百分之一秒值，仍不少于全局 1 秒。允许镜头数同时受该最小时长、批次 12 镜与总镜头 240 上限约束。用户合法的每镜固定时长覆盖默认偏好。
+
+自然语言 system 提示词、context 的 `min_shot_duration/max_shot_duration/min_shots/max_shots/recommended_shots/recommended_shot_duration` 和动态输出 schema 共用时间契约。提示词说明单位是时间线秒数，优先少量完整动作，只有必要的机位/动作变化才增加镜头。模型违反数量或单镜范围时由实际 Provider 的本地 schema 校验拒绝并最多纠正一次，不接受超限碎片。
+
+`normalize_plan` 先求按权重缩放且落在上下限内的精确分配，再以最大余数法分配剩余百分之一秒；使用 Fraction 避免先后顺序扣减和浮点边界偏差。合法原比例保持，均匀权重最多相差 0.01 秒，受约束的片段仍精确覆盖总时间线。时间线秒数与模型实际渲染帧数/最短时长的适配仍由既有 ParameterResolver 完成。
+
+仅没有计划的 Episode 调用新规划。已有计划、镜头、资产、试跑及默认 workflow 均不迁移或静默重拍；旧 1.x 秒镜头仍可恢复、裁切及合成。

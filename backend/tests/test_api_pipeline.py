@@ -186,7 +186,7 @@ def test_cancel_blocks_readmission_until_old_task_has_exited(system):
 
     class SlowProvider(FakeProvider):
         async def generate_json(self, system, context, schema, *, images=None):
-            if schema is EpisodePlan:
+            if issubclass(schema, EpisodePlan):
                 await asyncio.sleep(0.35)
             return await super().generate_json(system, context, schema, images=images)
 

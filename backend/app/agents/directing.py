@@ -3,45 +3,83 @@ import math
 from collections.abc import Callable
 from fractions import Fraction
 
+from pydantic import Field, create_model
+
 from app.agents.parameters import constrained_output
 from app.agents.provider import LLMProvider
 from app.agents.schemas import (
     EpisodePlan,
     PlanBatch,
     QAResult,
+    ShotPlan,
     ShotPrompts,
     Transition,
     VisualBible,
 )
 from app.core.errors import AppError
-from app.core.limits import MAX_EPISODE_SHOTS, PLAN_BATCH_SHOTS
+from app.core.limits import (
+    MAX_EPISODE_SHOTS,
+    MIN_SHOT_SECONDS,
+    PLAN_BATCH_SHOTS,
+    PREFERRED_MIN_SHOT_SECONDS,
+)
+
+
+def allocate_centiseconds(
+    weights: list[Fraction], target: int, floor: int, limit: int
+) -> list[int]:
+    """Solve sum(clamp(scale * weight)) exactly, then distribute fractional centiseconds."""
+    # Each breakpoint starts or ends one weight's contribution to the slope.
+    # Clamping low and high weights simultaneously would discard allocatable time.
+    events: dict[Fraction, Fraction] = {}
+    for weight in weights:
+        for point, change in (
+            (Fraction(floor) / weight, weight),
+            (Fraction(limit) / weight, -weight),
+        ):
+            events[point] = events.get(point, Fraction(0)) + change
+    amount, slope, previous, scale = (
+        Fraction(len(weights) * floor),
+        Fraction(0),
+        Fraction(0),
+        Fraction(0),
+    )
+    for point, change in sorted(events.items()):
+        next_amount = amount + (point - previous) * slope
+        if slope and next_amount >= target:
+            scale = previous + (target - amount) / slope
+            break
+        amount, previous, slope = next_amount, point, slope + change
+    exact = [min(Fraction(limit), max(Fraction(floor), scale * weight)) for weight in weights]
+    result = [math.floor(value) for value in exact]
+    remainder = target - sum(result)
+    order = sorted(range(len(weights)), key=lambda i: (-(exact[i] - result[i]), i))
+    for index in order[:remainder]:
+        result[index] += 1
+    return result
 
 
 def normalize_plan(
-    plan: EpisodePlan, total: float, maximum: float, *, first_segment: bool = True
+    plan: EpisodePlan,
+    total: float,
+    maximum: float,
+    *,
+    minimum: float = MIN_SHOT_SECONDS,
+    first_segment: bool = True,
 ) -> EpisodePlan:
-    """Allocate centiseconds within bounds, preserving feasible narrative proportions."""
+    """Preserve feasible narrative proportions without favoring earlier shots."""
     count = len(plan.shots)
-    target, limit = round(total * 100), int(Fraction(str(maximum)) * 100)
-    if count * 100 > target or count * limit < target:
+    target = round(total * 100)
+    floor, limit = math.ceil(Fraction(str(minimum)) * 100), int(Fraction(str(maximum)) * 100)
+    if floor > limit or count * floor > target or count * limit < target:
         raise AppError(
             "LLM_INVALID_OUTPUT",
-            "镜头数量无法满足每镜 1 秒至工作流上限及总时长",
-            {"min_shots": math.ceil(target / limit), "max_shots": target // 100},
+            "镜头数量无法满足每镜时长范围及总时长",
+            {"min_shots": math.ceil(target / limit), "max_shots": target // floor},
         )
-    durations = [100] * count
-    remaining = target - sum(durations)
-    while remaining > 0:
-        available = [i for i in range(count) if durations[i] < limit]
-        weight = sum(plan.shots[i].duration for i in available)
-        for i in available:
-            extra = min(
-                remaining,
-                limit - durations[i],
-                max(1, int(remaining * plan.shots[i].duration / weight)),
-            )
-            durations[i] += extra
-            remaining -= extra
+    durations = allocate_centiseconds(
+        [Fraction(str(shot.duration)) for shot in plan.shots], target, floor, limit
+    )
     result = plan.model_copy(deep=True)
     result.target_duration = total
     for index, shot in enumerate(result.shots):
@@ -50,6 +88,36 @@ def normalize_plan(
     if first_segment:
         result.shots[0].transition_from_previous = Transition.ESTABLISHING_CUT
     return result
+
+
+def segment_timing(total: float, maximum: float, fixed: float | None = None) -> dict:
+    """Prefer sustained shots, relaxing only when the segment cannot otherwise fit."""
+    target, limit = round(total * 100), int(Fraction(str(maximum)) * 100)
+    recommended = math.ceil(target / limit)
+    floor = min(round(PREFERRED_MIN_SHOT_SECONDS * 100), target // recommended)
+    if fixed is not None:
+        floor = limit = round(fixed * 100)
+    return {
+        "min_shot_duration": max(round(MIN_SHOT_SECONDS * 100), floor) / 100,
+        "max_shot_duration": limit / 100,
+        "min_shots": recommended,
+        "max_shots": min(PLAN_BATCH_SHOTS, target // floor),
+        "recommended_shots": recommended,
+        "recommended_shot_duration": round(total / recommended, 2),
+    }
+
+
+def planning_schema(base: type[EpisodePlan], timing: dict) -> type[EpisodePlan]:
+    shot = create_model(
+        "TimedShotPlan",
+        __base__=ShotPlan,
+        duration=(float, Field(ge=timing["min_shot_duration"], le=timing["max_shot_duration"])),
+    )
+    return create_model(
+        f"Timed{base.__name__}",
+        __base__=base,
+        shots=(list[shot], Field(min_length=timing["min_shots"], max_length=timing["max_shots"])),
+    )
 
 
 def generation_budget(
@@ -171,16 +239,11 @@ class Directors:
         context = {
             key: episode[key] for key in ("idea", "target_duration", "aspect_ratio", "style")
         }
-        context.update(
-            min_shots=math.ceil(
-                round(episode["target_duration"] * 100) / int(Fraction(str(maximum)) * 100)
-            ),
-            max_shots=min(PLAN_BATCH_SHOTS, math.floor(episode["target_duration"])),
-            max_shot_duration=maximum,
-            **segment,
+        timing = segment_timing(
+            episode["target_duration"], maximum, episode.get("fixed_shot_duration")
         )
-        if episode.get("fixed_shot_duration") is not None:
-            context["max_shots"] = context["min_shots"]
+        context.update(**timing, **segment)
+        schema = planning_schema(PlanBatch if segment["segment_count"] > 1 else EpisodePlan, timing)
         for attempt in range(2):
             check_cancel()
             plan = await self.provider.generate_json(
@@ -189,21 +252,31 @@ class Directors:
                 "Continue from previous_shots when present. Only resolve the full story in is_final_segment. "
                 "One major visual action per shot. "
                 "Choose camera variety and explicit transitions; do not force frame continuation across all shots. "
-                "Each shot must be at least one second and fit max_shot_duration. Match this segment's target_duration.",
+                f"Timing contract for this segment: each shot must last {timing['min_shot_duration']:g} "
+                f"to {timing['max_shot_duration']:g} seconds, inclusive. "
+                f"Return {timing['min_shots']} to {timing['max_shots']} shots; "
+                f"prefer {timing['recommended_shots']} shots of about {timing['recommended_shot_duration']:g} seconds. "
+                f"Their durations must sum to {episode['target_duration']:g} seconds. "
+                "These are timeline seconds, not frames or milliseconds. Use at most two decimal places. "
+                "Prefer fewer sustained shots with enough time for the action to read. "
+                "Do not turn every narrative beat into a separate quick cut. "
+                "Add a shot only for an essential change of viewpoint or action, within the timing contract. "
+                "Simplify actions to fit the available time; never lower the minimum or raise the maximum.",
                 context,
-                PlanBatch if segment["segment_count"] > 1 else EpisodePlan,
+                schema,
             )
             try:
-                if len(plan.shots) > context["max_shots"]:
+                if not context["min_shots"] <= len(plan.shots) <= context["max_shots"]:
                     raise AppError(
                         "LLM_INVALID_OUTPUT",
-                        "单批镜头数量超出上限",
-                        {"max_shots": context["max_shots"]},
+                        "单批镜头数量不符合时长约束",
+                        {"min_shots": context["min_shots"], "max_shots": context["max_shots"]},
                     )
                 return normalize_plan(
                     plan,
                     episode["target_duration"],
-                    maximum,
+                    timing["max_shot_duration"],
+                    minimum=timing["min_shot_duration"],
                     first_segment=segment["segment_index"] == 0,
                 )
             except AppError as exc:
