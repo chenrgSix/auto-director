@@ -314,7 +314,11 @@ class GenerationService:
         shot_id=None,
     ) -> dict:
         self.check_cancel(episode["id"])
-        parameters = episode.get(f"{profile['type']}_parameters", {})
+        parameters = (
+            episode.get(f"{profile['type']}_parameters", {})
+            if profile["id"] == episode.get(f"{profile['type']}_workflow_id")
+            else {}
+        )
         job = self.engine.create_job(
             profile, values, assets, episode["id"], shot_id, type, parameters, key
         )
@@ -618,7 +622,10 @@ class GenerationService:
                     for fraction in (0, 0.5, 1):
                         frame = self.assets.allocate(id, ".png")
                         await extract_frame(
-                            self.assets.path(shot["video_asset_id"]), frame, fraction
+                            self.assets.path(shot["video_asset_id"]),
+                            frame,
+                            fraction,
+                            duration_limit=shot["duration"],
                         )
                         sample = await self.assets.register(frame, id, "QA_SAMPLE_FRAME", sid)
                         samples.append(self.assets.path(sample["id"]))
@@ -640,7 +647,9 @@ class GenerationService:
                             {"scope": retry_scope, "explanation": qa.explanation},
                         )
                 last = self.assets.allocate(id, ".png")
-                await extract_frame(self.assets.path(shot["video_asset_id"]), last)
+                await extract_frame(
+                    self.assets.path(shot["video_asset_id"]), last, duration_limit=shot["duration"]
+                )
                 end = await self.assets.register(last, id, "ACTUAL_END_FRAME", sid)
                 self.update_shot(
                     id,
@@ -759,7 +768,11 @@ class GenerationService:
                 sid,
             )
             segments.append((self.assets.path(result["id"]), length))
-            start = end
+            if index < count - 1:
+                tail = self.assets.allocate(id, ".png")
+                await extract_frame(self.assets.path(result["id"]), tail, duration_limit=length)
+                actual = await self.assets.register(tail, id, "SEGMENT_END_FRAME", sid)
+                start = actual["id"]
         output = self.assets.allocate(id, ".mp4")
         await compose(segments, output, base["width"], base["height"], base["fps"])
         return await self.assets.register(output, id, "SHOT_VIDEO", sid)

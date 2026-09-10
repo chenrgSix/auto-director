@@ -3,6 +3,7 @@ import hashlib
 import json
 import shutil
 import tempfile
+from fractions import Fraction
 from pathlib import Path
 
 from PIL import Image, UnidentifiedImageError
@@ -102,9 +103,19 @@ async def inspect_media(path: Path) -> dict:
     return {"kind": "video" if extension in VIDEO_EXT else "audio", **data}
 
 
-async def extract_frame(source: Path, target: Path, fraction: float = 1) -> Path:
+async def extract_frame(
+    source: Path, target: Path, fraction: float = 1, *, duration_limit: float | None = None
+) -> Path:
     metadata = await probe(source)
-    timestamp = max(0, metadata["duration"] * fraction - (0.08 if fraction == 1 else 0))
+    duration = min(metadata["duration"], duration_limit or metadata["duration"])
+    video = metadata["video"] or {}
+    if video.get("duration") not in {None, "N/A"}:
+        duration = min(duration, float(video["duration"]))
+    try:
+        frame_interval = 1 / float(Fraction(video["avg_frame_rate"]))
+    except (KeyError, TypeError, ValueError, ZeroDivisionError):
+        frame_interval = 0.08
+    timestamp = max(0, duration * fraction - (frame_interval if fraction == 1 else 0))
     await run_process(
         "ffmpeg",
         "-hide_banner",

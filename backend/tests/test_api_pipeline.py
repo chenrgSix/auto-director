@@ -216,9 +216,30 @@ def test_restart_marks_active_work_unknown_and_preserves_artifacts(tmp_path):
         assert result["comfy_prompt_id"] == "known-prompt"
 
 
-@pytest.mark.parametrize(("retries", "expected"), [(1, "FAILED"), (2, "COMPLETED")])
-def test_oom_fallback_obeys_budget_and_preserves_timeline(system, retries, expected):
+@pytest.mark.parametrize(
+    ("retries", "expected", "alternative"),
+    [(1, "FAILED", False), (2, "COMPLETED", False), (2, "COMPLETED", True)],
+)
+def test_oom_fallback_obeys_budget_and_preserves_timeline(system, retries, expected, alternative):
     client, _, comfy = system
+    if alternative:
+        profile = client.get("/api/v1/workflows/default_video").json()
+        graph = profile["workflow"]
+        graph["low_sampler"] = graph.pop("sampler")
+        for node in graph.values():
+            for value in node["inputs"].values():
+                if isinstance(value, list) and value[0] == "sampler":
+                    value[0] = "low_sampler"
+        low = client.post(
+            "/api/v1/workflows/import",
+            json={"name": "Low memory", "type": "video", "workflow": graph},
+        )
+        assert low.status_code == 201, low.text
+        caps = {**profile["capabilities"], "low_memory_workflow_id": low.json()["id"]}
+        assert (
+            client.patch("/api/v1/workflows/default_video", json={"capabilities": caps}).status_code
+            == 200
+        )
     original = comfy.handle
     failing = set()
     videos = []
@@ -262,6 +283,7 @@ def test_oom_fallback_obeys_budget_and_preserves_timeline(system, retries, expec
             "height": 256,
             "qa_enabled": False,
             "max_retries": retries,
+            "video_parameters": {"sampler.steps": 7},
         },
     ).json()["id"]
     client.post(f"/api/v1/episodes/{id}/generate")
@@ -274,6 +296,16 @@ def test_oom_fallback_obeys_budget_and_preserves_timeline(system, retries, expec
     else:
         assert len(videos) == 5  # two failed full clips, three successful shorter segments
         assert abs(episode["final_duration"] - 5) < 0.5
+        jobs = client.get(f"/api/v1/jobs?episode_id={id}").json()
+        segments = sorted(
+            [job for job in jobs if job["type"] == "VIDEO_SEGMENT"],
+            key=lambda job: job["step_key"],
+        )
+        tail_id = segments[1]["asset_bindings"]["start_frame"]
+        asset = client.get(f"/api/v1/assets?episode_id={id}").json()
+        assert next(item for item in asset if item["id"] == tail_id)["type"] == "SEGMENT_END_FRAME"
+        if alternative:
+            assert all(job["parameter_values"] == {} for job in segments)
 
 
 def test_action_qa_retries_only_video_and_keeps_immutable_qa_records(system):

@@ -1,6 +1,7 @@
 import shutil
 
 import pytest
+from PIL import Image
 
 from app.core.errors import AppError
 from app.media.service import compose, extract_frame, inspect_media, probe, run_process
@@ -67,3 +68,38 @@ async def test_fake_extension_is_rejected(tmp_path):
     invalid.write_text("not an image")
     with pytest.raises(AppError):
         await inspect_media(invalid)
+
+
+async def test_continuity_tail_uses_exported_duration_not_unused_video_frames(tmp_path):
+    clip = tmp_path / "red-then-blue.mp4"
+    await run_process(
+        "ffmpeg",
+        "-v",
+        "error",
+        "-y",
+        "-f",
+        "lavfi",
+        "-i",
+        "color=red:size=64x64:rate=16:duration=1",
+        "-f",
+        "lavfi",
+        "-i",
+        "color=blue:size=64x64:rate=16:duration=1",
+        "-filter_complex",
+        "[0:v][1:v]concat=n=2:v=1:a=0[v]",
+        "-map",
+        "[v]",
+        "-c:v",
+        "libx264",
+        "-pix_fmt",
+        "yuv420p",
+        str(clip),
+    )
+    exported_tail = await extract_frame(clip, tmp_path / "exported.png", duration_limit=1)
+    original_tail = await extract_frame(clip, tmp_path / "original.png")
+    with Image.open(exported_tail) as frame:
+        red, _, blue = frame.convert("RGB").getpixel((32, 32))
+        assert red > 200 and blue < 20
+    with Image.open(original_tail) as frame:
+        red, _, blue = frame.convert("RGB").getpixel((32, 32))
+        assert blue > 200 and red < 20
