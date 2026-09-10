@@ -1,5 +1,7 @@
 from copy import deepcopy
 
+from app.agents.schemas import QAResult
+from tests.fakes import FakeProvider
 from tests.test_api_pipeline import wait_episode
 from tests.test_capabilities import image_to_image_graph, image_to_video_graph
 
@@ -111,6 +113,15 @@ def test_i2v_advanced_overrides_fill_owners_and_take_priority(system):
     assert [s["duration"] for s in episode["shots"]] == [3, 3]
     jobs = [j for j in app.state.store.list("job", id) if j["type"] == "SHOT_VIDEO"]
     assert len(jobs) == 2
+    assert not any(j["type"] == "SHOT_END_FRAME" for j in app.state.store.list("job", id))
+    assert all(s["end_frame_asset_id"] is None for s in episode["shots"])
+    assert all(s["actual_end_frame_asset_id"] for s in episode["shots"])
+    assert (
+        episode["shots"][1]["start_frame_asset_id"]
+        == episode["shots"][0]["actual_end_frame_asset_id"]
+    )
+    keyframe_qa = [q for q in app.state.store.list("qa", id) if q["stage"] == "keyframes"]
+    assert len(keyframe_qa) == 2 and all(len(q["asset_ids"]) == 1 for q in keyframe_qa)
     for job in jobs:
         assert job["input_values"]["prompt"] == "User camera prompt"
         assert job["patched_workflow"]["sampler"]["inputs"]["steps"] == 7
@@ -121,6 +132,7 @@ def test_i2v_advanced_overrides_fill_owners_and_take_priority(system):
         )
         assert job["profile_snapshot"]["capability"] == "IMAGE_TO_VIDEO"
         assert "end_frame" not in job["profile_snapshot"]["bindings"]
+        assert "end_frame" not in job["asset_bindings"]
     assert abs(episode["final_duration"] - 6) < 0.5
 
 
@@ -156,6 +168,44 @@ def test_asset_overrides_are_uploaded_real_media_and_reflected_in_shot(system):
         job["patched_workflow"][binding["node_id"]]["inputs"][binding["input"]]
         == "autodirector/fixture.png"
     )
+
+
+def test_i2v_transition_qa_retries_start_frame_without_end_render(system):
+    client, app, _ = system
+
+    class FailTransitionOnce(FakeProvider):
+        failed = False
+
+        async def generate_json(self, system, context, schema, *, images=None):
+            result = await super().generate_json(system, context, schema, images=images)
+            if schema is QAResult and context["stage"] == "video" and not self.failed:
+                self.failed = True
+                result.transition_quality = 0.2
+            return result
+
+    app.state.generation.provider_factory = FailTransitionOnce
+    graph = image_to_video_graph(client.get("/api/v1/workflows/default_video").json()["workflow"])
+    profile = client.post(
+        "/api/v1/workflows/import",
+        json={"name": "I2V QA", "capability": "IMAGE_TO_VIDEO", "workflow": graph},
+    ).json()
+    id = client.post(
+        "/api/v1/episodes",
+        json={
+            "idea": "transition retry",
+            "target_duration": 1,
+            "width": 256,
+            "height": 256,
+            "video_workflow_id": profile["id"],
+        },
+    ).json()["id"]
+    client.post(f"/api/v1/episodes/{id}/generate")
+    episode = wait_episode(client, id)
+    assert episode["status"] == "COMPLETED", episode["error"]
+    jobs = app.state.store.list("job", id)
+    assert sum(j["type"] == "SHOT_START_FRAME" for j in jobs) == 2
+    assert sum(j["type"] == "SHOT_VIDEO" for j in jobs) == 2
+    assert not any(j["type"] == "SHOT_END_FRAME" for j in jobs)
 
 
 def test_override_modes_missing_assets_and_rule_rebinding(system):

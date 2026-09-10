@@ -10,6 +10,7 @@ from app.core.config import Settings
 from app.db.store import Store
 from app.main import create_app
 from tests.fakes import FakeProvider
+from tests.test_capabilities import image_to_video_graph
 
 
 def wait_episode(client, id):
@@ -233,10 +234,24 @@ def test_restart_marks_active_work_unknown_and_preserves_artifacts(tmp_path):
     ("retries", "expected", "alternative"),
     [(1, "FAILED", False), (2, "COMPLETED", False), (2, "COMPLETED", True)],
 )
-def test_oom_fallback_obeys_budget_and_preserves_timeline(system, retries, expected, alternative):
+@pytest.mark.parametrize("capability", ["FIRST_LAST_TO_VIDEO", "IMAGE_TO_VIDEO"])
+def test_oom_fallback_obeys_budget_and_preserves_timeline(
+    system, retries, expected, alternative, capability
+):
     client, _, comfy = system
+    profile_id = "default_video"
+    if capability == "IMAGE_TO_VIDEO":
+        graph = image_to_video_graph(
+            client.get("/api/v1/workflows/default_video").json()["workflow"]
+        )
+        result = client.post(
+            "/api/v1/workflows/import",
+            json={"name": "I2V OOM", "capability": capability, "workflow": graph},
+        )
+        assert result.status_code == 201, result.text
+        profile_id = result.json()["id"]
     if alternative:
-        profile = client.get("/api/v1/workflows/default_video").json()
+        profile = client.get(f"/api/v1/workflows/{profile_id}").json()
         graph = profile["workflow"]
         graph["low_sampler"] = graph.pop("sampler")
         for node in graph.values():
@@ -245,12 +260,12 @@ def test_oom_fallback_obeys_budget_and_preserves_timeline(system, retries, expec
                     value[0] = "low_sampler"
         low = client.post(
             "/api/v1/workflows/import",
-            json={"name": "Low memory", "type": "video", "workflow": graph},
+            json={"name": "Low memory", "capability": capability, "workflow": graph},
         )
         assert low.status_code == 201, low.text
         caps = {**profile["capabilities"], "low_memory_workflow_id": low.json()["id"]}
         assert (
-            client.patch("/api/v1/workflows/default_video", json={"capabilities": caps}).status_code
+            client.patch(f"/api/v1/workflows/{profile_id}", json={"capabilities": caps}).status_code
             == 200
         )
     original = comfy.handle
@@ -297,15 +312,22 @@ def test_oom_fallback_obeys_budget_and_preserves_timeline(system, retries, expec
             "qa_enabled": False,
             "max_retries": retries,
             "video_parameters": {"sampler.steps": 7},
+            "video_workflow_id": profile_id,
         },
     ).json()["id"]
     client.post(f"/api/v1/episodes/{id}/generate")
     episode = wait_episode(client, id)
     assert episode["status"] == expected, episode.get("error")
+    if capability == "IMAGE_TO_VIDEO":
+        jobs = client.get(f"/api/v1/jobs?episode_id={id}").json()
+        assert not any(j["type"] in {"SHOT_END_FRAME", "SHOT_INTERMEDIATE_FRAME"} for j in jobs)
+        assert all("end_frame" not in j["asset_bindings"] for j in jobs)
+        assert episode["shots"][0]["end_frame_asset_id"] is None
     if expected == "FAILED":
         assert len(videos) == 2
         assert episode["shots"][0]["start_frame_asset_id"]
-        assert episode["shots"][0]["end_frame_asset_id"]
+        if capability == "FIRST_LAST_TO_VIDEO":
+            assert episode["shots"][0]["end_frame_asset_id"]
     else:
         assert len(videos) == 5  # two failed full clips, three successful shorter segments
         assert abs(episode["final_duration"] - 5) < 0.5

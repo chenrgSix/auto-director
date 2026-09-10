@@ -24,6 +24,7 @@ from app.generation.schemas import ACTIVE, EpisodeCreate, TimelineUpdate
 from app.media.service import Assets, compose, extract_frame
 from app.workflows.analyzer import analyze
 from app.workflows.ownership import decorate_parameters, is_asset_role
+from app.workflows.schema import WorkflowCapability
 
 logger = logging.getLogger(__name__)
 CONTINUOUS = {"CONTINUE_FRAME", "CONTINUE_VIDEO"}
@@ -566,10 +567,12 @@ class GenerationService:
         self, episode, shot, previous, continuity, image, video, budget, agents, visual_qa
     ):
         id, sid = episode["id"], shot["id"]
+        needs_end = video["capability"] == WorkflowCapability.FIRST_LAST_TO_VIDEO
+        frame_roles = ("start_frame", "end_frame") if needs_end else ("start_frame",)
         user_inputs = role_overrides(video, parameter_overrides(episode, video))
         frame_changes = {
             f"{role}_asset_id": user_inputs[role]
-            for role in ("start_frame", "end_frame")
+            for role in frame_roles
             if role in user_inputs and not shot.get(f"{role}_asset_id")
         }
         if frame_changes:
@@ -643,7 +646,7 @@ class GenerationService:
                         shot = self.update_shot(
                             id, sid, start_frame_asset_id=best, status="START_FRAME_READY"
                         )
-                if not shot["end_frame_asset_id"]:
+                if needs_end and not shot["end_frame_asset_id"]:
                     self.update_shot(id, sid, status="GENERATING_END_FRAME")
                     result = await self.render(
                         episode,
@@ -666,14 +669,14 @@ class GenerationService:
                     shot = self.update_shot(
                         id, sid, end_frame_asset_id=result["id"], status="KEYFRAMES_READY"
                     )
+                else:
+                    shot = self.update_shot(id, sid, status="KEYFRAMES_READY")
                 if visual_qa and not shot["video_asset_id"] and retry_scope != "video":
+                    keyframes = [shot[f"{role}_asset_id"] for role in frame_roles]
                     qa = await agents.qa(
                         episode["bible"],
                         shot,
-                        [
-                            self.assets.path(shot["start_frame_asset_id"]),
-                            self.assets.path(shot["end_frame_asset_id"]),
-                        ],
+                        [self.assets.path(asset_id) for asset_id in keyframes],
                         "keyframes",
                     )
                     scope = qa.retry_scope(high=episode["quality"] == "high")
@@ -682,7 +685,7 @@ class GenerationService:
                         sid,
                         "keyframes",
                         qa,
-                        [shot["start_frame_asset_id"], shot["end_frame_asset_id"]],
+                        keyframes,
                     )
                     self.update_shot(
                         id,
@@ -757,7 +760,9 @@ class GenerationService:
                 retries["remaining"] -= 1
                 if exc.code == "OUT_OF_MEMORY":
                     retry_scope = (
-                        "video" if self.shot(id, sid)["end_frame_asset_id"] else "keyframes"
+                        "video"
+                        if all(self.shot(id, sid)[f"{role}_asset_id"] for role in frame_roles)
+                        else "keyframes"
                     )
                     base.update(
                         width=max(256, (base["width"] * 3 // 4 // 16) * 16),
@@ -770,7 +775,7 @@ class GenerationService:
                 if retry_scope == "keyframes":
                     updates.update(start_frame_asset_id=None, end_frame_asset_id=None)
                 elif retry_scope == "transition":
-                    updates.update(end_frame_asset_id=None)
+                    updates[f"{'end_frame' if needs_end else 'start_frame'}_asset_id"] = None
                 self.update_shot(id, sid, **updates)
         raise AppError("QA_FAILED", "镜头超出重试预算")
 
@@ -791,9 +796,10 @@ class GenerationService:
         inputs = {
             **video_inputs,
             "start_frame": shot["start_frame_asset_id"],
-            "end_frame": shot["end_frame_asset_id"],
             **references,
         }
+        if video["capability"] == WorkflowCapability.FIRST_LAST_TO_VIDEO:
+            inputs["end_frame"] = shot["end_frame_asset_id"]
         try:
             return await self.render(
                 episode, video, "SHOT_VIDEO", values, inputs, stamp + ":video", sid
@@ -830,10 +836,12 @@ class GenerationService:
         if duration / count < 1:
             raise AppError("OUT_OF_MEMORY", "无法在最短 1 秒限制内继续分段")
         segments, start = [], shot["start_frame_asset_id"]
+        needs_end = video["capability"] == WorkflowCapability.FIRST_LAST_TO_VIDEO
+        inputs.pop("end_frame", None)
         for index in range(count):
             length = duration / count
             end = shot["end_frame_asset_id"]
-            if index < count - 1:
+            if needs_end and (index < count - 1 or not end):
                 middle = await self.render(
                     episode,
                     image,
@@ -856,7 +864,7 @@ class GenerationService:
                 video,
                 "VIDEO_SEGMENT",
                 {**smaller, "duration": length, "seed": base["seed"] + index},
-                {**inputs, "start_frame": start, "end_frame": end},
+                {**inputs, "start_frame": start, **({"end_frame": end} if needs_end else {})},
                 stamp + f":segment:{index}",
                 sid,
             )

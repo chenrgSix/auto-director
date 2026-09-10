@@ -1,6 +1,12 @@
 # 开发任务与交付目标
 
-## 当前迭代 C03：Workflow Capability 与参数归属
+## 当前收尾 C04：能力分支、AI 参数与路由基础
+
+范围固定为：I2V 只生成首帧（包括 QA、重试与 OOM 分段）；Bible/Shot 输出受当前 workflow owner/type/min/max/enum 约束的 `ai_parameters`，进入最终 patch 且用户高级覆盖优先；新增按 `default_capabilities` 查询的基础路由，兼容显式 workflow ID。保持现有架构、UI、数据库记录与生成恢复逻辑。
+
+状态：**IN_PROGRESS**。验收覆盖 I2V 无尾帧/中间帧渲染、FLF 保留首尾帧、任意 AI-owned 参数与拒绝非法值、四类能力路由与显式 ID 优先，最后执行完整 `make check`。不扩展其他功能。
+
+## 历史迭代 C03：Workflow Capability 与参数归属
 
 按 [C03 契约](WORKFLOW_CAPABILITIES.md) 实现四类 capability、owner/覆盖规则、真实素材自动绑定、默认/高级模式、600 秒与 240 镜统一 limits、数据库迁移及旧 API 兼容。状态：**VERIFIED**。代码、API、前端、迁移与文档已完成；`make check` 为 91 passed，默认/高级模式浏览器验收通过。
 
