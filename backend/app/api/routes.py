@@ -6,21 +6,16 @@ from typing import Annotated
 
 from fastapi import APIRouter, File, Query, Request, UploadFile
 from fastapi.responses import FileResponse, StreamingResponse
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, Field
 
 from app.core.errors import AppError
-from app.core.security import validate_comfy_url
+from app.core.runtime_settings import SettingsPatch
 from app.db.store import uid
 from app.generation.schemas import ACTIVE, EpisodeCreate, TestRun, TimelineUpdate
 from app.media.service import AUDIO_EXT, IMAGE_EXT, VIDEO_EXT
 from app.workflows.schema import WorkflowImport, WorkflowPatch
 
 router = APIRouter(prefix="/api/v1")
-
-
-class SettingsPatch(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    comfyui_url: str = Field(min_length=1, max_length=500)
 
 
 class ResolutionNote(BaseModel):
@@ -41,26 +36,27 @@ def settings(request: Request):
     state = resources(request)
     saved = state.store.get("settings", "settings")
     return {
-        **saved,
-        "comfyui_url": saved.get("comfyui_url") or state.config.comfyui_url,
-        "llm_configured": bool(state.config.llm_model),
-        "llm_model": state.config.llm_model,
-        "vlm_model": state.config.vlm_model,
-        "vlm_configured": bool(state.config.vlm_model),
-        "allow_public_comfyui": state.config.allow_public_comfyui,
-        "max_asset_mb": state.config.max_asset_mb,
+        "default_image": saved["default_image"],
+        "default_video": saved["default_video"],
+        **state.runtime_settings.public(),
     }
 
 
 @router.patch("/settings")
 async def update_settings(request: Request, body: SettingsPatch):
     state = resources(request)
-    if any(episode["status"] in ACTIVE for episode in state.store.list("episode")) or any(
-        job["status"] in {"QUEUED", "RUNNING", "UNKNOWN"} for job in state.store.list("job")
-    ):
-        raise AppError("CONFLICT", "存在进行中或状态不确定的作业，不能切换 ComfyUI", status=409)
-    url = await validate_comfy_url(body.comfyui_url, state.config.allow_public_comfyui)
-    state.store.update("settings", "settings", {"comfyui_url": url})
+
+    def busy():
+        return (
+            bool(state.generation.busy)
+            or state.engine.lock.locked()
+            or any(episode["status"] in ACTIVE for episode in state.store.list("episode"))
+            or any(
+                job["status"] in {"QUEUED", "RUNNING", "UNKNOWN"} for job in state.store.list("job")
+            )
+        )
+
+    await state.runtime_settings.update(body, busy)
     return settings(request)
 
 

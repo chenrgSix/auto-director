@@ -8,7 +8,13 @@ from app.core.errors import AppError
 
 
 async def validate_comfy_url(url: str, allow_public: bool = False) -> str:
-    parsed = urlsplit(url)
+    try:
+        parsed = urlsplit(url)
+        configured_port = parsed.port
+        if configured_port is not None and configured_port < 1:
+            raise ValueError("invalid port")
+    except ValueError:
+        raise AppError("INVALID_URL", "ComfyUI 地址或端口格式无效") from None
     if (
         parsed.scheme not in {"http", "https"}
         or not parsed.hostname
@@ -20,7 +26,7 @@ async def validate_comfy_url(url: str, allow_public: bool = False) -> str:
     ):
         raise AppError("INVALID_URL", "ComfyUI 地址必须是无凭据、路径、查询参数的 HTTP(S) 地址")
     try:
-        port = parsed.port or (443 if parsed.scheme == "https" else 80)
+        port = configured_port or (443 if parsed.scheme == "https" else 80)
         resolved = await asyncio.to_thread(socket.getaddrinfo, parsed.hostname, port)
     except (OSError, ValueError) as exc:
         raise AppError("COMFYUI_OFFLINE", "无法解析 ComfyUI 地址", status=502) from exc
@@ -36,7 +42,7 @@ async def validate_comfy_url(url: str, allow_public: bool = False) -> str:
             if address.version == ipaddress.ip_network(network).version
         )
         if not allow_public and not (address.is_loopback or lan):
-            raise AppError("INVALID_URL", "公网 ComfyUI 需设置 AD_ALLOW_PUBLIC_COMFYUI=true")
+            raise AppError("INVALID_URL", "请在连接与设置中启用允许公网 ComfyUI")
     return url.rstrip("/")
 
 

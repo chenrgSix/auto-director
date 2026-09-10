@@ -19,7 +19,7 @@ See `docs/DEVELOPMENT.md` for configuration and recovery procedures. Run one API
 
 ## Coding Style & Naming Conventions
 
-Python uses four spaces, `snake_case`, type hints, Pydantic schemas, and Ruff with a 100-character formatting target. TypeScript uses two spaces, `PascalCase` components, strict types, and ESLint. Preserve semantic workflow roles; never rely on fixed node IDs. Keep secrets in environment configuration.
+Python uses four spaces, `snake_case`, type hints, Pydantic schemas, and Ruff with a 100-character formatting target. TypeScript uses two spaces, `PascalCase` components, strict types, and ESLint. Preserve semantic workflow roles; never rely on fixed node IDs. Use backend-only runtime configuration for secrets; never return saved keys to the browser.
 
 ## Testing Guidelines
 

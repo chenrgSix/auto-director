@@ -8,36 +8,45 @@
 
 ```sh
 make install
-cp -n .env.example .env
 make build
 make run
 ```
 
-访问 `http://127.0.0.1:8000`；API 交互文档为 `/docs`，健康检查为 `/api/v1/health`。已有 `.env` 请直接编辑，不覆盖。未配置 ComfyUI/LLM 也可以浏览工作台、导入和编辑工作流；生成时会报告依赖错误。
+访问 `http://127.0.0.1:8000`；API 交互文档为 `/docs`，健康检查为 `/api/v1/health`。模型与连接信息直接在“连接与设置”填写。未配置 ComfyUI/LLM 也可以浏览工作台、导入和编辑工作流；生成时会报告依赖错误。
 
 开发时分别在两个终端运行 `make dev-api`、`make dev-web`，访问 `http://127.0.0.1:5173`；Vite 将 `/api` 转发至 8000。后端 reload 会中断任务，正在生成时使用 `make run`。只启动一个 API 进程，不加多个 uvicorn workers。
 
-## 模型与连接配置
+## 页面配置（推荐）
 
-按用户要求，本项目不在本机部署 ComfyUI，也不安装模型权重。工程和本地验证交付后再接入用户提供的服务。
+在“连接与设置”填写 ComfyUI 地址、模型 API 端点、导演模型名、可选视觉模型名和 API 密钥。展开“运行参数”可修改渲染等待、请求超时、资产大小和进度查询间隔。点击“保存配置”后立即生效，再点击“检测 ComfyUI”检查已保存的连接。页面不会自动调用收费的模型请求。
+
+密钥留空保持不变；输入新值替换；勾选“清除已保存的密钥”可删除，包括覆盖环境中原有的密钥。响应只返回是否已配置，保存/刷新后不回显。更换模型 API 端点时，需要重新输入密钥或明确清除。
+
+在线配置以 0600 权限原子写入 `data/runtime-settings.json`；该文件包含本机明文凭据，只允许当前系统账户读写，不能提交 Git。配置优先级：在线保存 > 既有 ComfyUI 设置 > 环境/.env > 默认值。数据库保存的默认工作流不受此变更影响。存在运行中、尚未退出或 UNKNOWN 作业时先结束并核对，再保存配置。
+
+按用户要求，本项目不部署 ComfyUI、不安装权重，使用用户提供的服务。
+
+## 可选环境默认值
+
+正常使用无需创建 `.env`。已有环境变量仍作为未在线覆盖字段的默认值。只有数据目录 `AD_DATA_DIR` 和网页来源 `AD_ALLOWED_ORIGINS` 等启动项需要环境配置及重启。
 
 | 环境变量 | 用途 |
 | --- | --- |
 | `AD_COMFYUI_URL` | 官方 ComfyUI HTTP 服务根地址，默认 `http://127.0.0.1:8188`；也可在设置页保存 |
 | `AD_LLM_BASE_URL` | OpenAI-compatible API 根地址，包含 `/v1`，默认 `http://127.0.0.1:11434/v1` |
 | `AD_LLM_MODEL` | 导演/Bible/Shot 模型，必须支持 Chat Completions JSON mode |
-| `AD_LLM_API_KEY` | 模型服务密钥，只在本机环境或 `.env` 配置，不返回浏览器 |
+| `AD_LLM_API_KEY` | 模型服务密钥的可选初始值；页面可替换/清除，后端不回显 |
 | `AD_VLM_MODEL` | 同一模型端点的视觉模型，需支持 `image_url` 输入；为空则明确跳过视觉 QA |
 | `AD_DATA_DIR` | SQLite 与资产根目录，默认仓库 `data/`；相对路径以仓库为基准 |
 | `AD_RENDER_TIMEOUT` | 单个 ComfyUI 作业等待上限，默认 1800 秒 |
 | `AD_MAX_ASSET_MB` | 单资产上限，默认 512 MiB |
 | `AD_ALLOW_PUBLIC_COMFYUI` | 默认 false，仅允许 loopback/LAN；公网地址需要显式 true |
 
-修改环境变量后重启 API。设置页保存的 ComfyUI 地址优先于环境变量；有进行中或 UNKNOWN 作业时不能切换。当前适配器直连官方 HTTP/WS，不含厂商云认证、代理登录或多租户支持。
+修改环境默认值需要重启，且不会覆盖已在线保存的同名字段。当前适配器直连官方 HTTP/WS，不含厂商云认证、代理登录或多租户支持。
 
 ## 工作流准备与首个生成
 
-1. 在“连接与设置”保存 ComfyUI 地址并检查设备、节点及模型。
+1. 在“连接与设置”保存渲染与模型配置，再检测 ComfyUI 设备、节点及模型。
 2. 打开“工作流”：选择内置模板或导入 **API Format JSON**；普通 UI JSON 需要先在 ComfyUI 导出 API 格式。
 3. 确认语义绑定、输出节点、capabilities 和模型枚举；设置 `duration_to_frames` 时检查 FPS 与帧数对齐规则。上传首尾帧，分别验证并试跑两类 profile，再设置默认项。
 4. 在“开始创作”输入 Idea，选择 5/10/15 秒、画幅和质量。单集页展示参考、镜头、QA、作业和成片；视频单独重试会复用关键帧，排序/禁用变化会失效相关镜头及旧成片。
@@ -56,7 +65,7 @@ make browser-fixture               # 8011 端口，合成测试媒体，关闭�
 
 ## 失败恢复与数据
 
-`data/autodirector.sqlite3` 保存版本化聚合、作业快照和 QA 历史；`data/assets/<episode_id>/` 保存 UUID 命名媒体。备份前停止 API，整体复制数据目录；恢复时保留数据库和对应媒体，不单独复制运行中的 SQLite 主文件。
+`data/autodirector.sqlite3` 保存版本化聚合、作业快照和 QA 历史；`data/assets/<episode_id>/` 保存 UUID 命名媒体。备份前停止 API，整体复制数据目录（含在线配置文件），限制备份访问权限；恢复时保留数据库和对应媒体，不单独复制运行中的 SQLite 主文件。
 
 取消会尽快停止自身 ComfyUI 作业；正在执行的 LLM/媒体步骤可能需要结束或超时后退出，退出前禁止重新入队。重启保留已生成资产，将中断作业标记为可诊断失败或 UNKNOWN。先在单集/设置页核对队列和历史：已知 prompt_id 可以恢复读取，未知受理状态不能直接重发。只有人工查明后，才填写明确结论解除 UNKNOWN。
 

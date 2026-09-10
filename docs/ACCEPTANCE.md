@@ -11,8 +11,8 @@ P0 + Phase 1/2 MVP 的本地工程闭环已完成。ComfyUI/LLM/VLM 依赖使用
 | 文档与贡献指南 | 通过 | 任务、模块、接口、运行、决策、迭代与验收同步；AGENTS.md 为当前目录和命令 |
 | 锁定依赖安装 | 通过 | `make install`；受限环境使用临时 uv/Python/npm 缓存，33 个 Python 包、175 个 npm 包 |
 | 统一本地检查 | 通过 | 根目录 `make check` 成功退出 |
-| Python 检查 | 通过 | Ruff lint + format check，35 个 Python 文件 |
-| 后端测试 | 通过 | **42 passed**，无跳过；耗时 7.01 秒；pytest/pytest-asyncio |
+| Python 检查 | 通过 | Ruff lint + format check，37 个 Python 文件 |
+| 后端测试 | 通过 | **63 passed**，无跳过；耗时 7.40 秒；pytest/pytest-asyncio |
 | 前端检查 | 通过 | ESLint、`tsc --noEmit`、`tsc -b && vite build`；Vite 7.3.6 |
 | FFmpeg 媒体 | 通过 | 真实 H.264/AAC 编码、混合尺寸/FPS、有声/无声拼接、尾帧和裁切边界 |
 | 5/10/15 秒流水线 | 通过（模拟模型） | API 创建→计划→参考→首尾帧→QA→视频→实际尾帧→真实 FFmpeg 导出，误差 ≤0.5 秒 |
@@ -48,7 +48,7 @@ P0 + Phase 1/2 MVP 的本地工程闭环已完成。ComfyUI/LLM/VLM 依赖使用
 
 ## 真实接入与视觉验收门禁 T02
 
-需要用户提供 ComfyUI 服务根地址、可用节点/模型信息或 API JSON 工作流，以及 OpenAI-compatible 模型端点、导演模型名和可选视觉模型名。密钥在本机 `.env` 配置。
+需要用户提供 ComfyUI 服务根地址、可用节点/模型信息或 API JSON 工作流，以及 OpenAI-compatible 模型端点、导演模型名和可选视觉模型名。通过“连接与设置”填写端点、模型名和密钥。
 
 1. 记录 ComfyUI 版本、GPU/显存、节点/模型版本、workflow hash、LLM/VLM 模型与配置（无密钥）。
 2. 两类 Workflow 完成导入→角色识别→参数编辑→校验→试跑→设置默认；检查参考图实际进入条件输入。
@@ -65,3 +65,9 @@ P0 + Phase 1/2 MVP 的本地工程闭环已完成。ComfyUI/LLM/VLM 依赖使用
 - 单用户、单 worker、无外网用户认证；Phase 3 的音频生成、多机/云市场等见任务路线图。
 
 每次验证同步更新命令、结果与限制，禁止用文件存在或按钮可点击替代功能验收。
+
+## C01 在线配置验收（2026-09-10）
+
+`make check` 全部通过：63 个测试（含 21 个配置回归）、Ruff/格式、前端 lint/类型与构建。新断言覆盖保存后现有 Provider/渲染器读取新值、重启恢复、环境/旧设置兼容、0600 文件权限、空密钥保留与显式清除、凭据不回显、端点变更确认、运行中/取消未退出/UNKNOWN 保护、DNS 校验期间入队竞争、写入失败不发布配置及清理临时文件。
+
+浏览器在隔离夹具中填写测试端点/模型/密钥，保存后提示即时生效，输入框清空；刷新后模型仍保留且不回显密钥；勾选清除后保存，密钥已配置状态消失；检测已保存 ComfyUI 连接成功。390×844 视口无横向溢出。正式服务检查没有活动作业后已重启，在线配置页加载正常；真实模型服务仍未接入。页面截图见 [在线配置](evidence/online-settings.png)。

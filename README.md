@@ -8,12 +8,11 @@
 
 ```sh
 make install
-cp -n .env.example .env
 make build
 make run
 ```
 
-打开 `http://127.0.0.1:8000`。先在 `.env` 配置模型端点和模型名，再在“连接与设置”接入 ComfyUI。开发时分别运行 `make dev-api`、`make dev-web`；`make check` 执行本地完整检查。
+打开 `http://127.0.0.1:8000`。在“连接与设置”填写 ComfyUI 地址、模型端点、模型名和密钥，保存后立即生效，无需编辑 `.env` 或重启。开发时分别运行 `make dev-api`、`make dev-web`；`make check` 执行本地完整检查。
 
 ## 项目文档
 

@@ -10,6 +10,7 @@ from starlette.middleware.trustedhost import TrustedHostMiddleware
 from app.api.routes import router
 from app.core.config import ROOT, Settings
 from app.core.errors import AppError
+from app.core.runtime_settings import RuntimeSettings
 from app.db.store import Store
 from app.generation.engine import RenderEngine
 from app.generation.pipeline import GenerationService
@@ -20,7 +21,7 @@ from app.workflows.manager import WorkflowManager
 def create_app(
     config: Settings | None = None, *, client_factory=None, provider_factory=None
 ) -> FastAPI:
-    config = config or Settings()
+    config = (config or Settings()).model_copy(deep=True)
 
     @asynccontextmanager
     async def lifespan(app):
@@ -29,6 +30,7 @@ def create_app(
         state.store = Store(config.storage_root)
         state.workflows = WorkflowManager(state.store)
         state.workflows.bootstrap()
+        state.runtime_settings = RuntimeSettings(config, state.store.get("settings", "settings"))
         state.assets = Assets(state.store)
         state.engine = RenderEngine(config, state.store, state.assets, client_factory)
         state.generation = GenerationService(

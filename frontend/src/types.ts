@@ -9,7 +9,12 @@ export type Workflow = {
   parameters: Parameter[]; parameter_values: Record<string, Value>; warnings: string[];
   validation: { valid: boolean; issues: Problem[] } | null; workflow_hash: string; last_test_job_id: string | null;
 };
-export type Settings = { comfyui_url: string; default_image: string; default_video: string; llm_configured: boolean; llm_model: string; vlm_configured: boolean; vlm_model: string; max_asset_mb: number };
+export type Settings = {
+  comfyui_url: string; allow_public_comfyui: boolean; default_image: string; default_video: string;
+  llm_base_url: string; llm_configured: boolean; llm_model: string; llm_api_key_configured: boolean;
+  vlm_configured: boolean; vlm_model: string; max_asset_mb: number;
+  render_timeout: number; request_timeout: number; poll_interval: number;
+};
 export type QA = { stage: string; character_consistency: number; scene_consistency: number; style_consistency: number; action_accuracy: number; transition_quality: number; artifact_score: number; explanation: string; retry_scope: string | null };
 export type Shot = {
   id: string; title: string; index: number; duration: number; enabled: boolean; status: string; action: string; camera: string;

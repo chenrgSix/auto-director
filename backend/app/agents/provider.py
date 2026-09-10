@@ -38,7 +38,7 @@ class LLMProvider:
         if not model:
             raise AppError(
                 "CONFIGURATION_REQUIRED",
-                "请在后端环境配置 AD_VLM_MODEL" if images else "请在后端环境配置 AD_LLM_MODEL",
+                "请在连接与设置中配置视觉模型" if images else "请在连接与设置中配置导演模型",
                 status=409,
             )
         instruction = (

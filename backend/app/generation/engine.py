@@ -25,8 +25,7 @@ class RenderEngine:
         self.lock = asyncio.Lock()
 
     def client(self):
-        saved = self.store.get("settings", "settings")
-        url = saved.get("comfyui_url") or self.settings.comfyui_url
+        url = self.settings.comfyui_url
         return (
             self.client_factory(url) if self.client_factory else ComfyUIClient(self.settings, url)
         )
