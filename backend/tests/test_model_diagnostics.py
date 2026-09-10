@@ -62,7 +62,7 @@ def test_model_probe_uses_saved_protocol_model_and_key_without_creating_records(
     assert result.status_code == 200 and result.json()["success"], result.text
     assert result.json()["model"] == f"{kind}-fixture"
     assert result.json()["elapsed_seconds"] >= 0
-    assert result.json()["timeout_seconds"] == 120
+    assert result.json()["timeout_seconds"] == 600
     assert len(calls) == 1
     request = calls[0]
     assert str(request.url) == "https://models.example/v1/chat/completions"
@@ -84,6 +84,25 @@ def test_model_probe_uses_saved_protocol_model_and_key_without_creating_records(
         assert result.json()["checks"] == ["json_output"]
     assert "private-test-key" not in result.text
     assert {key: app.state.store.list(key) for key in before} == before
+
+
+def test_saved_timeout_changes_apply_to_probe_and_existing_provider(model_system, monkeypatch):
+    client, app = model_system
+    calls = []
+
+    def respond(request):
+        calls.append(request)
+        return completion('{"result":"ok"}')
+
+    wire(app, monkeypatch, respond)
+    for timeout in (1, 600, 900, 3600):
+        saved = client.patch("/api/v1/settings", json={"llm_timeout": timeout})
+        assert saved.status_code == 200, saved.text
+        result = client.post("/api/v1/models/test", json={"kind": "director"}).json()
+        assert result["success"] and result["timeout_seconds"] == timeout
+        assert calls[-1].extensions["timeout"] == dict.fromkeys(
+            ("connect", "read", "write", "pool"), timeout
+        )
 
 
 @pytest.mark.parametrize(
@@ -211,10 +230,13 @@ def test_probe_deadline_cancels_request_and_cleans_up_test_image(model_system, m
             finally:
                 cancelled.append(True)
 
-    monkeypatch.setattr("app.agents.diagnostics.TEST_TIMEOUT_SECONDS", 0.01)
+    # Bypass the public 1-second minimum only to keep this cancellation test fast.
+    monkeypatch.setattr(app.state.config, "llm_timeout", 0.01)
     monkeypatch.setattr(app.state.generation, "provider_factory", Slow)
     data = client.post("/api/v1/models/test", json={"kind": "vision"}).json()
     assert not data["success"] and data["error"]["code"] == "LLM_TIMEOUT"
+    assert data["timeout_seconds"] == 0.01
+    assert "0.01 秒" in data["error"]["message"]
     assert cancelled and paths and all(not path.exists() for path in paths)
 
 

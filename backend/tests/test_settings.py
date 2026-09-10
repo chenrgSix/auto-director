@@ -21,6 +21,7 @@ def test_online_config_is_live_persistent_and_never_returns_secrets(tmp_path):
     base = configuration(tmp_path, llm_model="environment-model")
     app = create_app(base)
     with TestClient(app) as client:
+        assert client.get("/api/v1/settings").json()["llm_timeout"] == 600
         provider = app.state.generation.provider_factory()
         result = client.patch(
             "/api/v1/settings",
@@ -29,6 +30,7 @@ def test_online_config_is_live_persistent_and_never_returns_secrets(tmp_path):
                 "llm_base_url": "https://models.example/v1/",
                 "llm_model": "online-director",
                 "vlm_model": "online-vision",
+                "llm_timeout": 900,
                 "llm_api_key": "test-secret-never-return",
                 "render_timeout": 900,
                 "max_asset_mb": 128,
@@ -45,6 +47,7 @@ def test_online_config_is_live_persistent_and_never_returns_secrets(tmp_path):
         assert app.state.engine.client().url == "http://127.0.0.1:8288"
         assert app.state.generation.settings.vlm_model == "online-vision"
         assert provider.settings.llm_model == "online-director"
+        assert provider.settings.llm_timeout == 900
         assert base.llm_model == "environment-model"
 
         class Probe(BaseModel):
@@ -61,12 +64,16 @@ def test_online_config_is_live_persistent_and_never_returns_secrets(tmp_path):
         assert str(calls[0].url) == "https://models.example/v1/chat/completions"
         assert calls[0].headers["authorization"] == "Bearer test-secret-never-return"
         assert json.loads(calls[0].content)["model"] == "online-director"
+        assert calls[0].extensions["timeout"] == dict.fromkeys(
+            ("connect", "read", "write", "pool"), 900
+        )
         assert "test-secret-never-return" not in repr(app.state.config)
     path = tmp_path / "runtime-settings.json"
     assert stat.S_IMODE(path.stat().st_mode) == 0o600
     with TestClient(create_app(configuration(tmp_path, llm_model="changed-environment"))) as client:
         result = client.get("/api/v1/settings").json()
         assert result["llm_model"] == "online-director"
+        assert result["llm_timeout"] == 900
         assert result["comfyui_url"] == "http://127.0.0.1:8288"
         assert result["llm_api_key_configured"] is True
 
@@ -123,6 +130,11 @@ def test_secret_omission_endpoint_change_and_explicit_clear(tmp_path):
         {"llm_base_url": "https://user:secret@host/v1"},
         {"llm_base_url": "https://host/v1?api_key=secret"},
         {"render_timeout": 0},
+        {"llm_timeout": 0},
+        {"llm_timeout": 3601},
+        {"llm_timeout": None},
+        {"llm_timeout": "nan"},
+        {"llm_timeout": "inf"},
         {"max_asset_mb": 2049},
         {"llm_model": None},
         {"data_dir": "/tmp/move"},
@@ -202,6 +214,14 @@ def test_legacy_comfy_url_and_invalid_file_handling(tmp_path):
         RuntimeSettings(configuration(tmp_path), {})
     assert failure.value.code == "CONFIGURATION_INVALID"
     assert "private-value" not in str(failure.value)
+
+
+def test_older_saved_configuration_inherits_model_timeout_default(tmp_path):
+    (tmp_path / "runtime-settings.json").write_text('{"llm_model":"saved-model"}')
+    with TestClient(create_app(configuration(tmp_path))) as client:
+        settings = client.get("/api/v1/settings").json()
+        assert settings["llm_model"] == "saved-model"
+        assert settings["llm_timeout"] == 600
 
 
 def test_legacy_url_credentials_are_not_echoed_to_the_browser(tmp_path):

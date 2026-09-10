@@ -9,7 +9,7 @@ import { ErrorNotice, Loading } from './ui';
 import { ModelTests } from './ModelTests';
 
 type Connection = { connected: boolean; node_count: number; system: { devices?: { name?: string; vram_total?: number; vram_free?: number }[] }; workflows: { id: string; name: string; validation: { valid: boolean; issues: { message?: string; code: string; class_type?: string; field?: string }[] } }[] };
-const editable = ['comfyui_url', 'allow_public_comfyui', 'llm_base_url', 'llm_model', 'vlm_model', 'render_timeout', 'request_timeout', 'max_asset_mb', 'poll_interval'] as const;
+const editable = ['comfyui_url', 'allow_public_comfyui', 'llm_base_url', 'llm_model', 'vlm_model', 'llm_timeout', 'render_timeout', 'request_timeout', 'max_asset_mb', 'poll_interval'] as const;
 type Draft = Pick<Settings, typeof editable[number]>;
 const limits = [
   { key: 'render_timeout', label: '渲染等待上限（秒）', min: 1, max: 14400, step: 1 },
@@ -120,6 +120,11 @@ export default function SetupPage({ notify, onChange }: { notify: Notify; onChan
             <input id="llm-api-key" type="password" autoComplete="new-password" maxLength={4096} value={keyValue} disabled={clearKey || !!busy} onChange={event => { setKeyValue(event.target.value); setSavedMessage(false); setProblem(undefined); setModelTestVersion(value => value + 1); }} placeholder={saved.llm_api_key_configured ? '已保存密钥，留空保持不变' : '无需认证的服务可留空'} />
             <small>{saved.llm_api_key_configured ? '后端已有密钥。输入新值可替换，保存后输入框会清空。' : '密钥仅存储在本机后端，不会通过读取接口返回。'}</small>
             {saved.llm_api_key_configured && <label className="checkbox"><input type="checkbox" checked={clearKey} onChange={event => { setClearKey(event.target.checked); setKeyValue(''); setSavedMessage(false); setModelTestVersion(value => value + 1); }} />清除已保存的密钥</label>}
+          </div>
+          <div className="field">
+            <label htmlFor="llm-timeout">模型请求超时（秒）</label>
+            <input id="llm-timeout" type="number" required min={1} max={3600} step={1} value={draft.llm_timeout} onChange={event => change('llm_timeout', Number(event.target.value))} />
+            <small>默认 600 秒，可设置 1～3600 秒；导演、视觉模型和模型测试共用。</small>
           </div>
           <ModelTests key={modelTestVersion} settings={saved} disabled={!!busy} dirty={dirty} onPending={setModelTesting} />
         </section>

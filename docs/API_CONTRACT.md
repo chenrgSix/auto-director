@@ -8,7 +8,9 @@ Base `/api/v1`，JSON；ID 由服务端生成；UTC ISO 时间。验证失败 42
 
 `POST /models/test` 接收 `{ "kind": "director" | "vision" }`，只使用已保存的端点、模型和密钥，调用与生成相同的 JSON Provider。导演测试最小 JSON；视觉测试附带临时色块图片并校验识别结果，文件随后删除。模型诊断结果返回 200 / `{kind, model, success, elapsed_seconds, timeout_seconds, checks, error}`；未配置、鉴权/限流、请求错误和无效 JSON 记录在 error 中，非法请求字段仍返回 422。
 
-测试总截止时间为 120 秒，浏览器断开时取消下游等待。不保存配置、不创建 Episode/Job/Asset，不返回密钥、请求正文或上游原始报错。测试通过仅表示小请求的 JSON/图像输入检查成功，不代表长任务或视觉质量验收。
+测试总截止时间读取 `llm_timeout`，默认 600 秒；`GET/PATCH /settings` 支持读取与保存该字段，范围 1～3600 秒，越界或 null 返回 422。普通模型请求也使用此值作为 HTTP 连接/读写/连接池超时，单次调用开始时固定配置；保存后用于后续请求。旧配置文件缺少字段时继承环境 `AD_LLM_TIMEOUT` 或默认值，无需迁移。
+
+浏览器断开时取消下游等待。测试不保存配置、不创建 Episode/Job/Asset，不返回密钥、请求正文或上游原始报错。测试通过仅表示小请求的 JSON/图像输入检查成功，不代表长任务或视觉质量验收。
 
 ### 更换已创建短片的工作流（C08）
 

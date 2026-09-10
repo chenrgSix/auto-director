@@ -13,7 +13,6 @@ from app.core.config import Settings
 from app.core.errors import AppError
 
 T = TypeVar("T", bound=BaseModel)
-MODEL_TIMEOUT_SECONDS = 120
 
 
 def model_request_error(exc: httpx.RequestError) -> AppError:
@@ -115,7 +114,7 @@ class LLMProvider:
             {"Authorization": f"Bearer {settings.llm_api_key}"} if settings.llm_api_key else {}
         )
         async with httpx.AsyncClient(
-            timeout=MODEL_TIMEOUT_SECONDS,
+            timeout=settings.llm_timeout,
             headers=headers,
             trust_env=False,
             follow_redirects=False,

@@ -9,11 +9,8 @@ from typing import Literal
 from PIL import Image
 from pydantic import ValidationError
 
-from app.agents.provider import MODEL_TIMEOUT_SECONDS
 from app.agents.schemas import StrictModel
 from app.core.errors import AppError
-
-TEST_TIMEOUT_SECONDS = MODEL_TIMEOUT_SECONDS
 
 
 class ModelTestRequest(StrictModel):
@@ -31,6 +28,7 @@ class VisionProbe(StrictModel):
 async def check_model(config, provider, kind):
     started = monotonic()
     model = config.vlm_model if kind == "vision" else config.llm_model
+    timeout = config.llm_timeout
     error = None
     try:
         if not model:
@@ -38,7 +36,7 @@ async def check_model(config, provider, kind):
                 "CONFIGURATION_REQUIRED",
                 "请先保存视觉模型名称" if kind == "vision" else "请先保存导演模型名称",
             )
-        async with asyncio.timeout(TEST_TIMEOUT_SECONDS):
+        async with asyncio.timeout(timeout):
             if kind == "vision":
                 with TemporaryDirectory(prefix="autodirector-model-test-") as temporary:
                     path = Path(temporary) / "color.png"
@@ -65,7 +63,7 @@ async def check_model(config, provider, kind):
     except TimeoutError:
         error = AppError(
             "LLM_TIMEOUT",
-            f"模型测试超过 {TEST_TIMEOUT_SECONDS} 秒，已停止等待",
+            f"模型测试超过 {timeout:g} 秒，已停止等待",
             {"phase": "test_deadline"},
         )
     except ValidationError:
@@ -77,7 +75,7 @@ async def check_model(config, provider, kind):
         "model": model,
         "success": error is None,
         "elapsed_seconds": round(monotonic() - started, 3),
-        "timeout_seconds": TEST_TIMEOUT_SECONDS,
+        "timeout_seconds": timeout,
         "checks": (["json_output", "image_input"] if kind == "vision" else ["json_output"])
         if error is None
         else [],

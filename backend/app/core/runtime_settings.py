@@ -20,6 +20,7 @@ class SettingsPatch(BaseModel):
     llm_base_url: str | None = Field(default=None, min_length=1, max_length=500)
     llm_model: str | None = Field(default=None, max_length=200)
     vlm_model: str | None = Field(default=None, max_length=200)
+    llm_timeout: float | None = Field(default=None, ge=1, le=3600)
     llm_api_key: SecretStr | None = Field(default=None, max_length=4096)
     clear_llm_api_key: bool = False
     render_timeout: float | None = Field(default=None, ge=1, le=14400)

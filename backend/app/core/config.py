@@ -16,6 +16,7 @@ class Settings(BaseSettings):
     llm_model: str = ""
     llm_api_key: str = Field(default="", repr=False)
     vlm_model: str = ""
+    llm_timeout: float = Field(default=600, ge=1, le=3600)
     render_timeout: float = Field(default=1800, ge=1, le=14400)
     request_timeout: float = Field(default=30, ge=1, le=120)
     max_asset_mb: int = Field(default=512, ge=1, le=2048)

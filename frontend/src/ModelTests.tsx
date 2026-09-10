@@ -27,7 +27,7 @@ export function ModelTests({ settings, disabled, dirty, onPending }: { settings:
   }
   return <section className="model-tests" aria-label="模型测试">
     <div className="actions">{(['director', 'vision'] as const).map(kind => <button key={kind} type="button" disabled={disabled || dirty || !!pending || !(kind === 'director' ? settings.llm_model : settings.vlm_model)} onClick={() => void test(kind)}>{pending === kind ? `${labels[kind]}测试中…` : `测试${labels[kind]}`}</button>)}{pending && <button type="button" onClick={cancel}>取消模型测试</button>}</div>
-    <p className="muted">测试使用已保存配置调用模型，检查 JSON 输出；视觉测试会附带一张小图。最多等待 120 秒。</p>
+    <p className="muted">测试使用已保存配置调用模型，检查 JSON 输出；视觉测试会附带一张小图。最多等待 {settings.llm_timeout} 秒。</p>
     {dirty && <p className="muted">先保存更改，再测试模型；旧测试结果已清除。</p>}
     {!settings.vlm_model && <p className="muted">配置视觉 QA 模型后可测试图像输入。</p>}
     {error && <div className="notice" role="status">{error}</div>}
