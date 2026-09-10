@@ -4,7 +4,7 @@ from copy import deepcopy
 
 from app.core.errors import AppError
 from app.core.limits import MAX_BATCH, MAX_DIMENSION, MAX_FPS, MAX_SHOT_SECONDS, MIN_DIMENSION
-from app.workflows.analyzer import check_value
+from app.workflows.analyzer import check_value, validate_ai_parameters
 from app.workflows.ownership import decorate_parameters, is_asset_role
 
 
@@ -24,7 +24,10 @@ def ai_parameters(*profiles: dict) -> list[dict]:
     return [
         {
             "workflow_id": profile["id"],
-            **{key: item.get(key) for key in ("key", "role", "type", "min", "max", "enum")},
+            **{
+                key: item.get(key)
+                for key in ("key", "field", "role", "owner", "type", "min", "max", "enum")
+            },
         }
         for profile in profiles
         for item in profile["parameters"]
@@ -94,10 +97,12 @@ def validate_strategy(values: dict, maximum: float, *, low_memory=False, ceiling
 
 
 def resolve_parameters(
-    profile, automatic, assets, overrides, advanced, budget=None, *, recovery=False
+    profile, automatic, assets, overrides, advanced, budget=None, *, recovery=False, ai_values=None
 ):
+    validate_ai_parameters(profile, ai_values or {})
     validate_overrides(profile, overrides, advanced)
     values, bound_assets, raw = dict(automatic), dict(assets), dict(overrides)
+    values.update(role_overrides(profile, ai_values or {}))
     roles = role_overrides(profile, overrides)
     for role, value in roles.items():
         if is_asset_role(role):
@@ -132,6 +137,8 @@ def resolve_parameters(
         sources[item["key"]] = (
             "user"
             if item["key"] in overrides
+            else "ai"
+            if item["key"] in (ai_values or {})
             else item.get("owner", "workflow")
             if role in values or role in bound_assets
             else "workflow"

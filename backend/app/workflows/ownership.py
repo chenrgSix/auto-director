@@ -86,11 +86,12 @@ def decorate_parameters(profile: dict) -> None:
             if (
                 role
                 or item.get("asset_kind")
-                or rule.owner not in {ParameterOwner.WORKFLOW, ParameterOwner.USER}
+                or rule.owner
+                not in {ParameterOwner.AI, ParameterOwner.WORKFLOW, ParameterOwner.USER}
             ):
                 raise AppError(
                     "WORKFLOW_INVALID",
-                    "语义角色的 owner 不可改写；自定义参数可归属 workflow/user",
+                    "语义角色的 owner 不可改写；自定义参数可归属 ai/workflow/user",
                     {"key": item["key"], "owner": owner},
                 )
             owner = rule.owner.value

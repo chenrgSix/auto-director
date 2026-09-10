@@ -42,6 +42,7 @@ class RenderEngine:
         advanced_mode: bool = True,
         budget: dict | None = None,
         allowed_asset_ids: list[str] | None = None,
+        ai_values: dict | None = None,
     ) -> dict:
         profile = canonicalize(deepcopy(profile))
         requested = parameter_values or {}
@@ -53,6 +54,7 @@ class RenderEngine:
             advanced_mode,
             budget,
             recovery=bool(values.get("_oom_recovery")),
+            ai_values=ai_values,
         )
         signature = workflow_hash(
             {
@@ -60,6 +62,7 @@ class RenderEngine:
                 "capability": profile["capability"],
                 "parameter_rules": profile.get("parameter_rules", {}),
                 "requested": requested,
+                **({"ai_parameters": ai_values} if ai_values else {}),
                 "bindings": profile["bindings"],
                 "outputs": profile["outputs"],
                 "capabilities": profile["capabilities"],
@@ -86,6 +89,7 @@ class RenderEngine:
                 "asset_bindings": asset_bindings,
                 "parameter_values": parameter_values or {},
                 "requested_parameter_values": requested,
+                "ai_parameter_values": ai_values or {},
                 "parameter_sources": sources,
                 "advanced_mode": advanced_mode,
                 "allowed_asset_ids": allowed_asset_ids or [],
@@ -149,6 +153,7 @@ class RenderEngine:
                             values,
                             job["parameter_values"],
                             advanced=job.get("advanced_mode", True),
+                            ai_values=job.get("ai_parameter_values", {}),
                         )
                         report = validate_dependencies(
                             {**checked, "workflow": graph, "parameter_values": {}}, info

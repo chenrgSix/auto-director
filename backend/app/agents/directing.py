@@ -3,6 +3,7 @@ import math
 from collections.abc import Callable
 from fractions import Fraction
 
+from app.agents.parameters import constrained_output
 from app.agents.provider import LLMProvider
 from app.agents.schemas import (
     EpisodePlan,
@@ -211,14 +212,16 @@ class Directors:
     async def bible(self, episode: dict, plan: dict, workflow_parameters=None) -> VisualBible:
         return await self.provider.generate_json(
             "Act as Bible Agent. Specify distinct, stable character identities, environment, visual style, "
-            "lighting and continuity rules for this episode only. Preserve the exact subject count in the idea.",
+            "lighting and continuity rules for this episode only. Preserve the exact subject count in the idea. "
+            "Fill ai_parameters[workflow_id][parameter_key] for the listed AI-owned parameters, "
+            "respecting their types, bounds and enums. Never fill unlisted workflows or parameters.",
             {
                 "idea": episode["idea"],
                 "style": episode["style"],
                 "plan": plan,
                 "workflow_parameters": workflow_parameters or [],
             },
-            VisualBible,
+            constrained_output(VisualBible, workflow_parameters or []),
         )
 
     async def shot(
@@ -229,6 +232,7 @@ class Directors:
             "Inherit the Bible and continuity. End frame is the same subjects, location and lighting seconds later. "
             "Describe one action, camera, light, identity and negative constraints. Prompts should be in English. "
             "Respect the AI-owned workflow parameter types, ranges and enum options. "
+            "Fill ai_parameters[workflow_id][parameter_key] for the listed parameters only. "
             "continuity_state describes the expected subject position, direction, environment and time at the end.",
             {
                 "bible": bible,
@@ -236,7 +240,7 @@ class Directors:
                 "continuity": continuity,
                 "workflow_parameters": workflow_parameters or [],
             },
-            ShotPrompts,
+            constrained_output(ShotPrompts, workflow_parameters or []),
         )
 
     async def qa(self, bible: dict, shot: dict, paths: list, stage: str) -> QAResult:

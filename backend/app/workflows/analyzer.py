@@ -293,9 +293,20 @@ def check_value(item: dict, value: Any) -> None:
         valid = type(value) is bool
     elif kind in {"text", "textarea"}:
         valid = isinstance(value, str) and len(value) <= 20000
+    elif kind == "select":
+        valid = type(value) in {str, int, float, bool} and (
+            type(value) is not float or math.isfinite(value)
+        )
     if not valid:
         raise AppError("WORKFLOW_INVALID", f"参数 {item['key']} 类型不匹配", item)
-    if item.get("enum") and value not in item["enum"]:
+    if item.get("enum") and not any(
+        value == option
+        and (
+            type(value) is type(option)
+            or (type(value) in {int, float} and type(option) in {int, float})
+        )
+        for option in item["enum"]
+    ):
         raise AppError(
             "MISSING_MODEL"
             if any(x in item["field"] for x in ("name", "model"))
@@ -312,8 +323,25 @@ def check_value(item: dict, value: Any) -> None:
                 raise AppError("WORKFLOW_INVALID", f"参数 {item['key']} 超出 {key} 约束", item)
 
 
+def validate_ai_parameters(profile: dict, values: dict) -> None:
+    parameters = {item["key"]: item for item in profile["parameters"]}
+    for key, value in values.items():
+        item = parameters.get(key)
+        if not item or item["owner"] != "ai":
+            raise AppError("LLM_INVALID_OUTPUT", f"AI 不允许填写参数 {key}")
+        try:
+            check_value(item, value)
+        except AppError as exc:
+            raise AppError("LLM_INVALID_OUTPUT", exc.message, exc.details) from exc
+
+
 def patch(
-    profile: dict, values: dict, parameter_values: dict | None = None, *, advanced: bool = True
+    profile: dict,
+    values: dict,
+    parameter_values: dict | None = None,
+    *,
+    advanced: bool = True,
+    ai_values: dict | None = None,
 ) -> dict:
     issues = validate_bindings(profile)
     if issues:
@@ -322,11 +350,15 @@ def patch(
     decorated = deepcopy(profile)
     decorate_parameters(decorated)
     parameters = {item["key"]: item for item in decorated["parameters"]}
+    validate_ai_parameters(decorated, ai_values or {})
     for key, value in profile.get("parameter_values", {}).items():
         if key not in parameters:
             raise AppError("WORKFLOW_INVALID", f"未知动态参数 {key}")
         item = parameters[key]
         check_value(item, value)
+        graph[item["node_id"]]["inputs"][item["field"]] = value
+    for key, value in (ai_values or {}).items():
+        item = parameters[key]
         graph[item["node_id"]]["inputs"][item["field"]] = value
     for role, value in values.items():
         if role not in profile["bindings"]:

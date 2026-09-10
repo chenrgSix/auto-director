@@ -355,6 +355,10 @@ class GenerationService:
     ) -> dict:
         self.check_cancel(episode["id"])
         parameters = parameter_overrides(episode, profile)
+        output = (
+            self.shot(episode["id"], shot_id).get("prompts") if shot_id else episode.get("bible")
+        ) or {}
+        generated = output.get("ai_parameters", {}).get(profile["id"], {})
         job = self.engine.create_job(
             profile,
             values,
@@ -367,6 +371,7 @@ class GenerationService:
             advanced_mode=episode.get("advanced_mode", False),
             budget=episode.get("budget"),
             allowed_asset_ids=episode.get("allowed_asset_ids", []),
+            ai_values=generated,
         )
         results = await self.engine.run(job["id"], lambda: self.cancelled(episode["id"]))
         self.check_cancel(episode["id"])

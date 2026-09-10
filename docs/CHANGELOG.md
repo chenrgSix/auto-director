@@ -1,5 +1,11 @@
 # 迭代记录
 
+## 2026-09-10 · C04 通用 AI-owned 动态参数
+
+- Bible/Shot 输出增加按 workflow ID 隔离的 `ai_parameters`，schema 及服务端只接受当前 owner=ai 的键，严格执行类型、范围和枚举约束。
+- 自定义非素材参数可声明 AI owner；经 ParameterResolver 到最终 deepcopy patch，用户高级覆盖优先，执行时重新校验节点约束，作业保留 AI 值与来源。
+- 新增 21 项回归验证真实 patched JSON、Bible 与镜头值隔离、同名键隔离、非法输出拒绝、用户覆盖和用户锁；相关既有回归通过，前端 ESLint/TypeScript 通过。完整门禁待 C04 收尾。
+
 ## 2026-09-10 · C03 Workflow Capability 与参数归属
 
 - 引入 media_type + 四类 capability，保留旧 type 输入/响应兼容；工作流默认项按能力记录，图生图通过文生图初始参考进入关键帧流程。

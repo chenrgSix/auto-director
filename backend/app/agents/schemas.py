@@ -1,4 +1,5 @@
 from enum import StrEnum
+from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -57,6 +58,7 @@ class CharacterBible(StrictModel):
 
 
 class VisualBible(StrictModel):
+    ai_parameters: dict[str, dict[str, Any]] = Field(default_factory=dict)
     characters: list[CharacterBible] = Field(max_length=10)
     environment: dict[str, str]
     style: dict[str, str]
@@ -67,6 +69,7 @@ class VisualBible(StrictModel):
 
 
 class ShotPrompts(StrictModel):
+    ai_parameters: dict[str, dict[str, Any]] = Field(default_factory=dict)
     image_prompt: str = Field(min_length=1, max_length=6000)
     start_frame_prompt: str = Field(min_length=1, max_length=6000)
     end_frame_prompt: str = Field(min_length=1, max_length=6000)

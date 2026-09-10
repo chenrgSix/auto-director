@@ -38,7 +38,7 @@ class FakeProvider:
                     for i in range(count)
                 ],
             }
-        elif schema is VisualBible:
+        elif issubclass(schema, VisualBible):
             data = {
                 "characters": [
                     {
@@ -54,7 +54,7 @@ class FakeProvider:
                 "camera_motion": "static reference view",
                 "motion_strength": 0.2,
             }
-        elif schema is ShotPrompts:
+        elif issubclass(schema, ShotPrompts):
             data = {
                 "image_prompt": "A lion",
                 "start_frame_prompt": "Lion starts walking",

@@ -8,7 +8,7 @@
 
 ## 参数契约
 
-每个动态参数包含 `owner`、`editable`、`override_policy`（`advanced` 或 `never`）。角色绑定决定语义归属：prompt/negative/camera_motion/motion_strength 归 AI；duration 归 Director；媒体输入归 AssetResolver；尺寸/FPS/batch/seed 归 system；steps/cfg/sampler/scheduler/model 及未映射字段默认归 workflow。自定义字段可声明 user owner。
+每个动态参数包含 `owner`、`editable`、`override_policy`（`advanced` 或 `never`）。角色绑定决定语义归属：prompt/negative/camera_motion/motion_strength 归 AI；duration 归 Director；媒体输入归 AssetResolver；尺寸/FPS/batch/seed 归 system；steps/cfg/sampler/scheduler/model 及未映射字段默认归 workflow。无角色且非素材的自定义字段可显式声明 ai/user owner。
 
 优先级：原始模板 < profile 默认参数 < 自动填充 < 高级用户 override。节点链接不可覆盖；高级覆盖不绕过数值、节点、真实素材归属、单镜时长和显存约束。素材覆盖提交 asset ID，由服务端上传并转换为 ComfyUI 输入名。单镜时长覆盖参与规划，当前支持统一每镜固定时长，须整除用户总时长；帧数输入按 binding 偏移与 FPS 换算，不能只修改渲染帧数而破坏总时间线。
 
@@ -21,6 +21,12 @@
 ### C04 视频能力分支
 
 `FIRST_LAST_TO_VIDEO` 生成首尾两张关键帧并做双帧 QA；`IMAGE_TO_VIDEO` 只生成/绑定首帧并做单帧 QA，不创建 `SHOT_END_FRAME`。两者均从实际视频提取尾帧用于连续性。I2V 转场重试重新生成首帧；OOM 分段只继承上一段实际尾帧，不生成中间目标帧。低显存替代工作流按其自身 capability 决定是否需要目标尾帧。
+
+### C04 通用 AI 参数
+
+Bible/Shot 增加 `ai_parameters: {"workflow_id": {"node.field": value}}`。运行时按当前选定工作流的 AI owner 字段构造输出 schema，两层映射均禁止未知键，参数限制来自最新 object_info；本地严格检查 type/min/max/enum，拒绝数字字符串、布尔冒充数字、非有限数和错误 owner。Provider 沿用一次纠正机会，仍非法则返回 `LLM_INVALID_OUTPUT`。
+
+ParameterResolver 将合法 AI 值覆盖旧语义自动值或工作流默认值，再应用高级用户覆盖。非角色参数经独立 AI 通道进入 deepcopy patch，不受用户 editable 锁影响；锁只控制用户覆盖。作业保存 `ai_parameter_values` 并纳入缓存签名，执行前按最新节点约束再次校验。旧 Bible/Shot/Job 无映射时按空值读取，继续使用原语义自动值及模板默认，无需重写已提交图或数据库迁移。
 
 ## 交付门禁
 
