@@ -17,6 +17,9 @@ Base `/api/v1`，JSON；ID 由服务端生成；UTC ISO 时间。验证失败 42
 | `POST /workflows/{id}/test-run` | 参数/资产 ID 试跑，返回异步 RenderJob |
 | `POST /workflows/{id}/default` | 设置图像或视频默认项 |
 | `GET /jobs/{id}` | 作业状态、prompt_id、错误与资产 |
+| `GET /jobs`, `POST /jobs/{id}/reconcile` | 作业列表与按自身 client_id 核对服务端队列/历史 |
+| `POST /jobs/{id}/resume`, `POST /jobs/{id}/cancel` | 恢复已核对 prompt_id 的试跑、取消自身试跑 |
+| `POST /jobs/{id}/resolve` | 操作员核对后填写至少 10 字结论，解除 UNKNOWN；不能自动调用 |
 | `POST/GET /episodes`, `GET/DELETE /episodes/{id}` | 单集创建/列表/详情/可选资产清理 |
 | `POST /episodes/{id}/generate`, `POST /episodes/{id}/cancel` | 入队/取消 |
 | `GET /episodes/{id}/progress`, `GET /episodes/{id}/events` | 快照/SSE 进度 |
@@ -24,6 +27,7 @@ Base `/api/v1`，JSON；ID 由服务端生成；UTC ISO 时间。验证失败 42
 | `POST /shots/{id}/retry[-keyframes\|-video]` | 定向重试 |
 | `POST /episodes/{id}/compose` | 根据当前启用镜头重新导出 |
 | `POST /episodes/{id}/assets`, `GET /assets/{id}/file` | 有界媒体上传/本地预览下载 |
+| `POST/GET /assets` | 工作流试跑上传与资产列表；GET 支持 episode_id 过滤 |
 
 ## WorkflowProfile
 

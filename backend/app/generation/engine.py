@@ -1,0 +1,274 @@
+import asyncio
+from pathlib import Path
+
+from app.comfyui.client import ComfyUIClient
+from app.core.config import Settings
+from app.core.errors import AppError
+from app.db.store import Store, now
+from app.media.service import Assets
+from app.workflows.analyzer import patch, validate_dependencies, workflow_hash
+
+ASSET_ROLES = {
+    "start_frame",
+    "end_frame",
+    "reference_image",
+    "style_reference",
+    "reference_video",
+    "reference_audio",
+}
+
+
+class RenderEngine:
+    def __init__(self, settings: Settings, store: Store, assets: Assets, client_factory=None):
+        self.settings, self.store, self.assets = settings, store, assets
+        self.client_factory = client_factory
+        self.lock = asyncio.Lock()
+
+    def client(self):
+        saved = self.store.get("settings", "settings")
+        url = saved.get("comfyui_url") or self.settings.comfyui_url
+        return (
+            self.client_factory(url) if self.client_factory else ComfyUIClient(self.settings, url)
+        )
+
+    def unresolved(self) -> list[dict]:
+        return [job for job in self.store.list("job") if job["status"] == "UNKNOWN"]
+
+    def create_job(
+        self,
+        profile: dict,
+        values: dict,
+        asset_bindings: dict,
+        episode_id: str,
+        shot_id: str | None,
+        type: str,
+        parameter_values: dict | None = None,
+        step_key: str = "",
+    ) -> dict:
+        signature = workflow_hash(
+            {
+                "workflow": profile["workflow_hash"],
+                "parameters": {**profile.get("parameter_values", {}), **(parameter_values or {})},
+                "values": values,
+                "assets": asset_bindings,
+                "step": step_key,
+            }
+        )
+        for old in self.store.list("job", episode_id):
+            if old.get("signature") == signature and old["status"] in {"COMPLETED", "UNKNOWN"}:
+                return old
+        return self.store.create(
+            "job",
+            {
+                "status": "QUEUED",
+                "episode_id": episode_id,
+                "shot_id": shot_id,
+                "type": type,
+                "workflow_id": profile["id"],
+                "workflow_hash": profile["workflow_hash"],
+                "profile_snapshot": profile,
+                "input_values": values,
+                "asset_bindings": asset_bindings,
+                "parameter_values": parameter_values or {},
+                "signature": signature,
+                "step_key": step_key,
+                "comfy_prompt_id": None,
+                "patched_workflow": None,
+                "output_asset_ids": [],
+                "error": None,
+                "progress": None,
+                "attempt": 1,
+            },
+            parent=episode_id,
+        )
+
+    async def run(self, job_id: str, cancelled=lambda: False) -> list[dict]:
+        async with self.lock:
+            job = self.store.get("job", job_id)
+            if job["status"] == "COMPLETED":
+                return [self.store.get("asset", id) for id in job["output_asset_ids"]]
+            unresolved = [item for item in self.unresolved() if item["id"] != job_id]
+            if unresolved:
+                raise AppError(
+                    "UNRESOLVED_JOB",
+                    "存在状态不确定的渲染作业，请先核对历史后继续",
+                    {"job_ids": [item["id"] for item in unresolved]},
+                    status=409,
+                )
+            if job["status"] == "UNKNOWN" and not job["comfy_prompt_id"]:
+                raise AppError(
+                    "SUBMISSION_UNKNOWN",
+                    "此作业未取得 prompt_id，请在作业记录中核对",
+                    {"job_id": job_id},
+                    status=409,
+                )
+            if cancelled():
+                raise AppError("CANCELLED", "作业已取消")
+            profile = job["profile_snapshot"]
+            submitted = bool(job["comfy_prompt_id"])
+            try:
+                async with self.client() as client:
+                    if not job["patched_workflow"]:
+                        effective = {
+                            **profile,
+                            "parameter_values": {
+                                **profile.get("parameter_values", {}),
+                                **job["parameter_values"],
+                            },
+                        }
+                        report = validate_dependencies(effective, await client.object_info())
+                        if not report["valid"]:
+                            raise AppError(
+                                "WORKFLOW_INVALID", "工作流依赖未满足", report["issues"], status=422
+                            )
+                        values = dict(job["input_values"])
+                        for role, asset_id in job["asset_bindings"].items():
+                            if role not in profile["bindings"]:
+                                continue
+                            if role not in ASSET_ROLES and not role.startswith("reference_image_"):
+                                raise AppError(
+                                    "WORKFLOW_INVALID", "不允许把资产写入此输入角色", {"role": role}
+                                )
+                            asset = self.store.get("asset", asset_id)
+                            if (
+                                asset["episode_id"] != job["episode_id"]
+                                and job["type"] != "WORKFLOW_TEST"
+                            ):
+                                raise AppError("INVALID_MEDIA", "资产不属于当前 Episode")
+                            values[role] = await client.upload(self.assets.path(asset_id))
+                        graph = patch(profile, values, job["parameter_values"])
+                        job = self.store.update(
+                            "job",
+                            job_id,
+                            {"patched_workflow": graph, "status": "RUNNING", "started_at": now()},
+                        )
+                    else:
+                        self.store.update("job", job_id, {"status": "RUNNING", "error": None})
+
+                    async def on_submit(data):
+                        nonlocal submitted
+                        submitted = True
+                        self.store.update("job", job_id, data)
+
+                    async def on_progress(data):
+                        self.store.update("job", job_id, {"progress": data})
+
+                    history = await client.execute(
+                        job["patched_workflow"],
+                        job_id,
+                        on_submit,
+                        on_progress,
+                        cancelled,
+                        prompt_id=job["comfy_prompt_id"],
+                    )
+                    metadata = client.outputs(
+                        history, profile["outputs"][profile["type"]], profile["type"]
+                    )
+                    if not metadata:
+                        raise AppError(
+                            "OUTPUT_NOT_FOUND",
+                            "指定输出节点没有可用的图像/视频",
+                            {"output_node": profile["outputs"][profile["type"]]},
+                        )
+                    records = []
+                    for item in metadata[:8]:
+                        target = self.assets.allocate(
+                            job["episode_id"], Path(item["filename"]).suffix.lower()
+                        )
+                        await client.download(item, target)
+                        record = await self.assets.register(
+                            target, job["episode_id"], job["type"], job["shot_id"]
+                        )
+                        records.append(record)
+                    self.store.update(
+                        "job",
+                        job_id,
+                        {
+                            "status": "COMPLETED",
+                            "output_asset_ids": [record["id"] for record in records],
+                            "completed_at": now(),
+                            "error": None,
+                        },
+                    )
+                    return records
+            except AppError as exc:
+                uncertain = exc.code in {"SUBMISSION_UNKNOWN", "JOB_TIMEOUT"} or (
+                    submitted and exc.code == "COMFYUI_OFFLINE"
+                )
+                state = (
+                    "UNKNOWN" if uncertain else "CANCELLED" if exc.code == "CANCELLED" else "FAILED"
+                )
+                self.store.update("job", job_id, {"status": state, "error": exc.as_dict()})
+                raise
+            except asyncio.CancelledError:
+                self.store.update(
+                    "job",
+                    job_id,
+                    {
+                        "status": "UNKNOWN",
+                        "error": {
+                            "code": "WORKER_INTERRUPTED",
+                            "message": "进程中断，渲染状态需核对",
+                        },
+                    },
+                )
+                raise
+            except Exception:
+                self.store.update(
+                    "job",
+                    job_id,
+                    {
+                        "status": "UNKNOWN" if submitted else "FAILED",
+                        "error": {
+                            "code": "INTERNAL_ERROR",
+                            "message": "渲染处理异常；已保留作业信息",
+                        },
+                    },
+                )
+                raise
+
+    async def reconcile(self, job_id: str) -> dict:
+        job = self.store.get("job", job_id)
+        if job["status"] != "UNKNOWN":
+            return job
+        async with self.client() as client:
+            queue = await client.json("GET", "/queue")
+            history = await client.json("GET", "/history", params={"max_items": 1000})
+            entries = queue.get("queue_running", []) + queue.get("queue_pending", [])
+            entries += [value.get("prompt", []) for value in history.values()]
+            prompt_id = job["comfy_prompt_id"]
+            for entry in entries:
+                if (
+                    len(entry) > 3
+                    and isinstance(entry[3], dict)
+                    and (
+                        entry[3].get("autodirector_job_id") == job_id
+                        or entry[3].get("client_id") == job_id
+                    )
+                ):
+                    prompt_id = entry[1]
+                    break
+            if not prompt_id:
+                raise AppError(
+                    "SUBMISSION_UNKNOWN",
+                    "当前队列与可用历史未找到作业，仍不能确认未受理；需核对 ComfyUI 历史后人工确认",
+                    {"job_id": job_id},
+                    status=409,
+                )
+            return self.store.update("job", job_id, {"comfy_prompt_id": prompt_id, "error": None})
+
+    def acknowledge_absent(self, job_id: str, note: str) -> dict:
+        job = self.store.get("job", job_id)
+        if job["status"] != "UNKNOWN" or len(note.strip()) < 10:
+            raise AppError(
+                "CONFLICT", "仅可在人工核对后为 UNKNOWN 作业填写至少 10 字的结论", status=409
+            )
+        return self.store.update(
+            "job",
+            job_id,
+            {
+                "status": "FAILED",
+                "error": {"code": "MANUALLY_RESOLVED", "message": note.strip()},
+                "resolved_at": now(),
+            },
+        )
