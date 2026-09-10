@@ -15,7 +15,7 @@ Base `/api/v1`，JSON；ID 由服务端生成；UTC ISO 时间。验证失败 42
 | `GET/PATCH/DELETE /workflows/{id}` | profile、bindings、capabilities、删除保护 |
 | `POST /workflows/{id}/validate` | 检查节点、枚举模型、字段、输入角色 |
 | `POST /workflows/{id}/test-run` | 参数/资产 ID 试跑，返回异步 RenderJob |
-| `POST /workflows/{id}/default` | 设置图像或视频默认项 |
+| `POST /workflows/{id}/default` | 本地绑定校验通过后设置媒体与 capability 默认项；绑定不完整返回 400 / WORKFLOW_INVALID。不要求依赖检查或试跑成功，不请求 ComfyUI/AI，不修改已有 Episode |
 | `GET /jobs/{id}` | 作业状态、prompt_id、错误与资产 |
 | `GET /jobs`, `POST /jobs/{id}/reconcile` | 作业列表与按自身 client_id 核对服务端队列/历史 |
 | `POST /jobs/{id}/resume`, `POST /jobs/{id}/cancel` | 恢复已核对 prompt_id 的试跑、取消自身试跑 |
