@@ -20,3 +20,10 @@
 - 实现 HTTP 上传/下载、prompt/history/WS 进度、超时与按 prompt_id 取消；未知提交不自动重发。
 - 内置 SD1.5 文生图、Wan2.1 FLF2V API 模板及依赖说明，profile 可独立编辑和替换。
 - 结构与客户端测试使用固定夹具；不安装 ComfyUI、不宣称真实模型兼容/质量验收通过。
+
+## 2026-09-10 · A01 导演与模型适配
+
+- 四个 schema 受限的 Agent；统一 JSON Provider、图像输入、token/call 统计、拒绝和无效输出分类。
+- Director 强制 1 秒下限、workflow 上限与总时长；Bible/Shot 继承单集设定；QA 根据实际图像得分分流重试。
+- 支持显存/质量模式预算，High 规划两个候选；模型未配置时返回配置错误。
+- OpenAI-compatible 层采用 Chat Completions `json_object` 兼容模式 + 本地 Pydantic 强校验；不把 JSON mode 当远端 schema 保证。[官方 API](https://developers.openai.com/api/reference/resources/chat)

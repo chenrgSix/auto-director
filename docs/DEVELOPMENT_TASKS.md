@@ -19,7 +19,7 @@
 | W01 | API JSON 分析、动态 schema、绑定与 patch | §8–11,28–30 | B01 | VERIFIED | 本地分析/patch/边界测试通过；真实节点校验待 T02 |
 | W02 | ComfyUI 客户端、校验、执行、进度、取消 | §7,28,52–54 | W01 | IMPLEMENTED | MockTransport 验证 prompt 关联、未知提交不重发和隔离取消；真实服务待 T02 |
 | W03 | 默认图像/视频模板、导入与工作流库 | §12,44,58.1 | W02 | IMPLEMENTED | 两个 API profile 和管理器已实现；API/UI 随集成交付 |
-| A01 | Director/Bible/Shot Provider 与时长规划 | §14–18,41–42 | B01 | TODO | schema 校验；时长和/上限；无静默假生成 |
+| A01 | Director/Bible/Shot Provider 与时长规划 | §14–18,41–42 | B01 | VERIFIED | 本地 schema 修复、时长约束、QA 分流、显存预算测试通过；真实模型待 T02 |
 | G01 | Episode、持久任务队列、参考与首尾帧 | §23–27,32–38,46–47 | W03,A01 | TODO | 顺序执行；状态/资产/作业可追溯 |
 | G02 | 视频、连续性、VLM QA、定向重试与降级 | §19–22,39–40,53 | G01 | TODO | 镜头重试保留有效资产；质量失败分类 |
 | M01 | 媒体校验、预览、归一化、拼接导出 | §23,49–51 | G01 | TODO | 真 FFmpeg MP4；时长检查；保留原生音频 |
