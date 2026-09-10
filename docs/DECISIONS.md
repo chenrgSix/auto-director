@@ -19,3 +19,11 @@
 ## ADR-005：前端与权限范围（已采用）
 
 采用 React/TypeScript/Vite 与共享 CSS 实现 UI，按需求引入组件状态管理，不为建议技术列表强制添加尚不需要的依赖。默认 loopback 单用户，不具备公网多租户权限模型。媒体与数据库本地存储；LLM 密钥仅环境配置，公共网络 ComfyUI 需显式开关。
+
+## ADR-006：SQLite 聚合记录（已采用）
+
+MVP 使用 SQLAlchemy 的 versioned JSON records：Episode 聚合包含有序 Shots、plan、bible、continuity；Workflow、Asset、RenderJob、设置独立记录并按 parent_id 索引。SQLite WAL、事务和 version CAS 保证更新原子性。此实现没有独立 Shot 外键表；跨记录资源约束由服务层检查，后续关系查询压力出现时再迁移规范化表。数据库不在网络等待期间保持事务。
+
+## ADR-007：先实现、后接入真实服务（用户明确要求）
+
+不在本机部署 ComfyUI、不下载模型，先完成全部 MVP 实现与本地测试。ComfyUI 协议核对官方 docs 与 Comfy-Org 源码。用户仅在工程交付完成后提供真实 API/模型，外部门禁保持未执行。
