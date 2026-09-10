@@ -1,0 +1,250 @@
+{
+  "model": {
+    "class_type": "UNETLoader",
+    "inputs": {
+      "unet_name": "wan2.1_flf2v_720p_14B_fp8_e4m3fn.safetensors",
+      "weight_dtype": "default"
+    },
+    "_meta": {
+      "title": "UNETLoader"
+    }
+  },
+  "sampling": {
+    "class_type": "ModelSamplingSD3",
+    "inputs": {
+      "model": [
+        "model",
+        0
+      ],
+      "shift": 8.0
+    },
+    "_meta": {
+      "title": "ModelSamplingSD3"
+    }
+  },
+  "clip": {
+    "class_type": "CLIPLoader",
+    "inputs": {
+      "clip_name": "umt5_xxl_fp8_e4m3fn_scaled.safetensors",
+      "type": "wan",
+      "device": "default"
+    },
+    "_meta": {
+      "title": "CLIPLoader"
+    }
+  },
+  "vae": {
+    "class_type": "VAELoader",
+    "inputs": {
+      "vae_name": "wan_2.1_vae.safetensors"
+    },
+    "_meta": {
+      "title": "VAELoader"
+    }
+  },
+  "vision": {
+    "class_type": "CLIPVisionLoader",
+    "inputs": {
+      "clip_name": "clip_vision_h.safetensors"
+    },
+    "_meta": {
+      "title": "CLIPVisionLoader"
+    }
+  },
+  "positive": {
+    "class_type": "CLIPTextEncode",
+    "inputs": {
+      "text": "natural cinematic motion",
+      "clip": [
+        "clip",
+        0
+      ]
+    },
+    "_meta": {
+      "title": "(Input:prompt)"
+    }
+  },
+  "negative": {
+    "class_type": "CLIPTextEncode",
+    "inputs": {
+      "text": "artifacts, text, static image",
+      "clip": [
+        "clip",
+        0
+      ]
+    },
+    "_meta": {
+      "title": "(Input:negative)"
+    }
+  },
+  "start": {
+    "class_type": "LoadImage",
+    "inputs": {
+      "image": "start.png"
+    },
+    "_meta": {
+      "title": "(Input:start_frame)"
+    }
+  },
+  "end": {
+    "class_type": "LoadImage",
+    "inputs": {
+      "image": "end.png"
+    },
+    "_meta": {
+      "title": "(Input:end_frame)"
+    }
+  },
+  "start_vision": {
+    "class_type": "CLIPVisionEncode",
+    "inputs": {
+      "clip_vision": [
+        "vision",
+        0
+      ],
+      "image": [
+        "start",
+        0
+      ],
+      "crop": "center"
+    },
+    "_meta": {
+      "title": "CLIPVisionEncode"
+    }
+  },
+  "end_vision": {
+    "class_type": "CLIPVisionEncode",
+    "inputs": {
+      "clip_vision": [
+        "vision",
+        0
+      ],
+      "image": [
+        "end",
+        0
+      ],
+      "crop": "center"
+    },
+    "_meta": {
+      "title": "CLIPVisionEncode"
+    }
+  },
+  "frames": {
+    "class_type": "WanFirstLastFrameToVideo",
+    "inputs": {
+      "positive": [
+        "positive",
+        0
+      ],
+      "negative": [
+        "negative",
+        0
+      ],
+      "vae": [
+        "vae",
+        0
+      ],
+      "width": 720,
+      "height": 1280,
+      "length": 81,
+      "batch_size": 1,
+      "start_image": [
+        "start",
+        0
+      ],
+      "end_image": [
+        "end",
+        0
+      ],
+      "clip_vision_start_image": [
+        "start_vision",
+        0
+      ],
+      "clip_vision_end_image": [
+        "end_vision",
+        0
+      ]
+    },
+    "_meta": {
+      "title": "(Input:width_height) (Input:duration) (Input:batch)"
+    }
+  },
+  "sampler": {
+    "class_type": "KSampler",
+    "inputs": {
+      "seed": 42,
+      "steps": 30,
+      "cfg": 6.0,
+      "sampler_name": "uni_pc",
+      "scheduler": "simple",
+      "denoise": 1.0,
+      "model": [
+        "sampling",
+        0
+      ],
+      "positive": [
+        "frames",
+        0
+      ],
+      "negative": [
+        "frames",
+        1
+      ],
+      "latent_image": [
+        "frames",
+        2
+      ]
+    },
+    "_meta": {
+      "title": "(Input:seed)"
+    }
+  },
+  "decode": {
+    "class_type": "VAEDecode",
+    "inputs": {
+      "samples": [
+        "sampler",
+        0
+      ],
+      "vae": [
+        "vae",
+        0
+      ]
+    },
+    "_meta": {
+      "title": "VAEDecode"
+    }
+  },
+  "video": {
+    "class_type": "CreateVideo",
+    "inputs": {
+      "images": [
+        "decode",
+        0
+      ],
+      "fps": 16.0
+    },
+    "_meta": {
+      "title": "(Input:fps)"
+    }
+  },
+  "save": {
+    "class_type": "SaveVideo",
+    "inputs": {
+      "video": [
+        "video",
+        0
+      ],
+      "filename_prefix": "AutoDirector/video",
+      "format": {
+        "format": "mp4",
+        "codec": {
+          "codec": "h264"
+        }
+      }
+    },
+    "_meta": {
+      "title": "(Output:video)"
+    }
+  }
+}
