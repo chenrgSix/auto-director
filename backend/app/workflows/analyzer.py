@@ -6,6 +6,13 @@ from copy import deepcopy
 from typing import Any
 
 from app.core.errors import AppError
+from app.core.limits import MAX_SHOT_SECONDS
+from app.workflows.ownership import (
+    canonicalize,
+    decorate_parameters,
+    is_asset_role,
+    required_asset_roles,
+)
 from app.workflows.schema import Binding, Capabilities
 
 TAG = re.compile(r"\((Input|Output):([a-z_][a-z0-9_]*)\)", re.IGNORECASE)
@@ -24,6 +31,8 @@ ALIASES = {
     "duration": ["duration", "length", "frames", "num_frames"],
     "fps": ["fps", "frame_rate"],
     "batch": ["batch_size"],
+    "camera_motion": ["camera_motion"],
+    "motion_strength": ["motion_strength"],
 }
 
 
@@ -120,6 +129,16 @@ def parameter(id: str, node: dict, field: str, value: Any, object_info: dict) ->
         "step": constraints.get("step"),
         "enum": choices,
         "role": None,
+        "asset_kind": "image"
+        if constraints.get("image_upload") or node["class_type"] == "LoadImage"
+        else "video"
+        if constraints.get("video_upload")
+        else "audio"
+        if constraints.get("audio_upload")
+        else None,
+        "owner": "workflow",
+        "editable": True,
+        "override_policy": "advanced",
     }
 
 
@@ -174,11 +193,17 @@ def analyze(graph: dict, object_info: dict | None = None) -> dict:
                 )
                 bindings[role] = Binding(node_id=id, input=field, transform=transform).model_dump()
         parameters.extend(node_params)
+    # Unambiguous strategy/AI scalar names can be filled even without title tags.
+    for role in ("width", "height", "fps", "batch", "seed", "camera_motion", "motion_strength"):
+        matches = [p for p in parameters if p["field"] in ALIASES[role]]
+        if role not in seen_roles and len(matches) == 1:
+            item = matches[0]
+            bindings[role] = Binding(node_id=item["node_id"], input=item["field"]).model_dump()
     for role, binding in bindings.items():
         for item in parameters:
             if item["key"] == f"{binding['node_id']}.{binding['input']}":
                 item["role"] = role
-    return {
+    result = {
         "bindings": bindings,
         "outputs": outputs,
         "parameters": parameters,
@@ -186,14 +211,46 @@ def analyze(graph: dict, object_info: dict | None = None) -> dict:
         "workflow_hash": workflow_hash(graph),
         "required_class_types": sorted({node["class_type"] for node in graph.values()}),
     }
+    decorate_parameters(result)
+    return result
 
 
 def validate_bindings(profile: dict) -> list[dict]:
+    profile = canonicalize(deepcopy(profile))
     issues = []
     graph = profile["workflow"]
     caps = Capabilities.model_validate(profile["capabilities"])
+    if profile["capability"] == "TEXT_TO_IMAGE" and any(
+        is_asset_role(role) for role in profile["bindings"]
+    ):
+        issues.append(
+            {"code": "WORKFLOW_INVALID", "message": "带素材输入的图像工作流应声明 IMAGE_TO_IMAGE"}
+        )
+    if profile["capability"] == "IMAGE_TO_VIDEO" and "end_frame" in profile["bindings"]:
+        issues.append(
+            {
+                "code": "WORKFLOW_INVALID",
+                "message": "IMAGE_TO_VIDEO 只消费首帧；带尾帧输入应声明 FIRST_LAST_TO_VIDEO",
+            }
+        )
+    for item in profile["parameters"]:
+        if item.get("asset_kind") and not is_asset_role(item.get("role")):
+            issues.append(
+                {
+                    "code": "WORKFLOW_INVALID",
+                    "parameter": item["key"],
+                    "message": "素材输入必须绑定明确的素材角色",
+                }
+            )
+    occupied = set()
     for role, raw in profile["bindings"].items():
         binding = Binding.model_validate(raw)
+        destination = (binding.node_id, binding.input)
+        if destination in occupied:
+            issues.append(
+                {"code": "WORKFLOW_INVALID", "role": role, "message": "同一参数不能绑定多个角色"}
+            )
+        occupied.add(destination)
         node = graph.get(binding.node_id, {})
         value = node.get("inputs", {}).get(binding.input)
         if binding.input not in node.get("inputs", {}) or is_link(value):
@@ -210,20 +267,16 @@ def validate_bindings(profile: dict) -> list[dict]:
             issues.append(
                 {"code": "WORKFLOW_INVALID", "role": role, "message": "帧数转换仅用于 duration"}
             )
-    required = {"prompt"}
-    if profile["type"] == "video":
-        required.add("start_frame")
-        if not caps.supports_start_frame:
-            issues.append({"code": "WORKFLOW_INVALID", "message": "视频 profile 必须支持首帧"})
-        if caps.supports_end_frame:
-            required.add("end_frame")
+    required = {"prompt", *required_asset_roles(profile)}
+    if profile["media_type"] == "video":
+        required.add("duration")
         if caps.supports_video_reference:
             required.add("reference_video")
     for role in required - profile["bindings"].keys():
         issues.append(
             {"code": "WORKFLOW_INVALID", "role": role, "message": f"缺少必须输入角色 {role}"}
         )
-    output = profile["type"]
+    output = profile["media_type"]
     if profile["outputs"].get(output) not in graph:
         issues.append({"code": "WORKFLOW_INVALID", "message": f"缺少 {output} 输出节点"})
     return issues
@@ -259,14 +312,17 @@ def check_value(item: dict, value: Any) -> None:
                 raise AppError("WORKFLOW_INVALID", f"参数 {item['key']} 超出 {key} 约束", item)
 
 
-def patch(profile: dict, values: dict, parameter_values: dict | None = None) -> dict:
+def patch(
+    profile: dict, values: dict, parameter_values: dict | None = None, *, advanced: bool = True
+) -> dict:
     issues = validate_bindings(profile)
     if issues:
         raise AppError("WORKFLOW_INVALID", "工作流绑定无效", issues)
     graph = deepcopy(profile["workflow"])
-    parameters = {item["key"]: item for item in profile["parameters"]}
-    overrides = {**profile.get("parameter_values", {}), **(parameter_values or {})}
-    for key, value in overrides.items():
+    decorated = deepcopy(profile)
+    decorate_parameters(decorated)
+    parameters = {item["key"]: item for item in decorated["parameters"]}
+    for key, value in profile.get("parameter_values", {}).items():
         if key not in parameters:
             raise AppError("WORKFLOW_INVALID", f"未知动态参数 {key}")
         item = parameters[key]
@@ -282,7 +338,7 @@ def patch(profile: dict, values: dict, parameter_values: dict | None = None) -> 
                 type(fps) not in {int, float}
                 or type(value) not in {int, float}
                 or not 1 <= fps <= 120
-                or not 0 < value <= 30
+                or not 0 < value <= MAX_SHOT_SECONDS
             ):
                 raise AppError("WORKFLOW_INVALID", "duration/fps 超出允许范围")
             value = (
@@ -294,6 +350,16 @@ def patch(profile: dict, values: dict, parameter_values: dict | None = None) -> 
         if key in parameters:
             check_value(parameters[key], value)
         graph[binding.node_id]["inputs"][binding.input] = value
+    if parameter_values and not advanced:
+        raise AppError("OVERRIDE_NOT_ALLOWED", "参数覆盖需要高级模式")
+    for key, value in (parameter_values or {}).items():
+        item = parameters.get(key)
+        if not item:
+            raise AppError("WORKFLOW_INVALID", f"未知动态参数 {key}")
+        if not item["editable"] or item["override_policy"] != "advanced":
+            raise AppError("OVERRIDE_NOT_ALLOWED", f"参数 {key} 不允许覆盖")
+        check_value(item, value)
+        graph[item["node_id"]]["inputs"][item["field"]] = value
     return graph
 
 

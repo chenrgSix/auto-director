@@ -2,7 +2,7 @@ from enum import StrEnum
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from app.core.duration import (
+from app.core.limits import (
     MAX_EPISODE_SECONDS,
     MAX_EPISODE_SHOTS,
     MAX_SHOT_SECONDS,
@@ -61,6 +61,9 @@ class VisualBible(StrictModel):
     environment: dict[str, str]
     style: dict[str, str]
     continuity_rules: list[str] = Field(min_length=1, max_length=30)
+    negative_prompt: str = Field(min_length=1, max_length=4000)
+    camera_motion: str = Field(min_length=1, max_length=300)
+    motion_strength: float = Field(ge=0, le=1)
 
 
 class ShotPrompts(StrictModel):
@@ -69,8 +72,8 @@ class ShotPrompts(StrictModel):
     end_frame_prompt: str = Field(min_length=1, max_length=6000)
     video_prompt: str = Field(min_length=1, max_length=6000)
     negative_prompt: str = Field(min_length=1, max_length=4000)
-    motion_strength: float = Field(default=0.6, ge=0, le=1)
-    camera_motion: str = Field(default="", max_length=300)
+    motion_strength: float = Field(ge=0, le=1)
+    camera_motion: str = Field(min_length=1, max_length=300)
     continuity_state: dict[str, str] = Field(default_factory=dict)
 
 

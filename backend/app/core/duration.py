@@ -1,14 +1,11 @@
-"""Product duration policy, independent of a render workflow's clip capability."""
+"""Compatibility imports; all limits live in core.limits."""
 
-MIN_EPISODE_SECONDS = 1
-MAX_EPISODE_SECONDS = 600
-MIN_SHOT_SECONDS = 1
-MAX_SHOT_SECONDS = 30
-MAX_EPISODE_SHOTS = MAX_EPISODE_SECONDS // MIN_SHOT_SECONDS
-PLAN_BATCH_SHOTS = 12
-
-DURATION_POLICY = {
-    "min": MIN_EPISODE_SECONDS,
-    "max": MAX_EPISODE_SECONDS,
-    "presets": [5, 10, 15, 30, 60, 90],
-}
+from app.core.limits import (  # noqa: F401
+    DURATION_POLICY,
+    MAX_EPISODE_SECONDS,
+    MAX_EPISODE_SHOTS,
+    MAX_SHOT_SECONDS,
+    MIN_EPISODE_SECONDS,
+    MIN_SHOT_SECONDS,
+    PLAN_BATCH_SHOTS,
+)

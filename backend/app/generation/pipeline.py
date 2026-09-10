@@ -8,10 +8,22 @@ from app.agents.directing import Directors, anchored_prompt, generation_budget
 from app.agents.provider import LLMProvider
 from app.core.config import Settings
 from app.core.errors import AppError
+from app.core.limits import MAX_EPISODE_SHOTS
 from app.db.store import Store, now, uid
 from app.generation.engine import RenderEngine
+from app.generation.parameters import (
+    ai_parameters,
+    duration_seconds,
+    parameter_overrides,
+    role_overrides,
+    validate_overrides,
+    validate_strategy,
+)
+from app.generation.resolvers import AssetResolver, ContinuityManager
 from app.generation.schemas import ACTIVE, EpisodeCreate, TimelineUpdate
 from app.media.service import Assets, compose, extract_frame
+from app.workflows.analyzer import analyze
+from app.workflows.ownership import decorate_parameters, is_asset_role
 
 logger = logging.getLogger(__name__)
 CONTINUOUS = {"CONTINUE_FRAME", "CONTINUE_VIDEO"}
@@ -127,9 +139,31 @@ class GenerationService:
         for kind in ("image", "video"):
             id = data[f"{kind}_workflow_id"] or defaults[f"default_{kind}"]
             profile = self.store.get("workflow", id)
-            if profile["type"] != kind:
+            if profile["media_type"] != kind:
                 raise AppError("WORKFLOW_INVALID", f"{kind} 工作流类型不匹配")
             data[f"{kind}_workflow_id"] = id
+        reference_id = data["reference_workflow_id"] or defaults.get(
+            "default_capabilities", {}
+        ).get("TEXT_TO_IMAGE")
+        if not reference_id:
+            raise AppError("WORKFLOW_INVALID", "请配置文生图工作流以生成初始参考资产")
+        reference_profile = self.store.get("workflow", reference_id)
+        if reference_profile["capability"] != "TEXT_TO_IMAGE":
+            raise AppError("WORKFLOW_INVALID", "参考资产的起始工作流必须是 TEXT_TO_IMAGE")
+        data["reference_workflow_id"] = reference_id
+        selected_ids = {data["image_workflow_id"], data["video_workflow_id"], reference_id}
+        if data["workflow_overrides"].keys() - selected_ids:
+            raise AppError("WORKFLOW_INVALID", "只能覆盖当前选定工作流的参数")
+        allowed = set()
+        for workflow_id in selected_ids:
+            profile = self.store.get("workflow", workflow_id)
+            overrides = parameter_overrides(data, profile)
+            validate_overrides(profile, overrides, data["advanced_mode"])
+            for role, value in role_overrides(profile, overrides).items():
+                if is_asset_role(role):
+                    AssetResolver(self.store, self.assets).validate(role, value, "workflow-tests")
+                    allowed.add(value)
+        data["allowed_asset_ids"] = sorted(allowed)
         return self.store.create(
             "episode",
             {
@@ -266,6 +300,11 @@ class GenerationService:
         def change(episode):
             if episode["status"] in ACTIVE:
                 raise AppError("CONFLICT", "运行时不能编辑时间线", status=409)
+            if (
+                len(request.shots) > MAX_EPISODE_SHOTS
+                and len(episode["shots"]) <= MAX_EPISODE_SHOTS
+            ):
+                raise AppError("LIMIT_EXCEEDED", "新时间线最多 240 镜")
             by_id = {shot["id"]: shot for shot in episode["shots"]}
             order = [item.id for item in request.shots]
             if len(set(order)) != len(order) or set(order) != set(by_id):
@@ -314,13 +353,19 @@ class GenerationService:
         shot_id=None,
     ) -> dict:
         self.check_cancel(episode["id"])
-        parameters = (
-            episode.get(f"{profile['type']}_parameters", {})
-            if profile["id"] == episode.get(f"{profile['type']}_workflow_id")
-            else {}
-        )
+        parameters = parameter_overrides(episode, profile)
         job = self.engine.create_job(
-            profile, values, assets, episode["id"], shot_id, type, parameters, key
+            profile,
+            values,
+            assets,
+            episode["id"],
+            shot_id,
+            type,
+            parameters,
+            key,
+            advanced_mode=episode.get("advanced_mode", False),
+            budget=episode.get("budget"),
+            allowed_asset_ids=episode.get("allowed_asset_ids", []),
         )
         results = await self.engine.run(job["id"], lambda: self.cancelled(episode["id"]))
         self.check_cancel(episode["id"])
@@ -330,16 +375,46 @@ class GenerationService:
         episode = self.store.get("episode", id)
         image = self.store.get("workflow", episode["image_workflow_id"])
         video = self.store.get("workflow", episode["video_workflow_id"])
+        defaults = self.store.get("settings", "settings")
+        reference_profile = self.store.get(
+            "workflow",
+            episode.get("reference_workflow_id")
+            or defaults["default_capabilities"]["TEXT_TO_IMAGE"],
+        )
         provider = self.provider_factory()
         agents = Directors(provider)
         try:
             async with self.engine.client() as client:
                 system = await client.system()
+                object_info = await client.object_info()
+            for profile in (image, video, reference_profile):
+                profile["parameters"] = analyze(profile["workflow"], object_info)["parameters"]
+                decorate_parameters(profile)
             budget = episode.get("budget") or generation_budget(
                 episode, video["capabilities"], system
             )
+            override_roles = role_overrides(video, parameter_overrides(episode, video))
+            ceilings = dict(budget)
+            budget.update(
+                {
+                    role: value
+                    for role, value in override_roles.items()
+                    if role in {"width", "height", "fps", "batch", "seed"}
+                }
+            )
+            validate_strategy(
+                budget, budget["max_duration"], low_memory=budget["low_memory"], ceilings=ceilings
+            )
+            fixed_duration = None
+            if "duration" in override_roles:
+                fixed_duration = duration_seconds(video, override_roles["duration"], budget["fps"])
+                validate_strategy({"duration": fixed_duration}, budget["max_duration"])
             episode = self.stage(
-                id, "PLANNING", budget=budget, started_at=episode.get("started_at") or now()
+                id,
+                "PLANNING",
+                budget=budget,
+                fixed_shot_duration=fixed_duration,
+                started_at=episode.get("started_at") or now(),
             )
             if not episode["plan"]:
                 plan = await agents.plan(
@@ -371,7 +446,9 @@ class GenerationService:
                 )
             if not episode["bible"]:
                 self.stage(id, "BUILDING_BIBLE")
-                bible = await agents.bible(episode, episode["plan"])
+                bible = await agents.bible(
+                    episode, episode["plan"], ai_parameters(reference_profile)
+                )
                 episode = self.stage(
                     id, "GENERATING_REFERENCES", bible=bible.model_dump(mode="json")
                 )
@@ -410,12 +487,18 @@ class GenerationService:
                     continue
                 result = await self.render(
                     episode,
-                    image,
+                    reference_profile,
                     type,
                     {
                         **budget,
                         "prompt": anchored_prompt(episode["bible"], prompt, {}),
-                        "negative": "text, watermark, artifacts",
+                        "negative": episode["bible"].get(
+                            "negative_prompt", "text, watermark, artifacts"
+                        ),
+                        "camera_motion": episode["bible"].get(
+                            "camera_motion", "static reference view"
+                        ),
+                        "motion_strength": episode["bible"].get("motion_strength", 0.2),
                         "seed": episode["seed"] + len(current["references"]),
                     },
                     {},
@@ -461,10 +544,18 @@ class GenerationService:
                         + provider.usage["completion_tokens"],
                         "render_jobs": len(jobs),
                         "image_generations": sum(
-                            job["profile_snapshot"]["type"] == "image" for job in jobs
+                            job["profile_snapshot"].get(
+                                "media_type", job["profile_snapshot"].get("type")
+                            )
+                            == "image"
+                            for job in jobs
                         ),
                         "video_generations": sum(
-                            job["profile_snapshot"]["type"] == "video" for job in jobs
+                            job["profile_snapshot"].get(
+                                "media_type", job["profile_snapshot"].get("type")
+                            )
+                            == "video"
+                            for job in jobs
                         ),
                         "failed_jobs": sum(job["status"] == "FAILED" for job in jobs),
                     }
@@ -475,32 +566,30 @@ class GenerationService:
         self, episode, shot, previous, continuity, image, video, budget, agents, visual_qa
     ):
         id, sid = episode["id"], shot["id"]
+        user_inputs = role_overrides(video, parameter_overrides(episode, video))
+        frame_changes = {
+            f"{role}_asset_id": user_inputs[role]
+            for role in ("start_frame", "end_frame")
+            if role in user_inputs and not shot.get(f"{role}_asset_id")
+        }
+        if frame_changes:
+            shot = self.update_shot(id, sid, **frame_changes)
         if not shot["prompts"]:
-            prompts = await agents.shot(episode["bible"], shot, continuity)
+            prompts = await agents.shot(
+                episode["bible"], shot, continuity, ai_parameters(image, video)
+            )
             shot = self.update_shot(id, sid, prompts=prompts.model_dump(mode="json"))
         prompts = shot["prompts"]
-        references = episode["references"]
-        reference = next(
-            (asset for role, asset in references.items() if role.startswith("character:")),
-            references.get("environment"),
-        )
-        ref_inputs = {"reference_image": reference, "style_reference": references["style"]}
-        if image["capabilities"].get("supports_multi_reference"):
-            ref_inputs.update(
-                {f"reference_image_{i + 1}": asset for i, asset in enumerate(references.values())}
-            )
-        video_inputs = {}
-        if previous and shot["transition_from_previous"] == "CONTINUE_VIDEO":
-            if video["capabilities"]["supports_video_reference"]:
-                video_inputs["reference_video"] = previous["video_asset_id"]
-            else:
-                self.warn(id, "视频工作流不支持 reference_video，CONTINUE_VIDEO 已降级为帧连续。")
+        ref_inputs = ContinuityManager.references(episode)
+        video_inputs = ContinuityManager.video_reference(previous, video)
+        if previous and shot["transition_from_previous"] == "CONTINUE_VIDEO" and not video_inputs:
+            self.warn(id, "视频工作流不支持 reference_video，CONTINUE_VIDEO 已降级为帧连续。")
         base = {
             **budget,
             "seed": episode["seed"] + shot["index"] * 100,
             "negative": prompts["negative_prompt"],
-            "motion_strength": prompts["motion_strength"],
-            "camera_motion": prompts["camera_motion"],
+            "motion_strength": prompts.get("motion_strength", 0.6),
+            "camera_motion": prompts.get("camera_motion", "static"),
         }
         retry_scope = "keyframes"
         retries = {"remaining": budget["max_retries"]}
@@ -673,6 +762,7 @@ class GenerationService:
                     base.update(
                         width=max(256, (base["width"] * 3 // 4 // 16) * 16),
                         height=max(256, (base["height"] * 3 // 4 // 16) * 16),
+                        _oom_recovery=True,
                     )
                     self.warn(id, "检测到显存不足，降低生成分辨率后重试，目标时间线保持不变。")
                 shot = self.shot(id, sid)
@@ -714,6 +804,7 @@ class GenerationService:
             retries["remaining"] -= 1
         smaller = {
             **values,
+            "_oom_recovery": True,
             "width": max(256, values["width"] // 2 // 16 * 16),
             "height": max(256, values["height"] // 2 // 16 * 16),
             "batch": 1,
@@ -730,7 +821,7 @@ class GenerationService:
         alternative = video["capabilities"].get("low_memory_workflow_id")
         if alternative:
             video = self.store.get("workflow", alternative)
-            if video["type"] != "video":
+            if video["media_type"] != "video":
                 raise AppError("WORKFLOW_INVALID", "低显存 profile 必须是视频类型")
         max_segment = min(2, video["capabilities"]["max_duration"])
         count = math.ceil(duration / max_segment)

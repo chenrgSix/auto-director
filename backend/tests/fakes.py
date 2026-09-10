@@ -50,6 +50,9 @@ class FakeProvider:
                 "environment": {"biome": "forest"},
                 "style": {"style": "documentary"},
                 "continuity_rules": ["One lion"],
+                "negative_prompt": "artifacts, text",
+                "camera_motion": "static reference view",
+                "motion_strength": 0.2,
             }
         elif schema is ShotPrompts:
             data = {
@@ -58,6 +61,8 @@ class FakeProvider:
                 "end_frame_prompt": "Lion has walked forward",
                 "video_prompt": "Lion walking",
                 "negative_prompt": "artifacts",
+                "camera_motion": "slow tracking",
+                "motion_strength": 0.6,
                 "continuity_state": {"direction": "right"},
             }
         elif schema is QAResult:

@@ -37,7 +37,7 @@ def plan(count):
 
 @pytest.mark.parametrize(
     ("total", "maximum", "count"),
-    [(5, 5, 2), (10, 3, 4), (15, 5, 5), (29.8, 3.2, 10), (600, 5, 120), (600, 1, 600)],
+    [(5, 5, 2), (10, 3, 4), (15, 5, 5), (29.8, 3.2, 10), (600, 5, 120), (600, 2.5, 240)],
 )
 def test_duration_allocation_exact_and_bounded(total, maximum, count):
     result = normalize_plan(plan(count), total, maximum)
@@ -112,7 +112,7 @@ class RecordingDirector(FakeProvider):
 
 @pytest.mark.parametrize(
     ("total", "maximum"),
-    [(1, 5), (90, 5), (600, 5), (600, 1), (599, 1), (599.99, 3.2), (59.8, 1.15)],
+    [(1, 5), (60, 5), (90, 5), (600, 5), (600, 2.5), (239, 1), (599.99, 3.2), (59.8, 1.15)],
 )
 async def test_long_plans_batch_with_continuity_and_exact_timeline(total, maximum):
     provider = RecordingDirector()

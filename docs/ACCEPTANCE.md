@@ -11,12 +11,12 @@ P0 + Phase 1/2 MVP 的本地工程闭环已完成。ComfyUI/LLM/VLM 依赖使用
 | 文档与贡献指南 | 通过 | 任务、模块、接口、运行、决策、迭代与验收同步；AGENTS.md 为当前目录和命令 |
 | 锁定依赖安装 | 通过 | `make install`；受限环境使用临时 uv/Python/npm 缓存，33 个 Python 包、175 个 npm 包 |
 | 统一本地检查 | 通过 | 根目录 `make check` 成功退出 |
-| Python 检查 | 通过 | Ruff lint + format check，38 个 Python 文件 |
-| 后端测试 | 通过 | **77 passed**，无跳过；耗时 37.80 秒；pytest/pytest-asyncio |
+| Python 检查 | 通过 | Ruff lint + format check，46 个 Python 文件 |
+| 后端测试 | 通过 | **91 passed**，无跳过；耗时 42.04 秒；pytest/pytest-asyncio |
 | 前端检查 | 通过 | ESLint、`tsc --noEmit`、`tsc -b && vite build`；Vite 7.3.6 |
 | FFmpeg 媒体 | 通过 | 真实 H.264/AAC 编码、混合尺寸/FPS、有声/无声拼接、尾帧和裁切边界 |
 | 5/10/15/90 秒流水线 | 通过（模拟模型） | API 创建→计划→参考→首尾帧→QA→视频→实际尾帧→真实 FFmpeg 导出，误差 ≤0.5 秒；90 秒覆盖跨批规划 |
-| 600 秒计划与合成 | 通过（分层验证） | 分批模型夹具、600 镜时间线与真实 FFmpeg 120 段合成；不包含真实 AI 渲染 |
+| 600 秒计划与合成 | 通过（分层验证） | 240 镜分批规划、旧 600 镜时间线兼容与真实 FFmpeg 120 段合成；不包含真实 AI 渲染 |
 | 浏览器交互 | 通过（本地） | 真实未配置工作台 + 8011 隔离夹具，见下方步骤和截图 |
 | 真实 ComfyUI/LLM/VLM | 未执行 | 用户将在工程交付后提供服务；没有把协议夹具当作真实集成 |
 | 真实视觉/性能指标 | 未执行 | 需真实 5/10/15 秒、狮子案例和多次样本统计 |
@@ -84,3 +84,20 @@ P0 + Phase 1/2 MVP 的本地工程闭环已完成。ComfyUI/LLM/VLM 依赖使用
 - 正式工作台已重启加载新策略；1280px 和 390×844 页面检查通过，移动端 `scrollWidth == clientWidth == 390`。截图：[桌面时长](evidence/duration-desktop.png)、[移动时长](evidence/duration-mobile.png)。
 
 600 秒是产品输入上限；上述长视频使用合成素材，不能证明真实十分钟故事质量、生成耗时、显存或成功率。真实模型验收继续沿用 T02，并按实际能力增加长时长样本。
+
+
+## C03 Workflow Capability 与 owner 验收（2026-09-10）
+
+最终 `make check` 成功：**91 passed**，无跳过，42.04 秒；46 个 Python 文件 Ruff/格式、前端 ESLint/TypeScript/Vite 全部通过。相对 C02 新增 14 个用例；原有“600 个一秒镜头可新建”断言按新 240 镜策略调整为 600 秒 / 240 镜，原有 600 镜存量重排测试继续通过。
+
+- 四类 capability 导入、旧 type 推导、矛盾 media_type 拒绝；基于动态绑定识别 owner，重绑和 object_info 校验后保持一致。
+- 图生图夹具实际经过文生图参考生成 → 图生图首尾帧 → 视频与 FFmpeg。断言 reference_image 为已存在的 Episode 资产，首帧输入角色参考、尾帧输入刚生成的首帧，连续镜头继承前镜实际尾帧。
+- IMAGE_TO_VIDEO 夹具生成 6 秒短片，用户 49 帧 / 16 FPS / 偏移 1 覆盖参与规划，得到两镜各 3 秒；提示词、negative、steps、尺寸覆盖进入实际提交图。视频仅要求首帧。
+- 模板默认 steps/cfg/model、自动 AI/system 参数和用户覆盖按顺序解析；规则锁定、普通模式覆盖、越界尺寸/时长拒绝。素材覆盖实际上传，同步到 Shot；媒体类型/归属不符、LoadImage 伪绑定 prompt 或伪改 owner 均拒绝。
+- 60/90 秒分批规划通过；600 秒以 240 镜覆盖边界，241 秒 / 每镜 1 秒在调用模型前报 LIMIT_EXCEEDED。固定时长不整除总时长明确失败，OOM 分段保留实际尾帧并覆盖原始用户尺寸/时长输入。
+- 迁移幂等且失败时整批回滚；工作流参数、旧 600 镜计划、引用资产、patched_workflow、prompt_id 与 UNKNOWN 状态保持。正式本地库已在停机备份后迁移至版本 1，公开 API 返回 240 镜限制和完整 owner。
+- 浏览器隔离夹具：默认模式仅填写 Idea/时长完成 **1.00 秒 MP4**；高级模式覆盖视频 prompt 与 steps=9 后也导出 1.00 秒，作业记录确认两项来源均为 user。参数覆盖权限关闭后保存、刷新仍关闭；四类导入选项存在。390×844 下 `scrollWidth == clientWidth == 390`。
+
+截图：[默认模式](evidence/capability-default-mode.png)、[高级移动表单](evidence/capability-advanced-mobile.png)、[owner 与覆盖规则](evidence/workflow-owners.png)。默认/高级模式截图来自正式页面，owner 规则保存截图来自隔离夹具；生成媒体均为合成测试素材。
+
+未安装 ComfyUI/权重、未执行真实模型生成或视觉/性能验收；没有将四类 capability 支持等同于四套已验证的模型模板。内置仍为文生图和首尾帧视频，图生图/I2V 通过导入使用。远端 CI/生产准入未执行。

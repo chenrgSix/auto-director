@@ -2,14 +2,21 @@ export type Value = string | number | boolean;
 export type Problem = { code: string; message: string; details?: unknown };
 export type Binding = { node_id: string; input: string; transform?: string; frame_multiple?: number; frame_offset?: number };
 export type Capabilities = { supports_start_frame: boolean; supports_end_frame: boolean; supports_video_reference: boolean; supports_multi_reference: boolean; max_duration: number; low_memory_workflow_id: string | null };
-export type Parameter = { key: string; node_id: string; field: string; class_type: string; type: string; default: Value; min: number | null; max: number | null; step: number | null; enum: Value[] | null; role: string | null };
+export type WorkflowCapability = 'TEXT_TO_IMAGE' | 'IMAGE_TO_IMAGE' | 'FIRST_LAST_TO_VIDEO' | 'IMAGE_TO_VIDEO';
+export const CAPABILITY_LABELS: Record<WorkflowCapability, string> = { TEXT_TO_IMAGE: '文生图', IMAGE_TO_IMAGE: '图生图', FIRST_LAST_TO_VIDEO: '首尾帧生成视频', IMAGE_TO_VIDEO: '首帧生成视频' };
+export type ParameterOwner = 'ai' | 'director' | 'asset_resolver' | 'system' | 'workflow' | 'user';
+export const OWNER_LABELS: Record<ParameterOwner, string> = {ai:'AI 自动生成',director:'导演规划',asset_resolver:'自动绑定素材',system:'系统策略',workflow:'工作流默认',user:'用户填写'};
+export type ParameterRule = {owner?: ParameterOwner; editable: boolean; override_policy: 'advanced' | 'never'};
+export type Parameter = { owner: ParameterOwner; editable: boolean; override_policy: 'advanced' | 'never'; key: string; node_id: string; field: string; class_type: string; type: string; default: Value; min: number | null; max: number | null; step: number | null; enum: Value[] | null; role: string | null };
 export type Workflow = {
-  id: string; name: string; type: 'image' | 'video'; workflow: Record<string, { class_type: string; inputs: Record<string, unknown> }>;
+  id: string; name: string; type: 'image' | 'video'; media_type: 'image' | 'video'; capability: WorkflowCapability; parameter_rules: Record<string, ParameterRule>; workflow: Record<string, { class_type: string; inputs: Record<string, unknown> }>;
   capabilities: Capabilities; bindings: Record<string, Binding>; outputs: Record<string, string>;
   parameters: Parameter[]; parameter_values: Record<string, Value>; warnings: string[];
   validation: { valid: boolean; issues: Problem[] } | null; workflow_hash: string; last_test_job_id: string | null;
 };
 export type Settings = {
+  default_capabilities: Partial<Record<WorkflowCapability, string>>;
+  limits: { fps: {min:number;max:number}; episode_shots: number; shot_seconds: {min:number;max:number} };
   duration_policy: { min: number; max: number; presets: number[] };
   comfyui_url: string; allow_public_comfyui: boolean; default_image: string; default_video: string;
   llm_base_url: string; llm_configured: boolean; llm_model: string; llm_api_key_configured: boolean;

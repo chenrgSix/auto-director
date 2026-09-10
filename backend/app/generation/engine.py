@@ -1,21 +1,16 @@
 import asyncio
+from copy import deepcopy
 from pathlib import Path
 
 from app.comfyui.client import ComfyUIClient
 from app.core.config import Settings
 from app.core.errors import AppError
 from app.db.store import Store, now
+from app.generation.parameters import resolve_parameters
+from app.generation.resolvers import AssetResolver
 from app.media.service import Assets
-from app.workflows.analyzer import patch, validate_dependencies, workflow_hash
-
-ASSET_ROLES = {
-    "start_frame",
-    "end_frame",
-    "reference_image",
-    "style_reference",
-    "reference_video",
-    "reference_audio",
-}
+from app.workflows.analyzer import analyze, patch, validate_dependencies, workflow_hash
+from app.workflows.ownership import canonicalize, decorate_parameters
 
 
 class RenderEngine:
@@ -43,10 +38,28 @@ class RenderEngine:
         type: str,
         parameter_values: dict | None = None,
         step_key: str = "",
+        *,
+        advanced_mode: bool = True,
+        budget: dict | None = None,
+        allowed_asset_ids: list[str] | None = None,
     ) -> dict:
+        profile = canonicalize(deepcopy(profile))
+        requested = parameter_values or {}
+        values, asset_bindings, parameter_values, sources = resolve_parameters(
+            profile,
+            values,
+            asset_bindings,
+            requested,
+            advanced_mode,
+            budget,
+            recovery=bool(values.get("_oom_recovery")),
+        )
         signature = workflow_hash(
             {
                 "workflow": profile["workflow_hash"],
+                "capability": profile["capability"],
+                "parameter_rules": profile.get("parameter_rules", {}),
+                "requested": requested,
                 "bindings": profile["bindings"],
                 "outputs": profile["outputs"],
                 "capabilities": profile["capabilities"],
@@ -72,6 +85,10 @@ class RenderEngine:
                 "input_values": values,
                 "asset_bindings": asset_bindings,
                 "parameter_values": parameter_values or {},
+                "requested_parameter_values": requested,
+                "parameter_sources": sources,
+                "advanced_mode": advanced_mode,
+                "allowed_asset_ids": allowed_asset_ids or [],
                 "signature": signature,
                 "step_key": step_key,
                 "comfy_prompt_id": None,
@@ -112,34 +129,34 @@ class RenderEngine:
             try:
                 async with self.client() as client:
                     if not job["patched_workflow"]:
-                        effective = {
-                            **profile,
-                            "parameter_values": {
-                                **profile.get("parameter_values", {}),
-                                **job["parameter_values"],
-                            },
-                        }
-                        report = validate_dependencies(effective, await client.object_info())
+                        checked = deepcopy(profile)
+                        info = await client.object_info()
+                        checked["parameters"] = analyze(profile["workflow"], info)["parameters"]
+                        decorate_parameters(checked)
+                        values = dict(job["input_values"])
+                        values.update(
+                            await AssetResolver(self.store, self.assets).resolve(
+                                profile,
+                                job["asset_bindings"],
+                                client,
+                                job["episode_id"],
+                                job.get("allowed_asset_ids", []),
+                                test=job["type"] == "WORKFLOW_TEST",
+                            )
+                        )
+                        graph = patch(
+                            checked,
+                            values,
+                            job["parameter_values"],
+                            advanced=job.get("advanced_mode", True),
+                        )
+                        report = validate_dependencies(
+                            {**checked, "workflow": graph, "parameter_values": {}}, info
+                        )
                         if not report["valid"]:
                             raise AppError(
                                 "WORKFLOW_INVALID", "工作流依赖未满足", report["issues"], status=422
                             )
-                        values = dict(job["input_values"])
-                        for role, asset_id in job["asset_bindings"].items():
-                            if role not in profile["bindings"]:
-                                continue
-                            if role not in ASSET_ROLES and not role.startswith("reference_image_"):
-                                raise AppError(
-                                    "WORKFLOW_INVALID", "不允许把资产写入此输入角色", {"role": role}
-                                )
-                            asset = self.store.get("asset", asset_id)
-                            if (
-                                asset["episode_id"] != job["episode_id"]
-                                and job["type"] != "WORKFLOW_TEST"
-                            ):
-                                raise AppError("INVALID_MEDIA", "资产不属于当前 Episode")
-                            values[role] = await client.upload(self.assets.path(asset_id))
-                        graph = patch(profile, values, job["parameter_values"])
                         job = self.store.update(
                             "job",
                             job_id,
@@ -165,13 +182,13 @@ class RenderEngine:
                         prompt_id=job["comfy_prompt_id"],
                     )
                     metadata = client.outputs(
-                        history, profile["outputs"][profile["type"]], profile["type"]
+                        history, profile["outputs"][profile["media_type"]], profile["media_type"]
                     )
                     if not metadata:
                         raise AppError(
                             "OUTPUT_NOT_FOUND",
                             "指定输出节点没有可用的图像/视频",
-                            {"output_node": profile["outputs"][profile["type"]]},
+                            {"output_node": profile["outputs"][profile["media_type"]]},
                         )
                     records = []
                     for item in metadata[:8]:

@@ -12,8 +12,8 @@ from app.agents.schemas import (
     Transition,
     VisualBible,
 )
-from app.core.duration import PLAN_BATCH_SHOTS
 from app.core.errors import AppError
+from app.core.limits import MAX_EPISODE_SHOTS, PLAN_BATCH_SHOTS
 
 
 def normalize_plan(
@@ -71,6 +71,10 @@ def generation_budget(episode: dict, capabilities: dict, system_stats: dict) -> 
     )
     width = max(256, round(width / 16) * 16)
     height = max(256, round(height / 16) * 16)
+    if low and (
+        (episode.get("width") or width) > width or (episode.get("height") or height) > height
+    ):
+        raise AppError("OVERRIDE_INVALID", "自定义分辨率超过低显存策略上限")
     maximum = min(
         capabilities["max_duration"],
         episode.get("max_shot_duration") or 30,
@@ -100,7 +104,23 @@ class Directors:
     ) -> EpisodePlan:
         total = round(episode["target_duration"] * 100)
         limit = int(Fraction(str(maximum)) * 100)
+        fixed = episode.get("fixed_shot_duration")
+        if fixed is not None:
+            fixed_cents = round(fixed * 100)
+            if fixed_cents < 100 or fixed_cents > limit or total % fixed_cents:
+                raise AppError("OVERRIDE_INVALID", "每镜固定时长需在能力范围内，并整除总时长")
+            limit = fixed_cents
         count = math.ceil(total / limit)
+        if count > MAX_EPISODE_SHOTS:
+            raise AppError(
+                "LIMIT_EXCEEDED",
+                "当前单镜能力无法在镜头上限内完成目标时长",
+                {
+                    "required_shots": count,
+                    "max_shots": MAX_EPISODE_SHOTS,
+                    "max_shot_duration": maximum,
+                },
+            )
         if count * 100 > total:
             raise AppError("LLM_INVALID_OUTPUT", "总时长无法按每镜至少 1 秒和工作流上限拆分")
         length, remainder = divmod(total, count)
@@ -155,6 +175,8 @@ class Directors:
             max_shot_duration=maximum,
             **segment,
         )
+        if episode.get("fixed_shot_duration") is not None:
+            context["max_shots"] = context["min_shots"]
         for attempt in range(2):
             check_cancel()
             plan = await self.provider.generate_json(
@@ -186,21 +208,34 @@ class Directors:
                 context["correction"] = exc.details
         raise AppError("LLM_INVALID_OUTPUT", "无法规划镜头")
 
-    async def bible(self, episode: dict, plan: dict) -> VisualBible:
+    async def bible(self, episode: dict, plan: dict, workflow_parameters=None) -> VisualBible:
         return await self.provider.generate_json(
             "Act as Bible Agent. Specify distinct, stable character identities, environment, visual style, "
             "lighting and continuity rules for this episode only. Preserve the exact subject count in the idea.",
-            {"idea": episode["idea"], "style": episode["style"], "plan": plan},
+            {
+                "idea": episode["idea"],
+                "style": episode["style"],
+                "plan": plan,
+                "workflow_parameters": workflow_parameters or [],
+            },
             VisualBible,
         )
 
-    async def shot(self, bible: dict, shot: dict, continuity: dict) -> ShotPrompts:
+    async def shot(
+        self, bible: dict, shot: dict, continuity: dict, workflow_parameters=None
+    ) -> ShotPrompts:
         return await self.provider.generate_json(
             "Act as Shot Agent. Build actionable image/start/end/video/negative prompts. "
             "Inherit the Bible and continuity. End frame is the same subjects, location and lighting seconds later. "
             "Describe one action, camera, light, identity and negative constraints. Prompts should be in English. "
+            "Respect the AI-owned workflow parameter types, ranges and enum options. "
             "continuity_state describes the expected subject position, direction, environment and time at the end.",
-            {"bible": bible, "shot": shot, "continuity": continuity},
+            {
+                "bible": bible,
+                "shot": shot,
+                "continuity": continuity,
+                "workflow_parameters": workflow_parameters or [],
+            },
             ShotPrompts,
         )
 

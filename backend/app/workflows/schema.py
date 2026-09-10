@@ -1,6 +1,36 @@
+from enum import StrEnum
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
+
+from app.core.limits import MAX_SHOT_SECONDS, MIN_SHOT_SECONDS
+
+
+class WorkflowCapability(StrEnum):
+    TEXT_TO_IMAGE = "TEXT_TO_IMAGE"
+    IMAGE_TO_IMAGE = "IMAGE_TO_IMAGE"
+    FIRST_LAST_TO_VIDEO = "FIRST_LAST_TO_VIDEO"
+    IMAGE_TO_VIDEO = "IMAGE_TO_VIDEO"
+
+    @property
+    def media_type(self) -> str:
+        return "image" if self in {self.TEXT_TO_IMAGE, self.IMAGE_TO_IMAGE} else "video"
+
+
+class ParameterOwner(StrEnum):
+    AI = "ai"
+    DIRECTOR = "director"
+    ASSET_RESOLVER = "asset_resolver"
+    SYSTEM = "system"
+    WORKFLOW = "workflow"
+    USER = "user"
+
+
+class ParameterRule(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    owner: ParameterOwner | None = None
+    editable: bool = True
+    override_policy: Literal["advanced", "never"] = "advanced"
 
 
 class Binding(BaseModel):
@@ -18,18 +48,37 @@ class Capabilities(BaseModel):
     supports_end_frame: bool = True
     supports_video_reference: bool = False
     supports_multi_reference: bool = False
-    max_duration: float = Field(default=5, ge=1, le=30)
+    max_duration: float = Field(default=5, ge=MIN_SHOT_SECONDS, le=MAX_SHOT_SECONDS)
     low_memory_workflow_id: str | None = None
 
 
 class WorkflowImport(BaseModel):
     model_config = ConfigDict(extra="forbid")
     name: str = Field(min_length=1, max_length=120)
-    type: Literal["image", "video"]
+    type: Literal["image", "video"] | None = Field(
+        default=None, json_schema_extra={"deprecated": True}
+    )
+    media_type: Literal["image", "video"] | None = None
+    capability: WorkflowCapability | None = None
     workflow: dict[str, Any]
     capabilities: Capabilities = Field(default_factory=Capabilities)
     bindings: dict[str, Binding] | None = None
     outputs: dict[str, str] | None = None
+    parameter_rules: dict[str, ParameterRule] = Field(default_factory=dict)
+
+    @model_validator(mode="after")
+    def identity(self):
+        media = (
+            self.media_type
+            or self.type
+            or (self.capability.media_type if self.capability else None)
+        )
+        if not media or (self.type and self.media_type and self.type != self.media_type):
+            raise ValueError("需要匹配的 media_type / capability（旧 type 仍兼容）")
+        if self.capability and self.capability.media_type != media:
+            raise ValueError("capability 与 media_type 不匹配")
+        self.media_type = self.type = media
+        return self
 
 
 class WorkflowPatch(BaseModel):
@@ -39,3 +88,6 @@ class WorkflowPatch(BaseModel):
     outputs: dict[str, str] | None = None
     capabilities: Capabilities | None = None
     parameter_values: dict[str, Any] | None = None
+    capability: WorkflowCapability | None = None
+    media_type: Literal["image", "video"] | None = None
+    parameter_rules: dict[str, ParameterRule] | None = None
