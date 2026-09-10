@@ -22,8 +22,16 @@
 
 ## ADR-006：SQLite 聚合记录（已采用）
 
-MVP 使用 SQLAlchemy 的 versioned JSON records：Episode 聚合包含有序 Shots、plan、bible、continuity；Workflow、Asset、RenderJob、设置独立记录并按 parent_id 索引。SQLite WAL、事务和 version CAS 保证更新原子性。此实现没有独立 Shot 外键表；跨记录资源约束由服务层检查，后续关系查询压力出现时再迁移规范化表。数据库不在网络等待期间保持事务。
+MVP 使用 SQLAlchemy 的 versioned JSON records：Episode 聚合包含有序 Shots、plan、bible、continuity；Workflow、Asset、RenderJob、QAResult、设置独立记录并按 parent_id 索引。SQLite WAL、事务和 version CAS 保证更新原子性。此实现没有独立 Shot 外键表；跨记录资源约束由服务层检查，后续关系查询压力出现时再迁移规范化表。数据库不在网络等待期间保持事务。
 
 ## ADR-007：先实现、后接入真实服务（用户明确要求）
 
 不在本机部署 ComfyUI、不下载模型，先完成全部 MVP 实现与本地测试。ComfyUI 协议核对官方 docs 与 Comfy-Org 源码。用户仅在工程交付完成后提供真实 API/模型，外部门禁保持未执行。
+
+## ADR-008：参数编辑与内置模板能力（已采用）
+
+动态表单编辑 object_info 中的标量参数，包括模型枚举、数值、文本和布尔值。嵌套 DynamicCombo JSON 保持原样随模板传递，当前不生成递归编辑器；需要修改时重新导入 API JSON。内置模板提供协议和执行起点，不能代替真实节点/权重兼容验收。SD1.5 默认模板仅靠文本锚点，视觉参考输入由兼容替换模板承担。
+
+## ADR-009：验收工具与质量策略（已采用）
+
+`make check` 是统一的本地工程门禁，CI 运行同一命令。浏览器交互通过隔离夹具和实际浏览器记录，没有保留未实现的 Playwright 命令或空测试套件。VLM 未配置或 QA 关闭时，High 不进行候选视觉比较；VLM 缺失时提示跳过视觉检查；主动关闭 QA 的选择保存在单集配置中。参考资产、关键帧和视频均来自配置的真实 ComfyUI，应用代码没有模拟生成分支。

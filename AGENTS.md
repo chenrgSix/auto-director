@@ -2,41 +2,33 @@
 
 ## Project Structure & Module Organization
 
-AutoDirector is currently a design-stage repository for a ComfyUI-native short-video directing system.
-
-- `README.md` introduces the product and intended generation pipeline.
-- `docs/AutoDirector_完整产品与技术设计文档_v1.0.md` defines the proposed architecture, schemas, roadmap, and acceptance criteria.
-- No application source, tests, or asset directories exist yet. The design proposes `backend/app/`, `backend/tests/`, `frontend/`, and `bundled_workflows/{text_to_image,first_last_video}/`; treat these as planned locations.
+AutoDirector is a local ComfyUI video directing studio. `backend/app/` contains FastAPI routes, directing agents, workflow analysis, ComfyUI transport, generation orchestration, SQLite storage, and media processing. Backend tests and isolated dependency fixtures live in `backend/tests/`. `frontend/src/` contains React/TypeScript pages, shared UI, and styles. Replaceable API JSON templates live in `bundled_workflows/`; their generator is `scripts/build_bundled_workflows.py`. Runtime data belongs in ignored `data/`.
 
 ## Build, Test, and Development Commands
 
-No dependency manifests, build scripts, development server, or automated test runner are configured.
+Use Python 3.12, uv, Node 22, npm, and FFmpeg/ffprobe. Run commands from the repository root:
 
-- `git status --short`: inspect changed and untracked files before editing or committing.
-- `git diff --check`: check tracked changes for whitespace errors; use `git diff --cached --check` after staging new files.
+- `make install`: install locked backend and frontend dependencies.
+- `make dev-api` and `make dev-web`: start separate development servers on 8000 and 5173.
+- `make build && make run`: build the UI and serve the complete app on 8000.
+- `make check`: run Ruff, formatting checks, ESLint, TypeScript, build, and pytest.
+- `make test`: run backend contracts and real FFmpeg tests.
+- `make browser-fixture`: start an isolated UI acceptance server with synthetic media on 8011.
 
-When introducing runnable code, document installation, local startup, build, and test commands in `README.md` alongside the relevant manifests.
+See `docs/DEVELOPMENT.md` for configuration and recovery procedures. Run one API worker. Do not install ComfyUI or download model weights unless requested.
 
 ## Coding Style & Naming Conventions
 
-Keep Markdown sections focused, use fenced blocks with language labels, and preserve existing schema names such as `Episode`, `Shot`, `RenderJob`, and `WorkflowProfile`. Distinguish proposed behavior from implemented functionality.
-
-No formatter or linter is configured. For the proposed Python backend, use four-space indentation and `snake_case` modules/functions. For the proposed React/TypeScript frontend, use two-space indentation and `PascalCase` components. Add shared tool configuration when scaffolding each stack.
-
-## Architecture Guidelines
-
-Import ComfyUI workflows in API JSON format. Bind inputs through semantic role tags rather than fixed node IDs. Keep workflow profiles replaceable and separate generation orchestration from ComfyUI execution.
+Python uses four spaces, `snake_case`, type hints, Pydantic schemas, and Ruff with a 100-character formatting target. TypeScript uses two spaces, `PascalCase` components, strict types, and ESLint. Preserve semantic workflow roles; never rely on fixed node IDs. Keep secrets in environment configuration.
 
 ## Testing Guidelines
 
-No test framework or coverage threshold is established. For documentation changes, check referenced paths, examples, and consistency with the design.
+Use descriptive `test_*.py` names with pytest/pytest-asyncio. Cover changed state transitions, workflow bindings, uncertain submissions, and media behavior. No coverage percentage is mandated. Report fixture integration, browser checks, real model acceptance, and CI separately; synthetic output does not demonstrate visual quality.
 
-When implementing the backend, place tests in `backend/tests/` with descriptive `test_*.py` names. Follow the design's test plan: parsing, role detection, JSON patching, duration splitting, state transitions, and prompt schemas. Verify upload, execution, progress, history, and download against real ComfyUI for integration acceptance. Report unit, integration, and end-to-end results separately.
+## Documentation & Architecture
+
+Start from `docs/INDEX.md` and the v1.0 source design. Update affected contracts, tasks, decisions, and acceptance evidence with each change. If `.codegraph/` exists, use available CodeGraph exploration before locating indexed code; fall back to `rg` when unavailable or stale.
 
 ## Commit & Pull Request Guidelines
 
-History contains only `Initial commit`, so no established message convention exists. Use concise imperative subjects, for example `docs: add contributor guidelines`.
-
-Commit each independent code change separately, stage only task-related files, preserve existing user changes, and never use `git commit --no-verify`.
-
-Pull requests should describe the change, reference relevant design sections or issues, list actual validation and remaining limits, and include screenshots when UI behavior changes.
+History uses concise `docs:`, `feat:`, `fix:`, and `chore:` subjects. Commit each independent change, stage only related files, preserve existing user changes, and never bypass hooks. PRs should explain behavior, reference design sections/issues, list actual validation and remaining limits, and include screenshots for UI changes.

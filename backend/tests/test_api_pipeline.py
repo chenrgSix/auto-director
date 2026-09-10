@@ -143,6 +143,21 @@ def test_input_errors_secrets_and_cross_origin_protection(system):
     )
 
 
+@pytest.mark.parametrize("duration", [10, 15])
+def test_longer_episode_exports_requested_duration(system, duration):
+    client, _, _ = system
+    id = client.post(
+        "/api/v1/episodes",
+        json={"idea": "duration fixture", "target_duration": duration, "width": 256, "height": 256},
+    ).json()["id"]
+    assert client.post(f"/api/v1/episodes/{id}/generate").status_code == 202
+    episode = wait_episode(client, id)
+    assert episode["status"] == "COMPLETED", episode.get("error")
+    assert abs(episode["final_duration"] - duration) <= 0.5
+    assert len(episode["shots"]) == duration // 5
+    assert all(shot["status"] == "PASSED" for shot in episode["shots"])
+
+
 def test_workflow_test_run_upload_and_default_protection(system):
     client, _, comfy = system
     upload = client.post(

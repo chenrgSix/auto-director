@@ -80,6 +80,33 @@ async def test_cancel_does_not_interrupt_somebody_elses_prompt():
     assert paths == ["/queue", "/queue"]
 
 
+async def test_resume_known_prompt_reads_history_without_submitting_again():
+    paths = []
+
+    def handler(request):
+        paths.append((request.method, request.url.path))
+        assert request.method == "GET" and request.url.path == "/history/known"
+        return httpx.Response(
+            200,
+            json={
+                "known": {
+                    "status": {"completed": True, "status_str": "success"},
+                    "outputs": {"selected": {"images": [{"filename": "kept.png"}]}},
+                }
+            },
+        )
+
+    async with ComfyUIClient(
+        Settings(_env_file=None),
+        "http://127.0.0.1:8188",
+        transport=httpx.MockTransport(handler),
+        use_websocket=False,
+    ) as client:
+        history = await client.execute({}, "job", noop, noop, lambda: False, prompt_id="known")
+        assert history["outputs"]["selected"]["images"][0]["filename"] == "kept.png"
+    assert paths == [("GET", "/history/known")]
+
+
 async def test_download_rejects_path_traversal(tmp_path):
     async with ComfyUIClient(
         Settings(_env_file=None),

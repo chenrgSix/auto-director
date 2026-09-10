@@ -4,7 +4,7 @@
 
 Base `/api/v1`，JSON；ID 由服务端生成；UTC ISO 时间。验证失败 422，不存在 404，状态冲突 409，外部执行失败提供可读 `error.code/message/details`。仅本地单用户使用，默认绑定 loopback；跨域与公网 ComfyUI 需要显式配置。
 
-## API 清单（实现目标）
+## 已实现 API
 
 | 路径 | 行为 |
 | --- | --- |
@@ -35,6 +35,25 @@ Base `/api/v1`，JSON；ID 由服务端生成；UTC ISO 时间。验证失败 42
 统一 capability 命名为 `supports_start_frame/end_frame/video_reference/multi_reference` 与 `max_duration`。图像至少 `prompt` + `image` output；视频至少 `prompt/start_frame` + `video` output，声明支持尾帧时必须绑定 `end_frame`。缺尾帧只允许显式的 I2V capability 降级。
 
 Binding 为 `{node_id, input, transform}`；`transform` 默认 `identity`，可指定 `duration_to_frames`（根据 fps 对齐模型帧数）。输出绑定到 node，不修改输入。角色从 `_meta.title` 中的 `(Input:role)` / `(Output:role)` 提取；`width_height` 展开。不明确的字段要求用户编辑绑定，不猜测固定节点位置。参数 schema 保留字段类型、默认值、min/max、step、enum 及绑定角色。
+
+参数覆盖用 `node_id.field` 键，例如 `{"sampler.steps": 20}`。单集参数只覆盖其选择的原 profile；低显存替代项使用自身 profile 参数。嵌套 DynamicCombo 原样保留，表单当前只编辑标量。修改 profile 会清空旧校验结论，已创建 RenderJob 的快照保持不变。
+
+## 调用示例
+
+请求体与响应字段的完整类型见运行中的 `/docs` 和 `/openapi.json`。生成为异步操作：
+
+```http
+POST /api/v1/episodes
+Content-Type: application/json
+
+{"idea":"三只狮子进入侏罗纪","target_duration":5,"quality":"standard","aspect_ratio":"9:16"}
+```
+
+创建成功返回 201 与 Episode（含 `id`）。随后 `POST /episodes/{id}/generate` 返回 202，轮询 `GET /episodes/{id}` 或读取 `GET /episodes/{id}/events` 的 `progress` 事件；当前 Web UI 采用轮询。完成后读取 `final_video_asset_id`，通过 `GET /assets/{asset_id}/file?download=true` 下载 MP4。
+
+上传为 multipart 字段 `file`，返回 Asset；工作流试跑请求通过 `asset_bindings` 将角色关联到资产 ID，例如 `{"values":{"prompt":"A lion walking","duration":2,"fps":16},"asset_bindings":{"start_frame":"<asset_id>","end_frame":"<asset_id>"}}`。视频试跑要求相应首尾帧已上传。
+
+时间线 PATCH 必须提供全部镜头 ID，且不重复、至少启用一个，例如 `{"shots":[{"id":"<shot_id>","enabled":true}]}`。不直接编辑生成中的镜头；发生依赖失效后先重新生成，再 compose。
 
 ## 状态与错误
 
