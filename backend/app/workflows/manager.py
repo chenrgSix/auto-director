@@ -5,8 +5,14 @@ from app.core.config import ROOT
 from app.core.errors import AppError
 from app.db.migrations import migrate
 from app.db.store import Store, now
-from app.workflows.analyzer import analyze, patch, validate_bindings, validate_dependencies
-from app.workflows.ownership import canonicalize, decorate_parameters
+from app.workflows.analyzer import (
+    analyze,
+    patch,
+    refresh_profile,
+    validate_bindings,
+    validate_dependencies,
+)
+from app.workflows.ownership import canonicalize
 from app.workflows.schema import WorkflowImport, WorkflowPatch
 
 
@@ -105,9 +111,7 @@ class WorkflowManager:
 
     def validate(self, id: str, object_info: dict) -> dict:
         profile = self.store.get("workflow", id)
-        discovered = analyze(profile["workflow"], object_info)
-        profile["parameters"] = discovered["parameters"]
-        decorate_parameters(profile)
+        profile = refresh_profile(profile, object_info)
         result = validate_dependencies(profile, object_info)
         return self.describe(
             self.store.update(

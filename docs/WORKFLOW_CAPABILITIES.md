@@ -6,6 +6,8 @@
 
 统一 limits：总片长 1～600 秒，新计划最多 240 镜。单镜仍受 workflow 能力和显存策略限制；无法在 240 镜内完成时明确报错，不偷偷增加单镜时长。旧超限时间线可读取和导出，不截断数据。
 
+C11：Shot.duration 表示时间线长度，视频作业另记 timeline_duration 和实际渲染 duration。秒数节点根据已选模型的类型、min/max/step/enum 向上取合法值（2.86 秒可生成 4 秒后裁切），不超出 workflow 与适用显存上限；帧数节点保留既有转换。云端 API 视频以 duration 节点的 api_node 元数据判定，免除本地视频时长降级，图片继续遵守本地显存策略。无合法时长时提前失败，不生成参考图。
+
 ## 参数契约
 
 每个动态参数包含 `owner`、`editable`、`override_policy`（`advanced` 或 `never`）。角色绑定决定语义归属：prompt/negative/camera_motion/motion_strength 归 AI；duration 归 Director；媒体输入归 AssetResolver；尺寸/FPS/batch/seed 归 system；steps/cfg/sampler/scheduler/model 及未映射字段默认归 workflow。无角色且非素材的自定义字段可显式声明 ai/user owner。

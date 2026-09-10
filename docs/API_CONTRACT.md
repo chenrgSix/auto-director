@@ -50,7 +50,11 @@ Base `/api/v1`，JSON；ID 由服务端生成；UTC ISO 时间。验证失败 42
 
 Binding 为 `{node_id, input, transform}`；`transform` 默认 `identity`，可指定 `duration_to_frames`（根据 fps 对齐模型帧数）。输出绑定到 node，不修改输入。角色从 `_meta.title` 中的 `(Input:role)` / `(Output:role)` 提取；`width_height` 展开。不明确的字段要求用户编辑绑定，不猜测固定节点位置。参数 schema 保留字段类型、默认值、min/max、step、enum 及绑定角色。
 
-参数覆盖用 `node_id.field` 键，例如 `{"sampler.steps": 20}`。单集参数只覆盖其选择的原 profile；低显存替代项使用自身 profile 参数。嵌套 DynamicCombo 原样保留，表单当前只编辑标量。修改 profile 会清空旧校验结论，已创建 RenderJob 的快照保持不变。
+参数覆盖用 `node_id.field` 键，例如 `{"sampler.steps": 20}`。单集参数只覆盖其选择的原 profile；低显存替代项使用自身 profile 参数。DynamicCombo 的现有扁平标量（如 `28.model.duration`）读取已选模型分支约束，选择器 enum 返回 key 字符串；依赖检查会更新已保存 schema，生成前再次按实际选择校验。不新增不存在的分支字段或递归编辑器。修改 profile 会清空旧校验结论，已提交 RenderJob 的 JSON 保持不变。
+
+视频秒数输入按 type/min/max/step/enum 自动向上对齐，严格限制在 workflow 与适用显存预算内。Shot 的 `duration` 是时间线时长；视频作业 `input_values.timeline_duration` 记录原值，`input_values.duration` 是实际渲染秒数。例如 MiniMax H3 的 2.86 秒片段请求整数 4 秒，导出裁切回 2.86 秒；不把非法高级覆盖静默取整。无合法交集返回 `WORKFLOW_INVALID`，在生成参考图前拦截。
+
+Episode 预算新增 `render_max_duration`；由绑定 duration 节点的 `api_node=true` 判断云端视频，云端不采用本地 3 秒显存上限，图片仍按本地资源策略。旧 Episode/Job JSON 缺少新增字段时自动兼容，无数据库迁移或重新导入要求。
 
 ## 调用示例
 

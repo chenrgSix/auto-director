@@ -9,8 +9,8 @@ from app.db.store import Store, now
 from app.generation.parameters import resolve_parameters
 from app.generation.resolvers import AssetResolver
 from app.media.service import Assets
-from app.workflows.analyzer import analyze, patch, validate_dependencies, workflow_hash
-from app.workflows.ownership import canonicalize, decorate_parameters
+from app.workflows.analyzer import patch, refresh_profile, validate_dependencies, workflow_hash
+from app.workflows.ownership import canonicalize
 
 
 class RenderEngine:
@@ -92,6 +92,7 @@ class RenderEngine:
                 "ai_parameter_values": ai_values or {},
                 "parameter_sources": sources,
                 "advanced_mode": advanced_mode,
+                "budget_snapshot": budget,
                 "allowed_asset_ids": allowed_asset_ids or [],
                 "signature": signature,
                 "step_key": step_key,
@@ -133,15 +134,28 @@ class RenderEngine:
             try:
                 async with self.client() as client:
                     if not job["patched_workflow"]:
-                        checked = deepcopy(profile)
                         info = await client.object_info()
-                        checked["parameters"] = analyze(profile["workflow"], info)["parameters"]
-                        decorate_parameters(checked)
-                        values = dict(job["input_values"])
+                        checked = refresh_profile(
+                            profile, info, job.get("requested_parameter_values", {})
+                        )
+                        automatic = dict(job["input_values"])
+                        if "timeline_duration" in automatic:
+                            automatic["duration"] = automatic["timeline_duration"]
+                        values, bound_assets, raw, sources = resolve_parameters(
+                            checked,
+                            automatic,
+                            job["asset_bindings"],
+                            job.get("requested_parameter_values", job["parameter_values"]),
+                            job.get("advanced_mode", True),
+                            job.get("budget_snapshot"),
+                            recovery=bool(automatic.get("_oom_recovery")),
+                            ai_values=job.get("ai_parameter_values", {}),
+                        )
+                        resolved_values = dict(values)
                         values.update(
                             await AssetResolver(self.store, self.assets).resolve(
                                 profile,
-                                job["asset_bindings"],
+                                bound_assets,
                                 client,
                                 job["episode_id"],
                                 job.get("allowed_asset_ids", []),
@@ -151,7 +165,7 @@ class RenderEngine:
                         graph = patch(
                             checked,
                             values,
-                            job["parameter_values"],
+                            raw,
                             advanced=job.get("advanced_mode", True),
                             ai_values=job.get("ai_parameter_values", {}),
                         )
@@ -165,7 +179,13 @@ class RenderEngine:
                         job = self.store.update(
                             "job",
                             job_id,
-                            {"patched_workflow": graph, "status": "RUNNING", "started_at": now()},
+                            {
+                                "patched_workflow": graph,
+                                "input_values": resolved_values,
+                                "parameter_sources": sources,
+                                "status": "RUNNING",
+                                "started_at": now(),
+                            },
                         )
                     else:
                         self.store.update("job", job_id, {"status": "RUNNING", "error": None})

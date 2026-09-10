@@ -5,6 +5,7 @@ from copy import deepcopy
 from app.core.errors import AppError
 from app.core.limits import MAX_BATCH, MAX_DIMENSION, MAX_FPS, MAX_SHOT_SECONDS, MIN_DIMENSION
 from app.workflows.analyzer import check_value, validate_ai_parameters
+from app.workflows.duration import fit_duration, render_maximum
 from app.workflows.ownership import decorate_parameters, is_asset_role
 
 
@@ -131,6 +132,10 @@ def resolve_parameters(
     validate_strategy(
         values, maximum, low_memory=(budget or {}).get("low_memory", False), ceilings=budget
     )
+    if profile.get("media_type", profile.get("type")) == "video" and "duration" in values:
+        timeline = values["duration"]
+        values["duration"] = fit_duration(profile, timeline, render_maximum(profile, budget))
+        values["timeline_duration"] = timeline
     sources = {}
     for item in profile["parameters"]:
         role = item.get("role")

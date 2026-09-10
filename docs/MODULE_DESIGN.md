@@ -1,5 +1,15 @@
 # 模块设计
 
+## C11 动态模型与渲染时长
+
+Analyzer 按 `COMFY_DYNAMICCOMBO_V3` 当前选项递归读取扁平字段（如 `model.duration`）的类型、min/max/step、枚举与必填项，模型选择器的 enum 使用选项 key。`refresh_profile` 基于模板默认值、已保存参数与用户覆盖读取实际分支，只更新参数快照，保持原始图不变。
+
+`workflows/duration.py` 计算合法的秒数区间：整数、步长与离散枚举向上选择最短可覆盖时间线的值，上限向下对齐至合法值；约束无交集时在规划或参考图生成前失败。`duration_to_frames` 继续使用既有显式转换。ParameterResolver 保存 `timeline_duration` 与实际 `duration`，不改写 Shot 的时间线；用户原始覆盖仍须满足类型、范围、步长与固定时长计划。
+
+只在绑定 duration 的视频节点被 ComfyUI 明确标记为 `api_node=true` 时跳过本地视频时长降级；图片尺寸、batch 等仍使用本地显存预算。`max_duration` 控制时间线，`render_max_duration` 控制渲染，后者仍受 workflow 最大时长和模型范围限制。恢复旧云端任务时刷新这两个上限，保留已有尺寸、分镜、Bible、参考图与关键帧。
+
+RenderEngine 在未提交前按最新元数据再次解析/校验并保存实际请求值与预算快照；已提交的 patched JSON 和 UNKNOWN 恢复逻辑保持不变。QA、实际尾帧和 FFmpeg 继续按 Shot 时长取样/裁切，因此 2.86 秒片段可以渲染 4 秒、使用前 2.86 秒。原始生成尾帧不等同于裁切后的实际尾帧。
+
 ## C09 / C10 模型测试与超时配置
 
 `agents/diagnostics.py` 复用 LLMProvider 的 JSON/vision 通道，导演模型要求最小 JSON，视觉模型接收临时 32×32 色块图并校验颜色。测试不使用 ComfyUI，不读写 Episode/Job/Asset；测试图在完成、超时或断开时删除。API 监听浏览器断开，并给整个测试设 `llm_timeout` 截止时间。

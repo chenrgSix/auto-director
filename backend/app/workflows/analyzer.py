@@ -82,9 +82,29 @@ def validate_graph(graph: dict) -> None:
         remaining = {id: deps - ready for id, deps in remaining.items() if id not in ready}
 
 
+def input_definitions(node: dict, object_info: dict) -> dict:
+    """Flatten only the selected DynamicCombo branch, including its required inputs."""
+    result = {}
+
+    def visit(inputs, prefix=""):
+        for group in ("required", "optional"):
+            for name, definition in inputs.get(group, {}).items():
+                field = prefix + name
+                result[field] = (definition, group == "required")
+                if definition and definition[0] == "COMFY_DYNAMICCOMBO_V3":
+                    options = definition[1].get("options", []) if len(definition) > 1 else []
+                    selected = node["inputs"].get(field)
+                    for option in options:
+                        if isinstance(option, dict) and option.get("key") == selected:
+                            visit(option.get("inputs", {}), field + ".")
+                            break
+
+    visit(object_info.get(node["class_type"], {}).get("input", {}))
+    return result
+
+
 def field_spec(node: dict, field: str, object_info: dict) -> tuple[Any, dict]:
-    inputs = object_info.get(node["class_type"], {}).get("input", {})
-    definition = {**inputs.get("required", {}), **inputs.get("optional", {})}.get(field, [])
+    definition = input_definitions(node, object_info).get(field, ([], False))[0]
     if not definition:
         return None, {}
     return definition[0], definition[1] if len(definition) > 1 and isinstance(
@@ -95,6 +115,8 @@ def field_spec(node: dict, field: str, object_info: dict) -> tuple[Any, dict]:
 def parameter(id: str, node: dict, field: str, value: Any, object_info: dict) -> dict:
     type_info, constraints = field_spec(node, field, object_info)
     choices = type_info if isinstance(type_info, list) else constraints.get("options")
+    if type_info == "COMFY_DYNAMICCOMBO_V3" and choices:
+        choices = [option["key"] for option in choices if isinstance(option, dict)]
     if (
         constraints.get("image_upload")
         or constraints.get("video_upload")
@@ -281,6 +303,28 @@ def validate_bindings(profile: dict) -> list[dict]:
     return issues
 
 
+def refresh_profile(profile: dict, object_info: dict, overrides: dict | None = None) -> dict:
+    """Read live constraints against effective model selections without mutating the template."""
+    result = deepcopy(profile)
+    graph = deepcopy(profile["workflow"])
+    targets = {
+        f"{id}.{field}": (id, field) for id, node in graph.items() for field in node["inputs"]
+    }
+    for key, value in {**profile.get("parameter_values", {}), **(overrides or {})}.items():
+        if key in targets:
+            id, field = targets[key]
+            graph[id]["inputs"][field] = value
+    result["parameters"] = analyze(graph, object_info)["parameters"]
+    decorate_parameters(result)
+    duration_node = profile.get("bindings", {}).get("duration", {}).get("node_id")
+    result["remote_video"] = bool(
+        profile.get("media_type", profile.get("type")) == "video"
+        and duration_node in graph
+        and object_info.get(graph[duration_node]["class_type"], {}).get("api_node") is True
+    )
+    return result
+
+
 def check_value(item: dict, value: Any) -> None:
     kind = item["type"]
     valid = True
@@ -320,6 +364,11 @@ def check_value(item: dict, value: Any) -> None:
         ]:
             if item.get(key) is not None and violates(item[key]):
                 raise AppError("WORKFLOW_INVALID", f"参数 {item['key']} 超出 {key} 约束", item)
+        step = item.get("step")
+        if type(step) in {int, float} and step > 0:
+            units = (value - (item.get("min") or 0)) / step
+            if not math.isclose(units, round(units), abs_tol=1e-7, rel_tol=0):
+                raise AppError("WORKFLOW_INVALID", f"参数 {item['key']} 不满足 step 约束", item)
 
 
 def validate_ai_parameters(profile: dict, values: dict) -> None:
@@ -379,6 +428,9 @@ def patch(
             )
         key = f"{binding.node_id}.{binding.input}"
         if key in parameters:
+            if role == "duration" and parameters[key]["type"] == "integer":
+                if type(value) is float and value.is_integer():
+                    value = int(value)
             check_value(parameters[key], value)
         graph[binding.node_id]["inputs"][binding.input] = value
     if parameter_values and not advanced:
@@ -409,8 +461,8 @@ def validate_dependencies(profile: dict, object_info: dict) -> dict:
                 }
             )
             continue
-        for field in info.get("input", {}).get("required", {}):
-            if field not in node["inputs"]:
+        for field, (_, required) in input_definitions(node, object_info).items():
+            if required and field not in node["inputs"]:
                 issues.append(
                     {
                         "code": "WORKFLOW_INVALID",

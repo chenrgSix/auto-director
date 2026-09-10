@@ -16,6 +16,7 @@ from app.generation.parameters import (
     ai_parameters,
     duration_seconds,
     parameter_overrides,
+    resolve_parameters,
     role_overrides,
     validate_overrides,
     validate_strategy,
@@ -23,8 +24,9 @@ from app.generation.parameters import (
 from app.generation.resolvers import AssetResolver, ContinuityManager
 from app.generation.schemas import ACTIVE, EpisodeCreate, EpisodeWorkflowsUpdate, TimelineUpdate
 from app.media.service import Assets, compose, extract_frame
-from app.workflows.analyzer import analyze, validate_bindings
-from app.workflows.ownership import decorate_parameters, is_asset_role
+from app.workflows.analyzer import refresh_profile, validate_bindings
+from app.workflows.duration import render_maximum
+from app.workflows.ownership import is_asset_role
 from app.workflows.router import CapabilityRouter
 from app.workflows.schema import WorkflowCapability
 
@@ -478,11 +480,23 @@ class GenerationService:
             async with self.engine.client() as client:
                 system = await client.system()
                 object_info = await client.object_info()
-            for profile in (image, video, reference_profile):
-                profile["parameters"] = analyze(profile["workflow"], object_info)["parameters"]
-                decorate_parameters(profile)
-            budget = episode.get("budget") or generation_budget(
-                episode, video["capabilities"], system
+            image, video, reference_profile = (
+                refresh_profile(profile, object_info, parameter_overrides(episode, profile))
+                for profile in (image, video, reference_profile)
+            )
+            fresh_budget = generation_budget(
+                episode, video["capabilities"], system, remote_video=video["remote_video"]
+            )
+            budget = dict(episode.get("budget") or fresh_budget)
+            if video["remote_video"]:
+                # Old episodes may have applied the local 3-second ceiling to cloud video.
+                # Keep their image sizes, plans and already-rendered assets intact.
+                for key in ("max_duration", "render_max_duration"):
+                    budget[key] = fresh_budget[key]
+            budget["render_max_duration"] = render_maximum(video, budget)
+            budget["max_duration"] = min(budget["max_duration"], budget["render_max_duration"])
+            validate_overrides(
+                video, parameter_overrides(episode, video), episode.get("advanced_mode", False)
             )
             override_roles = role_overrides(video, parameter_overrides(episode, video))
             ceilings = dict(budget)
@@ -535,6 +549,17 @@ class GenerationService:
                     title=plan.title,
                     shots=shots,
                 )
+            # Check every remaining clip before spending on references or keyframes.
+            for shot in episode["shots"]:
+                if shot["enabled"] and not shot["video_asset_id"]:
+                    resolve_parameters(
+                        video,
+                        {**budget, "duration": shot["duration"]},
+                        {},
+                        parameter_overrides(episode, video),
+                        episode.get("advanced_mode", False),
+                        budget,
+                    )
             if not episode["bible"]:
                 self.stage(id, "BUILDING_BIBLE")
                 bible = await agents.bible(
