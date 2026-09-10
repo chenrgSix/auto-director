@@ -7,12 +7,15 @@ export const CAPABILITY_LABELS: Record<WorkflowCapability, string> = { TEXT_TO_I
 export type ParameterOwner = 'ai' | 'director' | 'asset_resolver' | 'system' | 'workflow' | 'user';
 export const OWNER_LABELS: Record<ParameterOwner, string> = {ai:'AI 自动生成',director:'导演规划',asset_resolver:'自动绑定素材',system:'系统策略',workflow:'工作流默认',user:'用户填写'};
 export type ParameterRule = {owner?: ParameterOwner; editable: boolean; override_policy: 'advanced' | 'never'};
-export type Parameter = { owner: ParameterOwner; editable: boolean; override_policy: 'advanced' | 'never'; key: string; node_id: string; field: string; class_type: string; type: string; default: Value; min: number | null; max: number | null; step: number | null; enum: Value[] | null; role: string | null };
+export type Parameter = { owner: ParameterOwner; editable: boolean; override_policy: 'advanced' | 'never'; key: string; node_id: string; field: string; class_type: string; type: string; default: Value; min: number | null; max: number | null; step: number | null; enum: Value[] | null; role: string | null; asset_kind?: string | null };
+export type BindingCandidate = {key: string; node_id: string; label: string; field: string; reason: string; automatic: boolean; binding: Binding};
+export type BindingAssistance = {suggested_capability: WorkflowCapability | null; inputs: Record<string, BindingCandidate[]>; outputs: Record<string, {node_id: string; label: string; reason: string}[]>};
 export type Workflow = {
-  id: string; name: string; type: 'image' | 'video'; media_type: 'image' | 'video'; capability: WorkflowCapability; parameter_rules: Record<string, ParameterRule>; workflow: Record<string, { class_type: string; inputs: Record<string, unknown> }>;
+  id: string; name: string; type: 'image' | 'video'; media_type: 'image' | 'video'; capability: WorkflowCapability; parameter_rules: Record<string, ParameterRule>; workflow: Record<string, { class_type: string; inputs: Record<string, unknown>; _meta?: {title?: string} }>;
   capabilities: Capabilities; bindings: Record<string, Binding>; outputs: Record<string, string>;
   parameters: Parameter[]; parameter_values: Record<string, Value>; warnings: string[];
   validation: { valid: boolean; issues: Problem[] } | null; workflow_hash: string; last_test_job_id: string | null;
+  binding_assistance?: BindingAssistance; binding_issues?: Problem[];
 };
 export type Settings = {
   default_capabilities: Partial<Record<WorkflowCapability, string>>;

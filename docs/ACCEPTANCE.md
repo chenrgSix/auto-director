@@ -114,3 +114,22 @@ P0 + Phase 1/2 MVP 的本地工程闭环已完成。ComfyUI/LLM/VLM 依赖使用
 - 旧数据缺少 ai_parameters/ai_parameter_values 时按空映射处理，无数据库版本升级；原有迁移、UNKNOWN 恢复、60/90 秒规划及长视频 FFmpeg 回归全部通过。
 
 本轮未部署 ComfyUI/模型、未调用真实 AI 服务、未重跑浏览器验收，也未执行远端 CI 或生产验收。
+
+## C05 工作流接入向导（2026-09-10）
+
+完整 `make check` 成功：**127 passed**，无跳过，pytest 44.74 秒；52 个 Python 文件 Ruff/格式、前端 ESLint/TypeScript/Vite 构建全部通过。相对 C04 新增 8 项识别/API 用例，保留既有 119 项。仅有既有 Starlette/httpx 和 AnyIO 弃用提醒。
+
+- 无标签 T2I、I2I、首尾帧视频与 I2V：通过实际条件/素材连线识别 prompt、negative、参考/首尾帧与保存输出；deepcopy patch 保持原模板和节点链接。
+- 多候选不自动猜测，PreviewImage 不当作最终保存输出；未知模型帧数规则及错误类型字段不自动绑定。补齐保留已有手动 prompt、占用目标及自定义帧数倍数。
+- analyze 不写数据库；未声明媒体类型的导入可推断用途，旧显式 API 保持兼容；绑定问题与缺失模型分别返回。既有记录不会在读取时被改写。
+
+隔离浏览器服务 `python -m tests.browser_server` 使用临时数据库与合成媒体，执行：
+
+1. 实际上传去掉标签、含两个保存节点的文生图 JSON；用途自动显示文生图，只出现一个最终输出待确认项。选择主输出，保存并检查依赖，重载后选择保留。
+2. 点击“保存并试跑”，夹具作业进入 `COMPLETED` 并显示合成图片；重命名后保存立即显示“配置已保存”，依赖检查成功。
+3. I2V 只显示起始画面上传，概览与高级绑定均无结束画面。清空 prompt 后点击自动补齐恢复 `positive.text`，保留 `negative.text`。
+4. 390×844 视口下 `scrollWidth = innerWidth = 390`，高级设置默认收起，应用控制台无 error。截图：[桌面 I2V](evidence/workflow-guide-desktop.png)、[移动端](evidence/workflow-guide-mobile.png)。
+
+确认正式服务无运行 Episode/Job 后重启 8000，健康检查返回 200。浏览器读取现有 SD1.5 profile，输入输出已识别，模型区域单独显示缺少 `v1-5-pruned-emaonly.safetensors` 与处理提示；未触发真实渲染。修正依赖提示受全局 flex 样式影响的换行后，前端 lint、typecheck、build 再次通过。截图：[模型依赖](evidence/workflow-guide-dependencies.png)。
+
+限制：自动识别覆盖已知常见字段与连线，特殊节点、歧义及未知帧数规则仍需高级确认；旧记录媒体类型选错需重新导入。夹具试跑证明交互与作业链路，不代表真实模型或视觉质量验收。本轮未下载模型、未调用真实 AI 生成，未执行远端 CI。

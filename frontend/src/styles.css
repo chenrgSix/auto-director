@@ -172,3 +172,28 @@ summary { cursor: pointer; font-size: 12px; color: #c0c8ac; line-height: 1.8; }
 .override-field .checkbox { flex-wrap: wrap; }
 .override-field small, .override-group p { font-size: 11px; color: #8b9779; }
 .override-field input:not([type=checkbox]), .override-field select, .override-field textarea { max-width: 100%; }
+.binding-summary { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin: 22px 0 12px; }
+.binding-summary-item { display: flex; align-items: flex-start; gap: 12px; padding: 17px; border: 1px solid #45583b; border-radius: 7px; background: #26331f; min-width: 0; }
+.binding-summary-item > svg { flex-shrink: 0; margin-top: 3px; }
+.binding-summary-item > div { min-width: 0; flex: 1; }
+.binding-summary-item strong { display: block; font-size: 13px; color: #e0e7c8; line-height: 1.7; }
+.binding-summary-item small { display: block; font-size: 11px; color: #a9bb91; line-height: 1.8; margin-top: 4px; }
+.binding-summary-item.needs-choice { background: #353820; border-color: #8b8151; color: #ddce92; }
+.binding-summary-item select { margin-top: 12px; font-size: 12px; width: 100%; }
+.binding-detail { margin-top: 10px; font-size: 10px; color: #a8b88f; }
+.binding-detail summary { cursor: pointer; }
+.binding-detail p { overflow-wrap: anywhere; font-size: 11px; padding-top: 7px; }
+.text-action { border: 0; background: transparent; padding: 8px 0; color: #c9d3a6; font-size: 11px; justify-content: flex-start; text-align: left; }
+.text-action:hover { background: transparent; color: #f1e5b2; }
+.pending-text { color: #dbca8f; }
+.workflow-readiness .notice { display: block; }
+.dependency-problems .notice p, .dependency-problems pre { overflow-wrap: anywhere; white-space: pre-wrap; }
+.dependency-problems .notice strong { display: block; font-size: 12px; margin-bottom: 5px; }
+.dependency-problems .notice small { display: block; font-size: 11px; line-height: 1.8; }
+.dependency-problems details { margin-top: 12px; }
+.dependency-problems summary { cursor: pointer; font-size: 11px; }
+.workflow-advanced > .panel { padding: 18px 0; background: transparent; border: 0; box-shadow: none; }
+.workflow-advanced > .muted { margin-top: 16px; }
+.workflow-advanced .binding-row label small { display: block; color: #8e9d77; font-size: 9px; margin-top: 4px; }
+.save-row { align-items: center; gap: 16px; flex-wrap: wrap; }
+@media (max-width: 720px) { .binding-summary { grid-template-columns: 1fr; }.binding-summary-item { padding: 15px; }.workflow-advanced .transform-fields { flex-wrap: wrap; }.workflow-advanced .panel-title { flex-wrap: wrap; } }
