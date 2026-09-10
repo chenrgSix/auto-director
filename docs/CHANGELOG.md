@@ -27,3 +27,9 @@
 - Director 强制 1 秒下限、workflow 上限与总时长；Bible/Shot 继承单集设定；QA 根据实际图像得分分流重试。
 - 支持显存/质量模式预算，High 规划两个候选；模型未配置时返回配置错误。
 - OpenAI-compatible 层采用 Chat Completions `json_object` 兼容模式 + 本地 Pydantic 强校验；不把 JSON mode 当远端 schema 保证。[官方 API](https://developers.openai.com/api/reference/resources/chat)
+
+## 2026-09-10 · M01 本地媒体链路
+
+- 资产按单集分区、服务端 UUID 命名并记录 SHA256/大小/媒体元数据；检查图片内容与扩展名。
+- FFmpeg 参数数组调用、进程超时/取消清理、实际视频尾帧提取、尺寸/FPS/音轨规范化与 MP4 合成。
+- 真实 FFmpeg 测试混合 320×180/180×320、16/24 FPS、有声/无声片段，验证 2 秒 H.264 成片、音轨和可解码尾帧。
