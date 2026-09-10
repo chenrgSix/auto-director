@@ -88,3 +88,24 @@ async def test_download_rejects_path_traversal(tmp_path):
     ) as client:
         with pytest.raises(AppError):
             await client.download({"filename": "../../secrets"}, tmp_path / "asset")
+
+
+@pytest.mark.parametrize(
+    "response",
+    [
+        httpx.Response(200, text="not json"),
+        httpx.Response(200, json=[]),
+        httpx.Response(200, json={}),
+        httpx.Response(503, json={"error": "upstream"}),
+    ],
+)
+async def test_corrupted_submit_response_remains_unknown(response):
+    async with ComfyUIClient(
+        Settings(_env_file=None),
+        "http://127.0.0.1:8188",
+        transport=httpx.MockTransport(lambda _: response),
+        use_websocket=False,
+    ) as client:
+        with pytest.raises(AppError) as result:
+            await client.execute({}, "job", noop, noop, lambda: False)
+        assert result.value.code == "SUBMISSION_UNKNOWN"

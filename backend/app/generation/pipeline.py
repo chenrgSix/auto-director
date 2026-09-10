@@ -482,6 +482,7 @@ class GenerationService:
             "camera_motion": prompts["camera_motion"],
         }
         retry_scope = "keyframes"
+        retries = {"remaining": budget["max_retries"]}
         for attempt in range(budget["max_retries"] + 1):
             self.check_cancel(id)
             shot = self.shot(id, sid)
@@ -580,7 +581,7 @@ class GenerationService:
                     self.stage(id, "RENDERING_VIDEO")
                     self.update_shot(id, sid, status="RENDERING_VIDEO")
                     result = await self.render_video(
-                        episode, shot, image, video, base, ref_inputs, video_inputs, stamp
+                        episode, shot, image, video, base, ref_inputs, video_inputs, stamp, retries
                     )
                     shot = self.update_shot(
                         id, sid, video_asset_id=result["id"], status="VIDEO_READY"
@@ -625,12 +626,13 @@ class GenerationService:
                 )
                 return
             except AppError as exc:
-                if (
-                    exc.code not in {"QA_FAILED", "OUT_OF_MEMORY"}
-                    or attempt >= budget["max_retries"]
-                ):
+                if exc.code not in {"QA_FAILED", "OUT_OF_MEMORY"} or retries["remaining"] == 0:
                     raise
+                retries["remaining"] -= 1
                 if exc.code == "OUT_OF_MEMORY":
+                    retry_scope = (
+                        "video" if self.shot(id, sid)["end_frame_asset_id"] else "keyframes"
+                    )
                     base.update(
                         width=max(256, (base["width"] * 3 // 4 // 16) * 16),
                         height=max(256, (base["height"] * 3 // 4 // 16) * 16),
@@ -646,7 +648,7 @@ class GenerationService:
         raise AppError("QA_FAILED", "镜头超出重试预算")
 
     async def render_video(
-        self, episode, shot, image, video, base, references, video_inputs, stamp
+        self, episode, shot, image, video, base, references, video_inputs, stamp, retries
     ):
         id, sid = episode["id"], shot["id"]
         duration = shot["duration"]
@@ -670,8 +672,9 @@ class GenerationService:
                 episode, video, "SHOT_VIDEO", values, inputs, stamp + ":video", sid
             )
         except AppError as exc:
-            if exc.code != "OUT_OF_MEMORY" or episode["budget"]["max_retries"] == 0:
+            if exc.code != "OUT_OF_MEMORY" or retries["remaining"] == 0:
                 raise
+            retries["remaining"] -= 1
         smaller = {
             **values,
             "width": max(256, values["width"] // 2 // 16 * 16),
@@ -684,8 +687,9 @@ class GenerationService:
                 episode, video, "SHOT_VIDEO", smaller, inputs, stamp + ":video:small", sid
             )
         except AppError as exc:
-            if exc.code != "OUT_OF_MEMORY":
+            if exc.code != "OUT_OF_MEMORY" or retries["remaining"] == 0:
                 raise
+            retries["remaining"] -= 1
         alternative = video["capabilities"].get("low_memory_workflow_id")
         if alternative:
             video = self.store.get("workflow", alternative)

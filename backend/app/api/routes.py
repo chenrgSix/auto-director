@@ -120,7 +120,7 @@ def default_workflow(request: Request, id: str):
 
 
 @router.post("/workflows/{id}/test-run", status_code=202)
-def test_workflow(request: Request, id: str, body: TestRun):
+async def test_workflow(request: Request, id: str, body: TestRun):
     state = resources(request)
     profile = state.store.get("workflow", id)
     for role in {"start_frame", "end_frame"} & profile["bindings"].keys():
@@ -172,7 +172,7 @@ def resolve(request: Request, id: str, body: ResolutionNote):
 
 
 @router.post("/jobs/{id}/resume", status_code=202)
-def resume_job(request: Request, id: str):
+async def resume_job(request: Request, id: str):
     state = resources(request)
     record = state.store.get("job", id)
     if (
@@ -241,12 +241,12 @@ async def delete_episode(request: Request, id: str, delete_assets: bool = False)
 
 
 @router.post("/episodes/{id}/generate", status_code=202)
-def generate(request: Request, id: str):
+async def generate(request: Request, id: str):
     return resources(request).generation.enqueue(id)
 
 
 @router.post("/episodes/{id}/compose", status_code=202)
-def compose_episode(request: Request, id: str):
+async def compose_episode(request: Request, id: str):
     return resources(request).generation.enqueue(id, "compose")
 
 
@@ -268,7 +268,7 @@ def timeline(request: Request, id: str, body: TimelineUpdate):
 @router.post("/shots/{id}/retry", status_code=202)
 @router.post("/shots/{id}/retry-keyframes", status_code=202)
 @router.post("/shots/{id}/retry-video", status_code=202)
-def retry(request: Request, id: str):
+async def retry(request: Request, id: str):
     return resources(request).generation.retry(
         id, "video" if request.url.path.endswith("retry-video") else "keyframes"
     )

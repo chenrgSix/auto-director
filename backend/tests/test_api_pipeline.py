@@ -2,10 +2,13 @@ import asyncio
 import shutil
 import time
 
+import httpx
 import pytest
 from fastapi.testclient import TestClient
 
+from app.agents.schemas import EpisodePlan
 from app.core.config import Settings
+from app.db.store import Store
 from app.main import create_app
 from app.media.service import run_process
 from tests.fakes import FakeComfy, FakeProvider
@@ -162,3 +165,112 @@ def test_workflow_test_run_upload_and_default_protection(system):
         time.sleep(0.01)
     assert job["status"] == "COMPLETED", job.get("error")
     assert client.delete("/api/v1/workflows/default_video").status_code == 409
+
+
+def test_cancel_blocks_readmission_until_old_task_has_exited(system):
+    client, app, _ = system
+
+    class SlowProvider(FakeProvider):
+        async def generate_json(self, system, context, schema, *, images=None):
+            if schema is EpisodePlan:
+                await asyncio.sleep(0.35)
+            return await super().generate_json(system, context, schema, images=images)
+
+    app.state.generation.provider_factory = SlowProvider
+    id = client.post(
+        "/api/v1/episodes", json={"idea": "cancel fixture", "target_duration": 5}
+    ).json()["id"]
+    client.post(f"/api/v1/episodes/{id}/generate")
+    for _ in range(50):
+        if client.get(f"/api/v1/episodes/{id}").json()["status"] == "PLANNING":
+            break
+        time.sleep(0.005)
+    assert client.post(f"/api/v1/episodes/{id}/cancel").json()["status"] == "CANCELLED"
+    assert client.post(f"/api/v1/episodes/{id}/generate").status_code == 409
+    assert client.delete(f"/api/v1/episodes/{id}").status_code == 409
+    time.sleep(0.4)
+    result = client.get(f"/api/v1/episodes/{id}").json()
+    assert result["status"] == "CANCELLED" and not result["shots"]
+    assert client.get(f"/api/v1/jobs?episode_id={id}").json() == []
+
+
+def test_restart_marks_active_work_unknown_and_preserves_artifacts(tmp_path):
+    config = Settings(_env_file=None, data_dir=tmp_path)
+    store = Store(tmp_path)
+    episode = store.create(
+        "episode",
+        {"status": "RENDERING_VIDEO", "shots": [{"id": "kept", "video_asset_id": "asset-kept"}]},
+    )
+    job = store.create(
+        "job",
+        {"status": "RUNNING", "type": "SHOT_VIDEO", "comfy_prompt_id": "known-prompt"},
+        parent=episode["id"],
+    )
+    store.close()
+    with TestClient(create_app(config)) as client:
+        result = client.get(f"/api/v1/episodes/{episode['id']}").json()
+        assert result["status"] == "FAILED"
+        assert result["shots"][0]["video_asset_id"] == "asset-kept"
+        result = client.get(f"/api/v1/jobs/{job['id']}").json()
+        assert result["status"] == "UNKNOWN"
+        assert result["comfy_prompt_id"] == "known-prompt"
+
+
+@pytest.mark.parametrize(("retries", "expected"), [(1, "FAILED"), (2, "COMPLETED")])
+def test_oom_fallback_obeys_budget_and_preserves_timeline(system, retries, expected):
+    client, _, comfy = system
+    original = comfy.handle
+    failing = set()
+    videos = []
+
+    def with_oom(request):
+        result = original(request)
+        if request.url.path == "/prompt":
+            prompt_id = result.json()["prompt_id"]
+            if comfy.prompts[prompt_id]["prompt"]["save"]["class_type"] == "SaveVideo":
+                videos.append(prompt_id)
+                if len(videos) <= 2:
+                    failing.add(prompt_id)
+        if (
+            request.url.path.startswith("/history/")
+            and request.url.path.rsplit("/", 1)[1] in failing
+        ):
+            prompt_id = request.url.path.rsplit("/", 1)[1]
+            return httpx.Response(
+                200,
+                json={
+                    prompt_id: {
+                        "status": {
+                            "completed": False,
+                            "status_str": "error",
+                            "messages": [
+                                ["execution_error", {"exception_type": "OutOfMemoryError"}]
+                            ],
+                        }
+                    }
+                },
+            )
+        return result
+
+    comfy.handle = with_oom
+    id = client.post(
+        "/api/v1/episodes",
+        json={
+            "idea": "OOM fixture",
+            "target_duration": 5,
+            "width": 256,
+            "height": 256,
+            "qa_enabled": False,
+            "max_retries": retries,
+        },
+    ).json()["id"]
+    client.post(f"/api/v1/episodes/{id}/generate")
+    episode = wait_episode(client, id)
+    assert episode["status"] == expected, episode.get("error")
+    if expected == "FAILED":
+        assert len(videos) == 2
+        assert episode["shots"][0]["start_frame_asset_id"]
+        assert episode["shots"][0]["end_frame_asset_id"]
+    else:
+        assert len(videos) == 5  # two failed full clips, three successful shorter segments
+        assert abs(episode["final_duration"] - 5) < 0.5

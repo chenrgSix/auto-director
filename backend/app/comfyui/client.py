@@ -80,9 +80,17 @@ class ComfyUIClient:
         try:
             data = response.json()
         except ValueError as exc:
-            raise AppError("COMFYUI_OFFLINE", f"ComfyUI {path} 返回无效 JSON", status=502) from exc
+            raise AppError(
+                "SUBMISSION_UNKNOWN" if path == "/prompt" else "COMFYUI_OFFLINE",
+                f"ComfyUI {path} 返回无效 JSON",
+                status=502,
+            ) from exc
         if not isinstance(data, dict):
-            raise AppError("COMFYUI_OFFLINE", f"ComfyUI {path} 返回格式不正确", status=502)
+            raise AppError(
+                "SUBMISSION_UNKNOWN" if path == "/prompt" else "COMFYUI_OFFLINE",
+                f"ComfyUI {path} 返回格式不正确",
+                status=502,
+            )
         return data
 
     async def system(self) -> dict:
@@ -238,7 +246,7 @@ class ComfyUIClient:
                         messages,
                         status=502,
                     )
-                if status.get("completed") and history.get("outputs"):
+                if status.get("completed"):
                     return history
                 if websocket is not None:
                     try:

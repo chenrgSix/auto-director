@@ -122,3 +122,17 @@ def test_bundled_profiles_are_runnable_structures_and_defaults_are_protected(tmp
     with pytest.raises(AppError):
         manager.delete("default_image")
     store.close()
+
+
+def test_numbered_references_and_three_duplicate_outputs():
+    graph = image_graph()
+    graph["ref"] = {
+        "class_type": "LoadImage",
+        "inputs": {"image": "reference.png"},
+        "_meta": {"title": "(Input:reference_image_1)"},
+    }
+    graph["out2"] = deepcopy(graph["out-z"])
+    graph["out3"] = deepcopy(graph["out-z"])
+    result = analyze(graph)
+    assert result["bindings"]["reference_image_1"]["input"] == "image"
+    assert "image" not in result["outputs"]

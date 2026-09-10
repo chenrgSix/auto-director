@@ -48,6 +48,9 @@ class RenderEngine:
         signature = workflow_hash(
             {
                 "workflow": profile["workflow_hash"],
+                "bindings": profile["bindings"],
+                "outputs": profile["outputs"],
+                "capabilities": profile["capabilities"],
                 "parameters": {**profile.get("parameter_values", {}), **(parameter_values or {})},
                 "values": values,
                 "assets": asset_bindings,
@@ -103,6 +106,7 @@ class RenderEngine:
                     status=409,
                 )
             if cancelled():
+                self.store.update("job", job_id, {"status": "CANCELLED"})
                 raise AppError("CANCELLED", "作业已取消")
             profile = job["profile_snapshot"]
             submitted = bool(job["comfy_prompt_id"])

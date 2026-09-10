@@ -8,7 +8,7 @@ from typing import Any
 from app.core.errors import AppError
 from app.workflows.schema import Binding, Capabilities
 
-TAG = re.compile(r"\((Input|Output):([a-z_]+)\)", re.IGNORECASE)
+TAG = re.compile(r"\((Input|Output):([a-z_][a-z0-9_]*)\)", re.IGNORECASE)
 ALIASES = {
     "prompt": ["text", "prompt", "positive_prompt"],
     "negative": ["text", "negative", "negative_prompt"],
@@ -128,6 +128,7 @@ def analyze(graph: dict, object_info: dict | None = None) -> dict:
     info = object_info or {}
     parameters, bindings, outputs, warnings = [], {}, {}, []
     seen_roles = set()
+    seen_outputs = set()
     for id, node in graph.items():
         scalars = {
             key: value
@@ -144,18 +145,24 @@ def analyze(graph: dict, object_info: dict | None = None) -> dict:
             )
             for role in roles:
                 if direction.lower() == "output":
-                    if role in outputs:
+                    if role in seen_outputs:
                         warnings.append(f"输出角色 {role} 重复，请手动选择输出节点")
                         outputs.pop(role, None)
                     else:
                         outputs[role] = id
+                        seen_outputs.add(role)
                     continue
                 if role in seen_roles:
                     warnings.append(f"输入角色 {role} 重复，请手动绑定")
                     bindings.pop(role, None)
                     continue
                 seen_roles.add(role)
-                matches = [key for key in ALIASES.get(role, [role]) if key in scalars]
+                aliases = (
+                    ["image", "reference_image"]
+                    if role.startswith("reference_image_")
+                    else ALIASES.get(role, [role])
+                )
+                matches = [key for key in aliases if key in scalars]
                 if len(matches) != 1:
                     warnings.append(f"节点 {id} 的 {role} 字段不明确，请手动绑定")
                     continue
