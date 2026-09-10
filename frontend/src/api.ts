@@ -1,0 +1,45 @@
+import { useCallback, useEffect, useState } from 'react';
+import type { Problem } from './types';
+
+export class ApiError extends Error {
+  problem: Problem;
+  constructor(problem: Problem) { super(problem.message); this.problem = problem; }
+}
+
+export async function api<T>(path: string, method = 'GET', body?: unknown): Promise<T> {
+  const form = body instanceof FormData;
+  const response = await fetch(`/api/v1${path}`, {
+    method, headers: body && !form ? { 'Content-Type': 'application/json' } : {},
+    body: body ? (form ? body : JSON.stringify(body)) : undefined,
+  });
+  if (response.status === 204) return undefined as T;
+  const data = await response.json().catch(() => ({ error: { code: 'SERVER_UNAVAILABLE', message: '后端未返回有效数据，请检查服务是否启动。' } }));
+  if (!response.ok || data.error?.code === 'SERVER_UNAVAILABLE') throw new ApiError(data.error ?? { code: 'REQUEST_FAILED', message: `请求失败 (${response.status})` });
+  return data as T;
+}
+
+export function useResource<T>(path: string, interval = 0) {
+  const [data, setData] = useState<T>();
+  const [error, setError] = useState<string>();
+  const [revision, setRevision] = useState(0);
+  const refresh = useCallback(() => setRevision(value => value + 1), []);
+  useEffect(() => {
+    let disposed = false;
+    let pending = false;
+    const load = async () => {
+      if (pending) return;
+      pending = true;
+      try {
+        const result = await api<T>(path);
+        if (!disposed) { setData(result); setError(undefined); }
+      } catch (error) { if (!disposed) setError(error instanceof Error ? error.message : '请求失败'); }
+      finally { pending = false; }
+    };
+    void load();
+    const timer = interval ? window.setInterval(() => void load(), interval) : undefined;
+    return () => { disposed = true; window.clearInterval(timer); };
+  }, [path, interval, revision]);
+  return { data, error, refresh };
+}
+
+export const assetUrl = (id: string, download = false) => `/api/v1/assets/${encodeURIComponent(id)}/file${download ? '?download=true' : ''}`;
