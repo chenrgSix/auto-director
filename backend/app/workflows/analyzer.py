@@ -7,7 +7,6 @@ from typing import Any
 
 from app.core.errors import AppError
 from app.core.limits import MAX_SHOT_SECONDS
-from app.workflows.discovery import discover
 from app.workflows.ownership import (
     canonicalize,
     decorate_parameters,
@@ -194,9 +193,6 @@ def analyze(graph: dict, object_info: dict | None = None, *, capability: str | N
                 )
                 bindings[role] = Binding(node_id=id, input=field, transform=transform).model_dump()
         parameters.extend(node_params)
-    assistance = discover(
-        graph, parameters, bindings, outputs, seen_roles, seen_outputs, capability
-    )
     for role, binding in bindings.items():
         for item in parameters:
             if item["key"] == f"{binding['node_id']}.{binding['input']}":
@@ -208,7 +204,11 @@ def analyze(graph: dict, object_info: dict | None = None, *, capability: str | N
         "warnings": warnings,
         "workflow_hash": workflow_hash(graph),
         "required_class_types": sorted({node["class_type"] for node in graph.values()}),
-        "binding_assistance": assistance,
+        "binding_assistance": {
+            "suggested_capability": capability,
+            "inputs": {},
+            "outputs": {},
+        },
     }
     decorate_parameters(result)
     return result

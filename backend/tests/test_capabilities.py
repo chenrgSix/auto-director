@@ -86,6 +86,7 @@ def test_owner_fill_workflow_defaults_user_precedence_and_immutable_graph(tmp_pa
     p["workflow"]["motion"] = {
         "class_type": "Motion",
         "inputs": {"motion_strength": 0.1, "camera_motion": "template"},
+        "_meta": {"title": "(Input:camera_motion) (Input:motion_strength)"},
     }
     p.update(analyze(p["workflow"]))
     p["parameter_values"] = {"sampler.steps": 18, "positive.text": "profile prompt"}

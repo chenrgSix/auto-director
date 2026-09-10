@@ -14,8 +14,8 @@ from app.core.runtime_settings import SettingsPatch
 from app.db.store import uid
 from app.generation.schemas import ACTIVE, EpisodeCreate, TestRun, TimelineUpdate
 from app.media.service import AUDIO_EXT, IMAGE_EXT, VIDEO_EXT
-from app.workflows.analyzer import analyze
 from app.workflows.ownership import required_asset_roles
+from app.workflows.recognition import recognize_workflow
 from app.workflows.schema import WorkflowAnalyze, WorkflowImport, WorkflowPatch
 
 router = APIRouter(prefix="/api/v1")
@@ -89,8 +89,27 @@ def workflows(request: Request):
 
 
 @router.post("/workflows/analyze")
-def analyze_workflow(body: WorkflowAnalyze):
-    return analyze(body.workflow, capability=body.capability)
+async def analyze_workflow(request: Request, body: WorkflowAnalyze):
+    async def disconnected():
+        while True:
+            message = await request.receive()
+            if message["type"] == "http.disconnect":
+                return
+
+    state = resources(request)
+    recognition = asyncio.create_task(
+        recognize_workflow(body.workflow, state.generation.provider_factory(), body.capability)
+    )
+    disconnect = asyncio.create_task(disconnected())
+    try:
+        done, _ = await asyncio.wait({recognition, disconnect}, return_when=asyncio.FIRST_COMPLETED)
+        if recognition in done:
+            return recognition.result()
+        raise AppError("REQUEST_CANCELLED", "已取消 AI 识别", status=499)
+    finally:
+        for task in (recognition, disconnect):
+            task.cancel()
+        await asyncio.gather(recognition, disconnect, return_exceptions=True)
 
 
 @router.post("/workflows/import", status_code=201)
@@ -106,7 +125,10 @@ def workflow(request: Request, id: str):
 
 @router.post("/workflows/{id}/auto-bind")
 def auto_bind_workflow(request: Request, id: str):
-    return resources(request).workflows.auto_bind(id)
+    resources(request).store.get("workflow", id)
+    raise AppError(
+        "WORKFLOW_RULES_REMOVED", "规则自动绑定已移除，请选择 AI 识别或手动绑定", status=410
+    )
 
 
 @router.patch("/workflows/{id}")

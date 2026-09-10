@@ -92,10 +92,12 @@ Agent 的 Bible/Shot 输出增加 `ai_parameters: {"workflow_id":{"node.field":v
 
 C04 路由不增加必填请求字段：显式 image/video/reference_workflow_id 优先；省略时通过 `default_capabilities` 解析默认项，旧媒体默认项保留能力选择及同能力回退语义。创建响应中保存最终 ID，生成时不随默认项变化重新选型。reference_workflow_id 始终要求 TEXT_TO_IMAGE。
 
-## C05 工作流接入向导
+## C06 快速导入与 AI 识别（替代 C05 识别接口）
 
-`POST /workflows/analyze` 接受 `{workflow, capability?}`，只读返回候选、自动绑定及 `binding_assistance.suggested_capability`。按已有标签、常见保存节点、正负 conditioning/素材连线及标量类型识别，不依赖固定节点 ID。多个候选不自动选择；未知模型的帧数对齐规则必须手动确认。
+`POST /workflows/analyze` 接受 `{workflow, capability?}`，显式调用已配置的导演模型，只读返回 `{capability, bindings, outputs, reasons, notes}`。不拉 ComfyUI 节点清单、不修改 profile；绑定只能指向实际可写字段，输出只能指向已有节点。非法类型、链接目标、重复字段、未知角色、能力冲突及额外字段被拒绝。省略 capability 时允许 AI 建议用途，提供时必须匹配。
 
-导入可省略 media_type/capability，由识别结果推导；无法确定时返回 422 并要求选择用途。原有显式字段、bindings/outputs 优先。Workflow 读取/保存/校验响应增加 `binding_assistance`（inputs/outputs 候选）与 `binding_issues`，旧存量无需迁移即可使用向导。
+`POST /workflows/import` 必须提供 capability、media_type 或旧 type 之一；否则返回 422。导入只做本地结构校验并保存；不隐式调用 AI、ComfyUI 或依赖检查。显式 bindings/outputs 和既有用途标签保持兼容。Workflow 仍返回 binding_issues；旧 binding_assistance 形状保留，但候选为空，不再规则推断。
 
-`POST /workflows/{id}/auto-bind` 只补齐空缺且唯一的绑定，不覆盖手动输入、输出或帧数转换规则。保存使依赖校验失效，需要重新检查；绑定完成、模型节点依赖满足、试跑成功分别表示不同状态。
+旧 `POST /workflows/{id}/auto-bind` 返回 410 / WORKFLOW_RULES_REMOVED，提示改用 AI 识别或手动绑定。AI 未配置返回 409 / CONFIGURATION_REQUIRED；超过 45 秒返回 504 / WORKFLOW_AI_TIMEOUT；超过上下文限制返回 422 / WORKFLOW_TOO_LARGE_FOR_AI；非法模型输出沿用一次纠正机会，仍非法返回 LLM_INVALID_OUTPUT。没有规则回退，取消识别不写数据。
+
+AI 建议经用户确认后，通过普通 import/PATCH 保存；依赖检查仍为 `/workflows/{id}/validate`，试跑前继续验证。绑定完成、依赖满足和试跑成功是独立状态，导入返回不代表工作流可运行。

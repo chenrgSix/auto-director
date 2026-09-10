@@ -77,6 +77,8 @@ class WorkflowImport(BaseModel):
             raise ValueError("需要匹配的 media_type / capability（旧 type 仍兼容）")
         if self.capability and self.capability.media_type != media:
             raise ValueError("capability 与 media_type 不匹配")
+        if not media:
+            raise ValueError("请选择生成用途，或先确认 AI 识别结果")
         self.media_type = self.type = media
         return self
 

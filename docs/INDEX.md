@@ -6,7 +6,7 @@
 | --- | --- |
 | [开发任务](DEVELOPMENT_TASKS.md) | 冻结目标、任务、状态、验收门禁与后续范围 |
 | [模块设计](MODULE_DESIGN.md) | 模块边界、数据、运行时与失败恢复 |
-| [工作流能力与参数归属](WORKFLOW_CAPABILITIES.md) | C03–C05 能力分支、AI 参数、路由、接入向导与验收门禁 |
+| [工作流能力与参数归属](WORKFLOW_CAPABILITIES.md) | C03–C06 能力分支、AI 参数、快速导入、实际字段配置与验收门禁 |
 | [接口契约](API_CONTRACT.md) | API、角色绑定、错误和状态约定 |
 | [开发与运行](DEVELOPMENT.md) | 环境、启动、配置、测试与工作流准备 |
 | [验收记录](ACCEPTANCE.md) | 已执行证据、未执行门禁及复现步骤 |

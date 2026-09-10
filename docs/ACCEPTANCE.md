@@ -133,3 +133,31 @@ P0 + Phase 1/2 MVP 的本地工程闭环已完成。ComfyUI/LLM/VLM 依赖使用
 确认正式服务无运行 Episode/Job 后重启 8000，健康检查返回 200。浏览器读取现有 SD1.5 profile，输入输出已识别，模型区域单独显示缺少 `v1-5-pruned-emaonly.safetensors` 与处理提示；未触发真实渲染。修正依赖提示受全局 flex 样式影响的换行后，前端 lint、typecheck、build 再次通过。截图：[模型依赖](evidence/workflow-guide-dependencies.png)。
 
 限制：自动识别覆盖已知常见字段与连线，特殊节点、歧义及未知帧数规则仍需高级确认；旧记录媒体类型选错需重新导入。夹具试跑证明交互与作业链路，不代表真实模型或视觉质量验收。本轮未下载模型、未调用真实 AI 生成，未执行远端 CI。
+
+
+## C06 快速导入、AI 建议与实际字段（2026-09-10）
+
+完整 `make check` 成功：**142 passed**，无跳过，pytest 119.61 秒。52 个 Python 文件 Ruff/格式、前端 ESLint/TypeScript/Vite 构建通过；最后前端准备状态简化后再次通过 lint/typecheck/build。保留既有 119 项（Motion fixture 显式标注用途），以 23 项新用例替代 8 项 C05 规则识别测试。仅有既有 Starlette/httpx 和 AnyIO 弃用提醒。
+
+### 耗时证据
+
+旧导入依次执行 analyze → import → validate，最后一步拉取 ComfyUI 全部 object_info。对 `10.0.1.10:8188/object_info` 的单次只读测量在 8.005 秒截止，HTTP 200、声明大小 3074993 字节，仅收到 368627 字节。此结果说明依赖清单下载会明显拖延旧导入，不代表规则分析本身耗时 8 秒。
+
+新导入断言 ComfyUI client、LLM provider 不得被调用；列表/详情也断言不得重新 analyze。隔离服务 8011 的一次三字段 JSON 导入为 201 / **20.52ms**，validation=null、bindings={}。该值仅为本机小样本，不作为任意工作流性能保证。
+
+### 自动化回归
+
+- 四类 capability 的 AI 建议经已有 HTTP Provider JSON 通道返回并实际进入 deepcopy patch；自定义节点/字段无需注册识别规则，模板与节点链接保持。
+- 未知节点/字段、链接覆盖、重复用途目标、文本/数值类型错误、未知角色、非法输出节点/媒体、非 duration 帧数转换、未给出帧数规则、能力冲突、额外输出字段均被拒绝；不存在规则回退。
+- AI 接口只读，不拉 object_info；未配置、超时、上下文过大、敏感字段脱敏、部分建议、浏览器断开取消模型请求均覆盖。导入明确要求用途，旧 auto-bind 返回 410。
+
+### 浏览器验收
+
+在临时数据库的浏览器夹具中使用固定模型响应（无真实 LLM/ComfyUI 请求）：
+
+1. 上传含 `custom.words`、`custom.strength`、`save.filename_prefix` 三个标量的 JSON，直接导入成功；未触发 analyze/validate。
+2. 参数表恰好 3 行，固定 binding-row 为 0，文生图用途选项中的参考/起始/结束项目为 0。AI 建议确认前仍显示待配置，确认后保存并进入真实字段绑定。
+3. 手动将 prompt 指向其他实际字段，并让 negative 占用 AI 建议目标，再应用 AI；两项手动选择保留。自定义 user owner 字段确认改为 prompt 后可保存，服务端 owner 为 ai，覆盖权限保留。
+4. 慢 AI 夹具等待时，“直接导入”仍可点击；取消立即恢复操作，识别中导入后页面关闭识别等待且数据已保存。页面没有第二套固定参数卡片。截图：[实际字段表](evidence/workflow-actual-fields.png)。
+
+正式本地服务无运行任务后重启 8000，健康检查 200；未配置导演模型时 AI 接口返回 409 / CONFIGURATION_REQUIRED，实测约 88ms，不阻塞导入。真实模型识别效果、真实渲染及远端 CI 未执行；本轮不将历史移动端或 C05 规则验收当作新界面的验收结果。
