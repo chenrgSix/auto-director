@@ -1,5 +1,11 @@
 # 迭代记录
 
+## 2026-09-10 · C05 自动识别与候选契约
+
+- 新增无标签常见工作流识别，沿条件/素材连线区分用途；多个候选和未知帧数规则留待确认，保存节点与预览节点分开。
+- 增加只读 analyze、保留手动选择的 auto-bind，以及独立 binding_issues；现有记录无需迁移。
+- 8 项新增识别回归、22 项既有工作流/capability/流水线回归通过；完整门禁及浏览器验收在 UI 完成后执行。
+
 ## 2026-09-10 · C04 Capability Router 与完整收尾
 
 - 新增 CapabilityRouter 基础层，按四类 default_capabilities 查询，保留显式 ID、旧媒体默认项和同能力回退；已创建 Episode 固定所选 ID。

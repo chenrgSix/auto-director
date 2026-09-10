@@ -91,3 +91,11 @@ Episode 状态遵循原文 §36；增加 `QUEUED` 表示已入队。Shot 状态�
 Agent 的 Bible/Shot 输出增加 `ai_parameters: {"workflow_id":{"node.field":value}}`，只能包含当前上下文内 owner=ai 的参数。严格校验失败返回 `LLM_INVALID_OUTPUT`，高级用户 override 不能掩盖非法 AI 输出。Episode 读取保留该映射；旧记录缺省为空。I2V 的 `end_frame_asset_id` 可为空，其 `actual_end_frame_asset_id` 仍是实际视频提取的尾帧。
 
 C04 路由不增加必填请求字段：显式 image/video/reference_workflow_id 优先；省略时通过 `default_capabilities` 解析默认项，旧媒体默认项保留能力选择及同能力回退语义。创建响应中保存最终 ID，生成时不随默认项变化重新选型。reference_workflow_id 始终要求 TEXT_TO_IMAGE。
+
+## C05 工作流接入向导
+
+`POST /workflows/analyze` 接受 `{workflow, capability?}`，只读返回候选、自动绑定及 `binding_assistance.suggested_capability`。按已有标签、常见保存节点、正负 conditioning/素材连线及标量类型识别，不依赖固定节点 ID。多个候选不自动选择；未知模型的帧数对齐规则必须手动确认。
+
+导入可省略 media_type/capability，由识别结果推导；无法确定时返回 422 并要求选择用途。原有显式字段、bindings/outputs 优先。Workflow 读取/保存/校验响应增加 `binding_assistance`（inputs/outputs 候选）与 `binding_issues`，旧存量无需迁移即可使用向导。
+
+`POST /workflows/{id}/auto-bind` 只补齐空缺且唯一的绑定，不覆盖手动输入、输出或帧数转换规则。保存使依赖校验失效，需要重新检查；绑定完成、模型节点依赖满足、试跑成功分别表示不同状态。

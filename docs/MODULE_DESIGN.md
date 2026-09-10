@@ -1,5 +1,11 @@
 # 模块设计
 
+## C05 工作流识别辅助
+
+`workflows/discovery.py` 在原 Analyzer 上提供候选及保守推导：沿 positive/negative 条件分支找到可写提示词，沿首尾帧或 VAEEncode 素材连接找到实际加载输入；识别常见保存节点，排除预览节点。已标记角色及重复标记保持权威，唯一候选才自动应用。未知视频帧数规则返回待确认项。
+
+WorkflowManager 动态补充识别辅助信息与独立绑定校验；已有 profile 的输入/输出保持不变，用户显式点“自动补齐”才填补空项。无需改动数据库格式、ParameterResolver 或生成流水线。
+
 ## 边界与数据流
 
 ```mermaid

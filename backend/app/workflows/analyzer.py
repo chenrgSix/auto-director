@@ -7,6 +7,7 @@ from typing import Any
 
 from app.core.errors import AppError
 from app.core.limits import MAX_SHOT_SECONDS
+from app.workflows.discovery import discover
 from app.workflows.ownership import (
     canonicalize,
     decorate_parameters,
@@ -142,7 +143,7 @@ def parameter(id: str, node: dict, field: str, value: Any, object_info: dict) ->
     }
 
 
-def analyze(graph: dict, object_info: dict | None = None) -> dict:
+def analyze(graph: dict, object_info: dict | None = None, *, capability: str | None = None) -> dict:
     validate_graph(graph)
     info = object_info or {}
     parameters, bindings, outputs, warnings = [], {}, {}, []
@@ -193,12 +194,9 @@ def analyze(graph: dict, object_info: dict | None = None) -> dict:
                 )
                 bindings[role] = Binding(node_id=id, input=field, transform=transform).model_dump()
         parameters.extend(node_params)
-    # Unambiguous strategy/AI scalar names can be filled even without title tags.
-    for role in ("width", "height", "fps", "batch", "seed", "camera_motion", "motion_strength"):
-        matches = [p for p in parameters if p["field"] in ALIASES[role]]
-        if role not in seen_roles and len(matches) == 1:
-            item = matches[0]
-            bindings[role] = Binding(node_id=item["node_id"], input=item["field"]).model_dump()
+    assistance = discover(
+        graph, parameters, bindings, outputs, seen_roles, seen_outputs, capability
+    )
     for role, binding in bindings.items():
         for item in parameters:
             if item["key"] == f"{binding['node_id']}.{binding['input']}":
@@ -210,6 +208,7 @@ def analyze(graph: dict, object_info: dict | None = None) -> dict:
         "warnings": warnings,
         "workflow_hash": workflow_hash(graph),
         "required_class_types": sorted({node["class_type"] for node in graph.values()}),
+        "binding_assistance": assistance,
     }
     decorate_parameters(result)
     return result

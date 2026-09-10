@@ -14,8 +14,9 @@ from app.core.runtime_settings import SettingsPatch
 from app.db.store import uid
 from app.generation.schemas import ACTIVE, EpisodeCreate, TestRun, TimelineUpdate
 from app.media.service import AUDIO_EXT, IMAGE_EXT, VIDEO_EXT
+from app.workflows.analyzer import analyze
 from app.workflows.ownership import required_asset_roles
-from app.workflows.schema import WorkflowImport, WorkflowPatch
+from app.workflows.schema import WorkflowAnalyze, WorkflowImport, WorkflowPatch
 
 router = APIRouter(prefix="/api/v1")
 
@@ -83,7 +84,13 @@ async def comfy_status(request: Request):
 
 @router.get("/workflows")
 def workflows(request: Request):
-    return resources(request).store.list("workflow")
+    state = resources(request)
+    return [state.workflows.describe(p) for p in state.store.list("workflow")]
+
+
+@router.post("/workflows/analyze")
+def analyze_workflow(body: WorkflowAnalyze):
+    return analyze(body.workflow, capability=body.capability)
 
 
 @router.post("/workflows/import", status_code=201)
@@ -93,7 +100,13 @@ def import_workflow(request: Request, body: WorkflowImport):
 
 @router.get("/workflows/{id}")
 def workflow(request: Request, id: str):
-    return resources(request).store.get("workflow", id)
+    state = resources(request)
+    return state.workflows.describe(state.store.get("workflow", id))
+
+
+@router.post("/workflows/{id}/auto-bind")
+def auto_bind_workflow(request: Request, id: str):
+    return resources(request).workflows.auto_bind(id)
 
 
 @router.patch("/workflows/{id}")

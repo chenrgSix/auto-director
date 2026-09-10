@@ -73,12 +73,18 @@ class WorkflowImport(BaseModel):
             or self.type
             or (self.capability.media_type if self.capability else None)
         )
-        if not media or (self.type and self.media_type and self.type != self.media_type):
+        if self.type and self.media_type and self.type != self.media_type:
             raise ValueError("需要匹配的 media_type / capability（旧 type 仍兼容）")
         if self.capability and self.capability.media_type != media:
             raise ValueError("capability 与 media_type 不匹配")
         self.media_type = self.type = media
         return self
+
+
+class WorkflowAnalyze(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    workflow: dict[str, Any]
+    capability: WorkflowCapability | None = None
 
 
 class WorkflowPatch(BaseModel):

@@ -47,7 +47,18 @@ class WorkflowManager:
 
     def import_workflow(self, request: WorkflowImport, id=None) -> dict:
         data = request.model_dump()
-        analysis = analyze(request.workflow)
+        analysis = analyze(request.workflow, capability=request.capability)
+        if not request.media_type:
+            suggested = analysis["binding_assistance"]["suggested_capability"]
+            if not suggested:
+                raise AppError(
+                    "WORKFLOW_INVALID", "暂时无法识别生成用途，请选择工作流能力", status=422
+                )
+            data.update(
+                capability=suggested,
+                media_type="video" if suggested.endswith("TO_VIDEO") else "image",
+            )
+            data["type"] = data["media_type"]
         if request.bindings is not None:
             analysis["bindings"] = {
                 key: value.model_dump() for key, value in request.bindings.items()
@@ -64,10 +75,38 @@ class WorkflowManager:
                 "last_test_job_id": None,
             }
         )
-        return self.store.create(
-            "workflow",
-            record,
-            id=id,
+        return self.describe(
+            self.store.create(
+                "workflow",
+                record,
+                id=id,
+            )
+        )
+
+    def describe(self, profile: dict) -> dict:
+        analysis = analyze(profile["workflow"], capability=profile["capability"])
+        return {
+            **profile,
+            "binding_assistance": analysis["binding_assistance"],
+            "binding_issues": validate_bindings(profile),
+        }
+
+    def auto_bind(self, id: str) -> dict:
+        original = self.store.get("workflow", id)
+        analysis = analyze(original["workflow"], capability=original["capability"])
+        # Fill only empty roles; user choices and conversion rules remain authoritative.
+        bindings = deepcopy(original["bindings"])
+        occupied = {(b["node_id"], b["input"]) for b in bindings.values()}
+        for role, binding in analysis["bindings"].items():
+            if role not in bindings and (binding["node_id"], binding["input"]) not in occupied:
+                bindings[role] = binding
+                occupied.add((binding["node_id"], binding["input"]))
+        return self.update(
+            id,
+            WorkflowPatch(
+                bindings=bindings,
+                outputs={**analysis["outputs"], **original["outputs"]},
+            ),
         )
 
     def update(self, id: str, changes: WorkflowPatch) -> dict:
@@ -88,7 +127,7 @@ class WorkflowManager:
         if not validate_bindings(candidate):
             patch(candidate, {})
         candidate.update(validation=None, last_validated_at=None)
-        return self.store.update("workflow", id, candidate)
+        return self.describe(self.store.update("workflow", id, candidate))
 
     def validate(self, id: str, object_info: dict) -> dict:
         profile = self.store.get("workflow", id)
@@ -96,14 +135,16 @@ class WorkflowManager:
         profile["parameters"] = discovered["parameters"]
         decorate_parameters(profile)
         result = validate_dependencies(profile, object_info)
-        return self.store.update(
-            "workflow",
-            id,
-            {
-                "parameters": profile["parameters"],
-                "validation": result,
-                "last_validated_at": now(),
-            },
+        return self.describe(
+            self.store.update(
+                "workflow",
+                id,
+                {
+                    "parameters": profile["parameters"],
+                    "validation": result,
+                    "last_validated_at": now(),
+                },
+            )
         )
 
     def set_default(self, id: str) -> dict:
