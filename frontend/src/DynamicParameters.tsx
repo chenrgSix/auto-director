@@ -8,7 +8,7 @@ export function ParameterInput({ parameter, value, onChange, label }: { paramete
   if (parameter.enum?.length) return <select aria-label={label ?? parameter.key} value={String(value)} onChange={event => { const selected = parameter.enum!.find(item => String(item) === event.target.value); if (selected !== undefined) onChange(selected); }}>{!parameter.enum.includes(value) && <option value={String(value)}>{String(value)}（当前不可用）</option>}{parameter.enum.map(item => <option key={String(item)} value={String(item)}>{String(item)}</option>)}</select>;
   if (parameter.type === 'textarea' || parameter.field === 'text') return <textarea aria-label={label ?? parameter.key} value={String(value)} onChange={event => onChange(event.target.value)} rows={3} />;
   const numeric = ['integer', 'number'].includes(parameter.type);
-  return <input aria-label={label ?? parameter.key} type={numeric ? 'number' : 'text'} value={String(value)} min={parameter.min ?? undefined} max={parameter.max ?? undefined} step={parameter.type === 'integer' ? 1 : parameter.step ?? 'any'} onChange={event => onChange(numeric ? Number(event.target.value) : event.target.value)} />;
+  return <input aria-label={label ?? parameter.key} type={numeric ? 'number' : 'text'} value={String(value)} min={parameter.min ?? undefined} max={parameter.max ?? undefined} step={parameter.step ?? (parameter.type === 'integer' ? 1 : 'any')} onChange={event => onChange(numeric ? Number(event.target.value) : event.target.value)} />;
 }
 
 

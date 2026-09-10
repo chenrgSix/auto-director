@@ -87,6 +87,7 @@ class WorkflowManager:
                 "outputs": {},
             },
             "binding_issues": validate_bindings(profile),
+            "execution_info": profile.get("execution_info", {"mode": "unknown", "api_nodes": []}),
         }
 
     def update(self, id: str, changes: WorkflowPatch) -> dict:
@@ -113,6 +114,20 @@ class WorkflowManager:
         profile = self.store.get("workflow", id)
         profile = refresh_profile(profile, object_info)
         result = validate_dependencies(profile, object_info)
+        api_nodes = [
+            {
+                "id": id,
+                "class_type": node["class_type"],
+                "title": node.get("_meta", {}).get("title", node["class_type"]),
+            }
+            for id, node in profile["workflow"].items()
+            if object_info.get(node["class_type"], {}).get("api_node") is True
+        ]
+        known = all(node["class_type"] in object_info for node in profile["workflow"].values())
+        execution = {
+            "mode": "cloud" if api_nodes else "local" if known else "unknown",
+            "api_nodes": api_nodes,
+        }
         return self.describe(
             self.store.update(
                 "workflow",
@@ -121,6 +136,7 @@ class WorkflowManager:
                     "parameters": profile["parameters"],
                     "validation": result,
                     "last_validated_at": now(),
+                    "execution_info": execution,
                 },
             )
         )

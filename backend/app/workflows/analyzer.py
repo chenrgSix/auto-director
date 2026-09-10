@@ -446,6 +446,21 @@ def patch(
     return graph
 
 
+def autogrow_present(node: dict, field: str, definition: list) -> bool:
+    if not definition or definition[0] != "COMFY_AUTOGROW_V3" or len(definition) < 2:
+        return False
+    template = definition[1].get("template", {})
+    names, prefix = template.get("names", []), template.get("prefix")
+    count = 0
+    for key, value in node["inputs"].items():
+        if not key.startswith(field + ".") or value is None:
+            continue
+        name = key[len(field) + 1 :]
+        if name in names or (prefix and name.startswith(prefix) and name[len(prefix) :].isdigit()):
+            count += 1
+    return count >= template.get("min", 1)
+
+
 def validate_dependencies(profile: dict, object_info: dict) -> dict:
     issues = validate_bindings(profile)
     graph = patch(profile, {}) if not issues else profile["workflow"]
@@ -461,8 +476,12 @@ def validate_dependencies(profile: dict, object_info: dict) -> dict:
                 }
             )
             continue
-        for field, (_, required) in input_definitions(node, object_info).items():
-            if required and field not in node["inputs"]:
+        for field, (definition, required) in input_definitions(node, object_info).items():
+            if (
+                required
+                and field not in node["inputs"]
+                and not autogrow_present(node, field, definition)
+            ):
                 issues.append(
                     {
                         "code": "WORKFLOW_INVALID",

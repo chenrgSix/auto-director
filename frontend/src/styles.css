@@ -206,3 +206,52 @@ summary { cursor: pointer; font-size: 12px; color: #c0c8ac; line-height: 1.8; }
 .workflow-advanced .binding-row label small { display: block; color: #8e9d77; font-size: 9px; margin-top: 4px; }
 .save-row { align-items: center; gap: 16px; flex-wrap: wrap; }
 @media (max-width: 720px) { .binding-summary { grid-template-columns: 1fr; }.binding-summary-item { padding: 15px; }.workflow-advanced .transform-fields { flex-wrap: wrap; }.workflow-advanced .panel-title { flex-wrap: wrap; } }
+
+/* Workflow configuration: direct bindings, node fields, and explicit checks. */
+.workflow-fieldset { border: 0; padding: 0; margin: 0; min-width: 0; display: grid; gap: 18px; }
+.workflow-pane[hidden] { display: none; }
+.workflow-editor h3 { font-size: 16px; font-weight: 500; margin: 0 0 12px; }
+.workflow-toolbar { position: sticky; top: 12px; z-index: 5; padding: 12px; border: 1px solid #63724b; border-radius: 12px; background: #25361f; box-shadow: 0 6px 20px #14210d66; }
+.workflow-tabs { display: flex; gap: 6px; }
+.workflow-tabs button { flex: 1; font-size: 12px; padding: 11px 7px; }
+.workflow-tabs button[aria-selected="true"] { color: #18230f; background: #c2d4a5; border-color: #c2d4a5; }
+.workflow-save { display: flex; gap: 10px; align-items: center; justify-content: flex-end; padding-top: 10px; }
+.workflow-save > span { margin-right: auto; color: #c6d6b0; font-size: 11px; }
+.workflow-save button { padding: 8px 11px; font-size: 12px; }
+.role-config { padding: 18px 0; border-bottom: 1px solid #455837; display: grid; gap: 9px; min-width: 0; }
+.role-config > label { display: flex; align-items: center; justify-content: space-between; font-size: 14px; gap: 10px; }
+.role-config > label small { font-size: 11px; }
+.role-config select, .workflow-parameter input, .workflow-parameter select, .workflow-parameter textarea { font-size: 12px; width: 100%; min-width: 0; }
+.role-config > small { line-height: 1.7; }
+.role-config .transform-fields { grid-column: auto; flex-wrap: wrap; }
+.role-config .transform-fields label { display: grid; gap: 7px; font-size: 11px; }
+.role-config .transform-fields input { width: 90px; }
+.config-details { margin-top: 22px; font-size: 12px; }
+.config-details > summary { cursor: pointer; padding: 10px 0; }
+.parameter-search { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin: 22px 0; }
+.parameter-search label, .parameter-search input { width: 100%; }
+.parameter-search label { font-size: 12px; }
+.parameter-search button { padding: 5px 9px; font-size: 11px; }
+.parameter-node { border-top: 1px solid #526540; padding-top: 18px; margin-top: 20px; }
+.parameter-node-heading h4 { margin: 0 0 6px; font-size: 14px; font-weight: 500; overflow-wrap: anywhere; }
+.parameter-node-heading small { font-size: 10px; color: #a7ba8d; overflow-wrap: anywhere; }
+.parameter-node .parameter-list { grid-template-columns: 1fr; }
+.parameter-title { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.parameter-title label { margin: 0; }
+.parameter-source { font-size: 10px; border-radius: 4px; padding: 4px 6px; background: #425833; color: #d0e0b8; }
+.workflow-parameter { display: grid; gap: 10px; }
+.workflow-parameter > small { overflow-wrap: anywhere; }
+.workflow-parameter input[type="checkbox"] { width: auto; }
+.parameter-hint { display: flex; align-items: center; gap: 12px; justify-content: space-between; }
+.parameter-hint small { color: #9eb587; font-size: 10px; line-height: 1.7; }
+.parameter-hint button, .parameter-policy button { padding: 5px 8px; font-size: 11px; flex-shrink: 0; }
+.parameter-policy { font-size: 11px; color: #b5c59d; }
+.parameter-policy summary { cursor: pointer; padding: 5px 0; }
+.parameter-policy p, .parameter-policy > label { margin-top: 12px; }
+.execution-info { margin-bottom: 25px; padding: 16px; border: 1px solid #536541; border-radius: 8px; }
+.execution-info p { font-size: 12px; line-height: 1.8; color: #b9cba1; }
+.execution-info small { display: block; font-size: 10px; overflow-wrap: anywhere; }
+.config-problem p, .config-problem small { overflow-wrap: anywhere; line-height: 1.7; }
+.config-problem details { margin-top: 12px; }
+.config-problem button { font-size: 12px; }
+@media (max-width: 720px) { .workflow-toolbar { top: 6px; padding: 9px; }.workflow-save { gap: 7px; }.workflow-save > span { font-size: 10px; }.workflow-save button { padding: 8px; font-size: 11px; }.workflow-tabs button { font-size: 11px; }.role-config select { font-size: 11px; }.workflow-editor .fields.two { grid-template-columns: 1fr; }.parameter-hint { flex-wrap: wrap; } }

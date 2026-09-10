@@ -218,3 +218,16 @@ P0 + Phase 1/2 MVP 的本地工程闭环已完成。ComfyUI/LLM/VLM 依赖使用
 - 原失败短片 `43a9ba95-46cb-4d97-b836-051c42de9c17` 仍为 FAILED，updated_at 仍为 `2026-09-10T15:09:22.206427+00:00`，渲染作业仍为 0。
 
 真实导演测试仅证明当次最小请求可用，不证明此前失败是何种网络异常，也不代表较大 Visual Bible 请求、真实视觉模型、ComfyUI 生成、移动端或远端 CI 已验收。
+
+## C12 工作流配置可用性（2026-09-11）
+
+完整 `make check` 通过：**222 passed**、无跳过，pytest 52.26 秒；59 个 Python 文件 Ruff/格式、前端 ESLint、TypeScript 与 Vite 构建通过。新增 16 项测试覆盖 AUTOGROW 命名/前缀槽位、最少输入数、缺失/非法槽名、普通必填/链接索引保留，以及 API 节点元数据分类、未检查兼容和列表/详情持久化。最后补充保存错误自动定位后再次通过前端 lint/typecheck/build。
+
+- 临时数据库的浏览器夹具：导入未带标签的视频图，直接选择 prompt、start_frame、end_frame、duration 及输出，设置 `duration_to_frames` 后保存并检查通过；不存在第二套固定参数值，已占用字段禁选。
+- 搜索 `sampler` 定位 6 个实际字段，steps 从 30 改为 24 保存；非法 24.5 被后端类型校验拒绝。从其他页签保存非法值时自动跳到参数页并定位 `sampler.steps`。另将 steps 改为 26 并检查（schema default 随之变为 26），再恢复导入值、保存和整页重载，实际显示 30，`parameter_values` 为空。取消修改有效。设置默认并整页重新加载，默认标记保留，未要求先通过依赖检查。
+- 注入错误的 `latent.width`，检查页明确显示字段及错误；点击“去修改此参数”自动打开参数页并搜索该字段，改为 512 后保存/检查通过。文生图只显示实际绑定，无首尾帧必填项。
+- 1280px 桌面与 390×844 窄屏检查完成，窄屏 `scrollWidth=innerWidth=390`，保存按钮可见。截图：[直接绑定](evidence/workflow-config-bindings.png)、[窄屏配置](evidence/workflow-config-mobile.png)。正式页面搜索“模型”显示当前 MiniMax 工作流中的 6 个实际字段，包括 VAE、扩散模型、CLIP 和 LoRA 的 ComfyUI 枚举。
+- 确认无活动 Episode/Job 后重启正式 8000，健康检查 200。依次刷新两个实际 workflow 的节点元数据：`首尾帧MiniMax` 为 local、api_nodes 为空，`values.a` 不再误报缺少 `values`；剩下 4 个必需用途未绑定及两个素材用途问题。旧 `按首尾帧生成视频` 为 cloud，准确列出 node 28 `MinimaxHailuo03FirstLastFrameNode`。
+- 上述检查前后实际绑定、模板参数覆盖及两个默认 workflow ID 保持原值。原 Episode `43a9ba95-46cb-4d97-b836-051c42de9c17` 仍为 FAILED，更新时间保持 `2026-09-10T16:11:22.758940+00:00`。没有自动提交渲染或配置账号。
+
+浏览器交互使用模拟 ComfyUI/模型夹具；完整测试包含真实 FFmpeg，但本轮没有执行真实模型生成、云端认证、真实视觉 QA 或远端 CI。local 只表示所检查节点元数据未声明 ComfyUI 云端 API，不能作为第三方节点完全不联网的证明。切换工作流的未保存确认已实现，未单独验收原生确认框。

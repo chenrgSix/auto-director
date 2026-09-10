@@ -56,6 +56,12 @@ Binding 为 `{node_id, input, transform}`；`transform` 默认 `identity`，可�
 
 Episode 预算新增 `render_max_duration`；由绑定 duration 节点的 `api_node=true` 判断云端视频，云端不采用本地 3 秒显存上限，图片仍按本地资源策略。旧 Episode/Job JSON 缺少新增字段时自动兼容，无数据库迁移或重新导入要求。
 
+## 工作流配置检查信息（C12）
+
+WorkflowProfile 响应新增 `execution_info: {mode: "unknown" | "local" | "cloud", api_nodes: [{id, class_type, title}]}`。导入及旧记录默认 unknown；显式 `POST /workflows/{id}/validate` 从 ComfyUI `object_info` 更新后，GET 列表/详情和 PATCH 响应返回缓存结果。API 节点依据 `api_node=true`，不根据名称猜测，local 不代表真实渲染通过。更新值保留节点执行信息，但清空旧依赖结论。
+
+保存继续使用现有 `bindings/outputs/parameter_values/parameter_rules`，没有新增第二套固定参数。未绑定完整的草稿仍可保存；设为默认需完整绑定，依赖检查与真实试跑独立。AUTOGROW 的必需容器认可其声明的实际槽位与最小数量，原来的缺失字段/越界链接错误仍有效。
+
 ## 调用示例
 
 `EpisodeCreate.target_duration` 接受 **1～600 秒**，与 `max_shot_duration` 分开校验。后者仍为 1～30 秒，并受所选工作流能力和显存预算进一步约束。总时长超出范围返回 422；600 秒请求通过多个镜头完成。

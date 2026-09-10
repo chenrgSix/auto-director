@@ -115,3 +115,14 @@ C04：`agents/parameters.py` 为 Bible/Shot 构造按 workflow ID 隔离的 AI �
 高级时长覆盖在规划前换算并校验，确保每镜时长和整集目标一致。OOM 后以显式恢复标志让较小尺寸、batch、分段时长和实际分段尾帧优先，不能被用户原始覆盖重新放大或替换；替代 profile 继续使用自身节点参数。
 
 `db/migrations.py` 在启动 bootstrap 前运行版本 1 的原子迁移，版本写入 schema_migrations。补全旧工作流/作业快照的身份和元数据、Episode 高级模式及覆盖默认字段；已提交图、prompt_id、资产和超过新上限的旧计划保持不变。失败回滚本次记录更新；重复启动不重复迁移。
+
+
+## C12 工作流配置界面
+
+`WorkflowsPage` 保留导入与列表，`WorkflowEditor` 管理草稿、保存、依赖检查和试跑；按“输入与输出 / 模型与参数 / 检查与试跑”组织界面。绑定选择器只指向已有可写标量，显示节点标题、字段、ID 和当前值；重复占用的目标禁选，必需项随 capability 变化。可选用途按需添加，不创建不存在的参数。
+
+`WorkflowParameterPanel` 按实际节点分组并提供字段/值搜索；每个字段只有一个模板值编辑器，自动填写 owner 与创作高级覆盖规则独立折叠。恢复导入值读取原 JSON，避免依赖检查后的 effective default 被当作原值。保存和脏状态常驻，取消恢复最近保存版本，切换工作流丢弃草稿需确认。字段错误可跳到对应参数；模型与节点检查、真实试跑均由用户明确触发。
+
+`WorkflowManager.validate` 缓存节点执行信息：存在 `api_node=true` 为 cloud，所有节点类均已获取且未标记 API 为 local，否则 unknown。名称不参与判断；local 仅说明元数据未声明云端 API，不保证第三方节点不联网。导入与列表不增加远程请求。
+
+ComfyUI AUTOGROW 容器的必需输入检查识别其 template.names / prefix 声明的实际点分槽位，例如 `values.a` 可满足 `values` 最小数量；保留普通必填、链接索引及现有参数检查。不从动态槽位推断角色或修改原图。

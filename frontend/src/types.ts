@@ -16,6 +16,7 @@ export type Workflow = {
   parameters: Parameter[]; parameter_values: Record<string, Value>; warnings: string[];
   validation: { valid: boolean; issues: Problem[] } | null; workflow_hash: string; last_test_job_id: string | null;
   binding_assistance?: BindingAssistance; binding_issues?: Problem[];
+  execution_info?: { mode: 'local' | 'cloud' | 'unknown'; api_nodes: {id: string; class_type: string; title: string}[] };
 };
 export type Settings = {
   default_capabilities: Partial<Record<WorkflowCapability, string>>;
