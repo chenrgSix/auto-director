@@ -16,6 +16,7 @@ from app.db.store import uid
 from app.generation.schemas import (
     ACTIVE,
     EpisodeCreate,
+    EpisodeWorkflowRestore,
     EpisodeWorkflowsUpdate,
     PreviewApproval,
     PreviewUpdate,
@@ -342,6 +343,11 @@ async def approve_preview(request: Request, id: str, body: PreviewApproval):
 @router.patch("/episodes/{id}/workflows")
 async def update_episode_workflows(request: Request, id: str, body: EpisodeWorkflowsUpdate):
     return resources(request).generation.change_workflows(id, body)
+
+
+@router.post("/episodes/{id}/workflows/restore")
+async def restore_episode_workflows(request: Request, id: str, body: EpisodeWorkflowRestore):
+    return resources(request).generation.restore_workflow_story(id, body)
 
 
 @router.post("/episodes/{id}/compose", status_code=202)

@@ -49,9 +49,7 @@ def rebind(client, episode, **selection):
     )
 
 
-def test_rebind_archives_state_preserves_history_and_only_retains_relevant_overrides(
-    system, monkeypatch
-):
+def test_rebind_preserves_state_history_and_only_retains_relevant_overrides(system, monkeypatch):
     client, app, comfy = system
     episode = create(
         client,
@@ -103,9 +101,10 @@ def test_rebind_archives_state_preserves_history_and_only_retains_relevant_overr
     changed = result.json()
     assert changed["status"] == "DRAFT" and changed["workflow_binding_revision"] == 1
     assert changed["idea"] == episode["idea"] and changed["target_duration"] == 4
-    assert changed["plan"] is None and changed["bible"] is None and changed["budget"] is None
-    assert changed["shots"] == [] and changed["references"] == {} and changed["continuity"] == {}
-    assert changed["final_video_asset_id"] is None and changed["final_duration"] is None
+    assert changed["plan"] == episode["plan"] and changed["budget"] == episode["budget"]
+    assert changed["bible"] == {"ai_parameters": {}}
+    for field in ("shots", "references", "continuity", "final_video_asset_id", "final_duration"):
+        assert changed[field] == episode[field]
     assert changed["metrics"] == episode["metrics"]
     assert changed["image_parameters"] == {}
     assert changed["video_parameters"] == {"sampler.steps": 7}
@@ -224,53 +223,51 @@ def test_invalid_retained_override_rejects_rebind_without_partial_reset(system):
 
 
 @pytest.mark.parametrize("replacement_type", ["identical_graph", "short_i2v"])
-def test_rebound_episode_regenerates_with_new_workflows_and_never_reuses_old_cache(
+def test_completed_rebind_keeps_results_until_explicit_retry_uses_new_workflow(
     system, replacement_type
 ):
     client, app, comfy = system
-    episode = create(client, width=256, height=256)
+    episode = create(client, target_duration=1, width=256, height=256, qa_enabled=False)
     id = episode["id"]
     assert client.post(f"/api/v1/episodes/{id}/generate").status_code == 202
     original = wait_episode(client, id)
     assert original["status"] == "COMPLETED", original.get("error")
     old_jobs = deepcopy(app.state.store.list("job", id))
     old_assets = deepcopy(app.state.store.list("asset", id))
-    old_job_ids = {job["id"] for job in old_jobs}
-    old_reference_ids = set(original["references"].values())
     image = imported(app)
-    selection = {"image_workflow_id": image["id"], "reference_workflow_id": image["id"]}
-    if replacement_type == "short_i2v":
-        video = imported(app, "IMAGE_TO_VIDEO")
-        app.state.store.update(
-            "workflow", video["id"], {"capabilities": {**video["capabilities"], "max_duration": 2}}
-        )
-        selection["video_workflow_id"] = video["id"]
-    response = rebind(client, original, **selection)
+    video = imported(
+        app, "IMAGE_TO_VIDEO" if replacement_type == "short_i2v" else "FIRST_LAST_TO_VIDEO"
+    )
+    response = rebind(
+        client,
+        original,
+        image_workflow_id=image["id"],
+        reference_workflow_id=image["id"],
+        video_workflow_id=video["id"],
+    )
     assert response.status_code == 200, response.text
-    assert client.post(f"/api/v1/episodes/{id}/generate").status_code == 202
+    saved = response.json()
+    assert saved["status"] == "COMPLETED"
+    for field in ("plan", "shots", "references", "final_video_asset_id", "budget"):
+        assert saved[field] == original[field]
+    assert app.state.store.list("job", id) == old_jobs
+    assert client.post(f"/api/v1/episodes/{id}/generate").status_code == 409
+    assert client.post(f"/api/v1/shots/{original['shots'][0]['id']}/retry-video").status_code == 202
     regenerated = wait_episode(client, id)
     assert regenerated["status"] == "COMPLETED", regenerated.get("error")
-    assert abs(regenerated["final_duration"] - 4) < 0.15
-    assert set(regenerated["references"].values()).isdisjoint(old_reference_ids)
-    new_jobs = [job for job in app.state.store.list("job", id) if job["id"] not in old_job_ids]
-    assert new_jobs and all(job["step_key"].startswith("binding:1:") for job in new_jobs)
-    assert all(
-        job["workflow_id"] == image["id"]
-        for job in new_jobs
-        if job["profile_snapshot"]["media_type"] == "image"
+    assert regenerated["references"] == original["references"]
+    assert regenerated["metrics"]["llm_calls"] == original["metrics"]["llm_calls"]
+    assert (
+        regenerated["shots"][0]["start_frame_asset_id"]
+        == original["shots"][0]["start_frame_asset_id"]
     )
-    assert all(job["comfy_prompt_id"] in comfy.prompts for job in new_jobs)
+    old_ids = {job["id"] for job in old_jobs}
+    new_jobs = [job for job in app.state.store.list("job", id) if job["id"] not in old_ids]
+    assert len(new_jobs) == 1 and new_jobs[0]["type"] == "SHOT_VIDEO"
+    assert new_jobs[0]["workflow_id"] == video["id"]
+    assert new_jobs[0]["step_key"].startswith("binding:1:")
     for job in old_jobs:
         assert app.state.store.get("job", job["id"]) == job
     for asset in old_assets:
         assert app.state.store.get("asset", asset["id"]) == asset
         assert app.state.assets.path(asset["id"]).exists()
-    if replacement_type == "short_i2v":
-        assert len(regenerated["shots"]) > len(original["shots"])
-        assert all(shot["duration"] <= 2 for shot in regenerated["shots"])
-        assert all(job["type"] != "SHOT_END_FRAME" for job in new_jobs)
-        assert all(
-            job["workflow_id"] == video["id"]
-            for job in new_jobs
-            if job["profile_snapshot"]["media_type"] == "video"
-        )

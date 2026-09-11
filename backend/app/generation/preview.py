@@ -15,6 +15,7 @@ from app.generation.parameters import (
     usable_ai_values,
     validate_strategy,
 )
+from app.generation.workflow_state import scope_ai_parameters
 from app.workflows.analyzer import check_value
 from app.workflows.duration import render_maximum, uses_remote_video
 
@@ -227,18 +228,7 @@ def rebind_story(episode, image, video, reference):
                 {"shot_id": shot["id"], "field": "duration", "cause": exc.as_dict()},
             ) from exc
     # AI values belong to a workflow/stage, not to node names reused by another workflow.
-    outputs = [(episode.get("bible"), (reference,))]
-    outputs += [(shot.get("prompts"), (image, video)) for shot in episode["shots"]]
-    for output, profiles in outputs:
-        if output is None:
-            continue
-        mapping = output.get("ai_parameters", {})
-        selected = {p["id"] for p in profiles}
-        for id in list(mapping):
-            if id not in selected:
-                mapping.pop(id)
-        for profile in profiles:
-            usable_ai_values(profile, mapping.get(profile["id"], {}), stage_prompt=True)
+    scope_ai_parameters(episode, image, video, reference)
     episode.update(
         preview_required=True, preview_approved_at=None, error=None, queued_operation=None
     )

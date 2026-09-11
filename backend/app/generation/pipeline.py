@@ -36,9 +36,16 @@ from app.generation.resolvers import AssetResolver, ContinuityManager
 from app.generation.schemas import (
     ACTIVE,
     EpisodeCreate,
+    EpisodeWorkflowRestore,
     EpisodeWorkflowsUpdate,
     PreviewUpdate,
     TimelineUpdate,
+)
+from app.generation.workflow_state import (
+    media_ids,
+    recoverable_history,
+    resume_story,
+    story_snapshot,
 )
 from app.media.service import Assets, compose, extract_frame
 from app.workflows.analyzer import refresh_profile, validate_bindings
@@ -214,7 +221,7 @@ class GenerationService:
             selection = request.model_dump(exclude={"expected_version"})
             if all(episode.get(key) == value for key, value in selection.items()):
                 return
-            preserve_story = bool(episode.get("plan")) and not self.has_rendered_content(episode)
+            rendered = self.has_rendered_content(episode)
             profiles = [
                 self.router.select("image", request.image_workflow_id),
                 self.router.select("video", request.video_workflow_id),
@@ -237,7 +244,7 @@ class GenerationService:
             for media in ("image", "video"):
                 if episode.get(f"{media}_workflow_id") != selection[f"{media}_workflow_id"]:
                     candidate[f"{media}_parameters"] = {}
-            allowed = set()
+            allowed = set(episode.get("allowed_asset_ids", [])) & media_ids(episode)
             for profile in profiles:
                 overrides = parameter_overrides(candidate, profile)
                 validate_overrides(profile, overrides, candidate.get("advanced_mode", False))
@@ -247,25 +254,6 @@ class GenerationService:
                             role, value, id, episode.get("allowed_asset_ids", [])
                         )
                         allowed.add(value)
-            reset = {
-                "status": "DRAFT",
-                "plan": None,
-                "bible": None,
-                "shots": [],
-                "references": {},
-                "continuity": {},
-                "budget": None,
-                "fixed_shot_duration": None,
-                "final_video_asset_id": None,
-                "final_duration": None,
-                "error": None,
-                "warnings": [],
-                "started_at": None,
-                "completed_at": None,
-                "queued_operation": None,
-                "preview": None,
-                "preview_approved_at": None,
-            }
             configuration = {
                 **selection,
                 "workflow_overrides": candidate["workflow_overrides"],
@@ -279,7 +267,8 @@ class GenerationService:
                     "changed_at": now(),
                     "revision": episode.get("workflow_binding_revision", 0),
                     "previous_state": {
-                        key: deepcopy(episode.get(key)) for key in {*reset, *configuration, "title"}
+                        **story_snapshot(episode),
+                        **{key: deepcopy(episode.get(key)) for key in configuration},
                     },
                 }
             )
@@ -288,10 +277,63 @@ class GenerationService:
                 workflow_binding_revision=episode.get("workflow_binding_revision", 0) + 1,
                 workflow_binding_history=history,
             )
-            if preserve_story:
+            if rendered and episode.get("plan"):
+                resume_story(episode, *profiles)
+            elif episode.get("plan"):
                 rebind_story(episode, *profiles)
             else:
-                episode.update(reset)
+                episode.update(
+                    status="DRAFT",
+                    budget=None,
+                    error=None,
+                    queued_operation=None,
+                    preview=None,
+                    preview_approved_at=None,
+                )
+
+        return self.store.update("episode", id, change)
+
+    def restore_workflow_story(self, id: str, request: EpisodeWorkflowRestore) -> dict:
+        def change(episode):
+            if (
+                episode["version"] != request.expected_version
+                or id in self.busy
+                or episode["status"] in ACTIVE
+                or self.has_current_jobs(episode)
+            ):
+                raise AppError("CONFLICT", "短片已变更或仍有作业，请刷新并核对后恢复", status=409)
+            history = recoverable_history(episode)
+            if not history or history["revision"] != request.history_revision:
+                raise AppError(
+                    "CONFLICT", "只能恢复空短片中最近一次保留的故事，不能覆盖现有内容", status=409
+                )
+            source = history["previous_state"]
+            # Old snapshots predate preview_required; retain the episode's flag then.
+            restored = {**episode, **story_snapshot(source)}
+            if restored.get("preview_required") is None:
+                restored["preview_required"] = episode.get("preview_required", False)
+            restored_ids = media_ids(restored)
+            allowed = set(episode.get("allowed_asset_ids", [])) | (
+                set(source.get("allowed_asset_ids") or []) & restored_ids
+            )
+            for asset_id in restored_ids:
+                asset = self.store.get("asset", asset_id)
+                role = (
+                    "reference_video" if asset["metadata"]["kind"] == "video" else "reference_image"
+                )
+                AssetResolver(self.store, self.assets).validate(role, asset_id, id, allowed)
+            restored["allowed_asset_ids"] = sorted(allowed)
+            profiles = self.preview_profiles(restored)
+            if restored_ids or restored.get("preview_approved_at"):
+                resume_story(restored, *profiles)
+            else:
+                rebind_story(restored, *profiles)
+            restored["workflow_recovery"] = {
+                "source_revision": history["revision"],
+                "binding_revision": episode.get("workflow_binding_revision", 0),
+                "recovered_at": now(),
+            }
+            episode.update(restored)
 
         return self.store.update("episode", id, change)
 
@@ -306,6 +348,8 @@ class GenerationService:
 
     def detail(self, id: str) -> dict:
         episode = self.store.get("episode", id)
+        if history := recoverable_history(episode):
+            episode["recoverable_workflow_revision"] = history["revision"]
         if episode["status"] == "AWAITING_REVIEW" and episode.get("preview"):
             profiles = self.preview_profiles(episode)
             if episode["preview"]["workflow_versions"] == workflow_versions(profiles):
@@ -608,7 +652,9 @@ class GenerationService:
             if episode.get("preview_required") and not preview_only:
                 if not episode.get("preview_approved_at"):
                     raise AppError("PREVIEW_REQUIRED", "请先确认分镜", status=409)
-                if not self.has_current_jobs(episode):
+                if not self.has_rendered_content(episode) and not episode.get(
+                    "refresh_workflow_budget"
+                ):
                     try:
                         require_current_preview(episode, (image, video, reference_profile))
                     except AppError:
@@ -624,7 +670,11 @@ class GenerationService:
             fresh_budget = generation_budget(
                 episode, video["capabilities"], system, remote_video=video["remote_video"]
             )
-            budget = dict(episode.get("budget") or fresh_budget)
+            budget = dict(
+                fresh_budget
+                if episode.get("refresh_workflow_budget")
+                else episode.get("budget") or fresh_budget
+            )
             if video["remote_video"]:
                 # Old episodes may have applied the local 3-second ceiling to cloud video.
                 # Keep their image sizes, plans and already-rendered assets intact.
@@ -655,6 +705,7 @@ class GenerationService:
                 id,
                 "PLANNING",
                 budget=budget,
+                refresh_workflow_budget=False,
                 fixed_shot_duration=fixed_duration,
                 started_at=episode.get("started_at") or now(),
             )

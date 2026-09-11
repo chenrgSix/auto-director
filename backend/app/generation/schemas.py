@@ -68,6 +68,11 @@ class EpisodeWorkflowsUpdate(StrictModel):
     reference_workflow_id: str = Field(min_length=1)
 
 
+class EpisodeWorkflowRestore(StrictModel):
+    expected_version: int = Field(ge=1)
+    history_revision: int = Field(ge=0)
+
+
 class PreviewShotUpdate(StrictModel):
     id: str = Field(min_length=1)
     title: str = Field(min_length=1, max_length=200)

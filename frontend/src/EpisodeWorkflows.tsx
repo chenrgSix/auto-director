@@ -44,7 +44,17 @@ export function EpisodeWorkflows({ episode, busy, locked, setBusy, onSaved, noti
     try {
       const saved = await api<Episode>(`/episodes/${episode.id}/workflows`, 'PATCH', draft);
       setDraft(undefined); onSaved();
-      notify(saved.shots.length ? '工作流已更换，故事与分镜已保留，请检查后确认生成' : '工作流已更新，可继续准备短片');
+      notify(saved.refresh_workflow_budget ? '工作流已更换，剧本和已有素材已保留，点击继续生成补齐缺失部分' : saved.shots.length ? '工作流已更换，故事与分镜已保留，请检查后确认生成' : '工作流已更新，可继续准备短片');
+    } catch (error) { setError((error as Error).message); }
+    finally { setBusy(false); }
+  }
+  async function restore() {
+    setBusy(true); setError(undefined);
+    try {
+      await api(`/episodes/${episode.id}/workflows/restore`, 'POST', {
+        expected_version: episode.version, history_revision: episode.recoverable_workflow_revision,
+      });
+      onSaved(); notify('剧本和已有素材已恢复，保留当前工作流，尚未开始生成');
     } catch (error) { setError((error as Error).message); }
     finally { setBusy(false); }
   }
@@ -55,8 +65,8 @@ export function EpisodeWorkflows({ episode, busy, locked, setBusy, onSaved, noti
       {FIELDS.map(([key, label]) => <p className="muted" key={key}>{label}：{workflows.data?.find(item => item.id === episode[key])?.name || episode[key] || '未配置'}</p>)}
       <button disabled={busy || locked || !workflows.data} onClick={() => { setError(undefined); setDraft({ expected_version: episode.version, image_workflow_id: episode.image_workflow_id, reference_workflow_id: episode.reference_workflow_id, video_workflow_id: episode.video_workflow_id }); }}>更换工作流</button>
     </> : <>
-      <p className="muted">尚未开始渲染时，更换工作流会保留故事、分镜时长、视觉设定和已保存的提示词，只更新生成配置。新工作流不兼容时会提示原因，保留原配置。保存不会自动开始生成。</p>
-      <p className="muted">若当前配置已产生渲染作业或素材，更换将归档并重置当前计划及生成结果。已换走工作流的专属参数不会套用到新工作流。</p>
+      <p className="muted">更换工作流会保留剧本、分镜时长、提示词，以及已生成的参考图、关键帧和视频。保存不会自动开始生成。</p>
+      <p className="muted">新工作流用于后续缺失部分；已有结果需要重新生成时，请在对应镜头点击重试。继续生成前会检查模型、时长和显存限制。已换走工作流的专属参数不会套用到新工作流。</p>
       <div className="fields two">{FIELDS.map(([key, label]) => <div className="field" key={key}>
         <label htmlFor={`episode-${key}`}>{label}</label>
         <select id={`episode-${key}`} disabled={busy || locked} value={draft[key] || ''} onChange={event => setDraft({ ...draft, [key]: event.target.value })}>
@@ -65,13 +75,15 @@ export function EpisodeWorkflows({ episode, busy, locked, setBusy, onSaved, noti
         </select>
       </div>)}</div>
       <p className="muted">绑定完整即可选择。模型与节点将在生成前检查；更换本片不会改变全局默认项。</p>
-      {error && <ErrorNotice>{error}</ErrorNotice>}
       <div className="actions">
         <button disabled={busy} onClick={() => setDraft(undefined)}>取消更换</button>
         <button disabled={busy || locked || !workflows.data} onClick={() => void defaults()}>使用当前默认</button>
         <button className="primary" disabled={busy || locked || !changed || FIELDS.some(([key]) => !draft[key])} onClick={() => void save()}>保存工作流</button>
       </div>
     </>}
+    {!draft && episode.recoverable_workflow_revision != null && <div className="notice"><p>更换前的剧本和素材记录仍保留在历史中，可以恢复到当前短片并继续使用当前工作流。</p><button disabled={busy || locked} onClick={() => void restore()}>恢复剧本和已有素材</button></div>}
+    {episode.refresh_workflow_budget && <p className="muted">剧本和已有素材已保留。继续生成会沿用已有结果，只补齐缺失部分；重试镜头会重新生成对应结果。</p>}
+    {error && <ErrorNotice>{error}</ErrorNotice>}
     {locked && <p className="muted">请先等待生成结束，或停止并核对未完成作业后再更换。</p>}
   </section>;
 }
