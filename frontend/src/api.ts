@@ -26,18 +26,23 @@ export function useResource<T>(path: string, interval = 0) {
   useEffect(() => {
     let disposed = false;
     let pending = false;
+    let controller: AbortController | undefined;
     const load = async () => {
       if (pending) return;
       pending = true;
+      controller = new AbortController();
+      const timeout = window.setTimeout(() => controller?.abort(), 15000);
       try {
-        const result = await api<T>(path);
+        const result = await api<T>(path, 'GET', undefined, controller.signal);
         if (!disposed) { setData(result); setError(undefined); }
       } catch (error) { if (!disposed) setError(error instanceof Error ? error.message : '请求失败'); }
-      finally { pending = false; }
+      finally { window.clearTimeout(timeout); pending = false; }
     };
     void load();
     const timer = interval ? window.setInterval(() => void load(), interval) : undefined;
-    return () => { disposed = true; window.clearInterval(timer); };
+    const online = () => void load();
+    window.addEventListener('online', online);
+    return () => { disposed = true; controller?.abort(); window.clearInterval(timer); window.removeEventListener('online', online); };
   }, [path, interval, revision]);
   return { data, error, refresh };
 }

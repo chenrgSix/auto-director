@@ -50,7 +50,7 @@ export type Episode = {
   preview?: { capability: WorkflowCapability; min_duration: number; max_duration: number; render_max_duration: number; fixed_duration: number | null } | null;
 };
 export type Asset = { id: string; type: string; episode_id: string; path: string; metadata: { kind: string }; size: number };
-export type Job = { id: string; type: string; status: string; comfy_prompt_id: string | null; error: Problem | null; output_asset_ids: string[]; progress: { value?: number; max?: number; node?: string } | null; input_values: Record<string, unknown> };
+export type Job = { id: string; type: string; status: string; comfy_prompt_id: string | null; error: Problem | null; output_asset_ids: string[]; progress: { value?: number; max?: number; node?: string; connection?: 'connected' | 'reconnecting'; reconnect_attempt?: number; retry_in?: number; message?: string } | null; input_values: Record<string, unknown> };
 export const ACTIVE = new Set(['QUEUED', 'PLANNING', 'BUILDING_BIBLE', 'PREPARING_PROMPTS', 'GENERATING_REFERENCES', 'GENERATING_KEYFRAMES', 'RENDERING_VIDEO', 'QA', 'COMPOSING']);
 export const STATUS: Record<string, string> = {
   DRAFT: '草稿', QUEUED: '等待开始', PLANNING: '规划故事', BUILDING_BIBLE: '建立视觉设定', GENERATING_REFERENCES: '生成参考图',

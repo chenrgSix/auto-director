@@ -148,6 +148,8 @@ class ComfyUIClient:
                 },
             ) as response:
                 if response.status_code != 200:
+                    if response.status_code >= 500:
+                        raise AppError("COMFYUI_OFFLINE", "下载连接暂不可用", status=502)
                     raise AppError("OUTPUT_NOT_FOUND", "无法下载 ComfyUI 产物", status=502)
                 target.parent.mkdir(parents=True, exist_ok=True)
                 size = 0
@@ -157,9 +159,60 @@ class ComfyUIClient:
                         if size > limit:
                             raise AppError("INVALID_MEDIA", "渲染产物超过大小限制")
                         file.write(chunk)
+        except httpx.RequestError as exc:
+            await asyncio.to_thread(target.unlink, missing_ok=True)
+            raise AppError("COMFYUI_OFFLINE", "下载连接中断", status=502) from exc
         except BaseException:
             await asyncio.to_thread(target.unlink, missing_ok=True)
             raise
+
+    @staticmethod
+    async def pause(delay: float, cancelled: Callable[[], bool]) -> None:
+        until = time.monotonic() + delay
+        # Cancellation is persisted in SQLite, not signalled by an in-process Event.
+        while not cancelled() and (remaining := until - time.monotonic()) > 0:  # noqa: ASYNC110
+            await asyncio.sleep(min(remaining, 0.25))
+
+    async def recover_read(
+        self, operation, prompt_id, on_progress, cancelled, *, deadline=None, cancel_remote=False
+    ):
+        """Retry reads of an accepted job only; never resubmit /prompt on disconnect."""
+        deadline = deadline or time.monotonic() + self.settings.render_timeout
+        attempts = 0
+        while time.monotonic() < deadline:
+            if cancelled():
+                if cancel_remote:
+                    # A failed cancellation remains UNKNOWN in the engine.
+                    await self.cancel(prompt_id)
+                raise AppError("CANCELLED", "作业已取消")
+            try:
+                result = await operation()
+            except AppError as exc:
+                if exc.code != "COMFYUI_OFFLINE":
+                    raise
+                attempts += 1
+                delay = min(15, self.settings.poll_interval * 2 ** min(attempts - 1, 8))
+                await on_progress(
+                    {
+                        "connection": "reconnecting",
+                        "reconnect_attempt": attempts,
+                        "retry_in": delay,
+                        "message": "连接中断，正在重连原任务；远端可能仍在生成",
+                    }
+                )
+                await self.pause(min(delay, max(0, deadline - time.monotonic())), cancelled)
+                continue
+            if attempts:
+                await on_progress(
+                    {"connection": "connected", "message": "连接已恢复，继续读取原任务"}
+                )
+            return result
+        raise AppError(
+            "JOB_TIMEOUT",
+            "等待超时，已保留原任务；连接恢复后可继续读取进度和结果",
+            {"prompt_id": prompt_id},
+            status=504,
+        )
 
     async def cancel(self, prompt_id: str) -> None:
         queue = await self.json("GET", "/queue")
@@ -198,18 +251,27 @@ class ComfyUIClient:
         prompt_id: str | None = None,
     ) -> dict:
         websocket = None
+        next_socket_attempt = 0
+
+        async def open_socket():
+            nonlocal next_socket_attempt
+            next_socket_attempt = time.monotonic() + 5
+            try:
+                return await connect(
+                    self.url.replace("https://", "wss://").replace("http://", "ws://")
+                    + "/ws?"
+                    + urlencode({"clientId": job_id}),
+                    open_timeout=3,
+                    close_timeout=1,
+                    proxy=None,
+                    max_size=2 * 1024 * 1024,
+                )
+            except Exception:
+                return None
+
         try:
             if self.use_websocket:
-                with contextlib.suppress(OSError, TimeoutError, Exception):
-                    websocket = await connect(
-                        self.url.replace("https://", "wss://").replace("http://", "ws://")
-                        + "/ws?"
-                        + urlencode({"clientId": job_id}),
-                        open_timeout=3,
-                        close_timeout=1,
-                        proxy=None,
-                        max_size=2 * 1024 * 1024,
-                    )
+                websocket = await open_socket()
             if prompt_id is None:
                 if cancelled():
                     raise AppError("CANCELLED", "作业已取消")
@@ -229,11 +291,19 @@ class ComfyUIClient:
                     )
                 await on_submit({"comfy_prompt_id": prompt_id})
             started = time.monotonic()
+            await on_progress({"connection": "connected", "message": "正在读取原任务进度"})
             while time.monotonic() - started < self.settings.render_timeout:
                 if cancelled():
                     await self.cancel(prompt_id)
                     raise AppError("CANCELLED", "作业已取消")
-                history = await self.history(prompt_id)
+                history = await self.recover_read(
+                    lambda: self.history(prompt_id),
+                    prompt_id,
+                    on_progress,
+                    cancelled,
+                    deadline=started + self.settings.render_timeout,
+                    cancel_remote=True,
+                )
                 status = history.get("status", {})
                 if status.get("status_str") == "error":
                     messages = status.get("messages", [])
@@ -248,6 +318,12 @@ class ComfyUIClient:
                     )
                 if status.get("completed"):
                     return history
+                if (
+                    self.use_websocket
+                    and websocket is None
+                    and time.monotonic() >= next_socket_attempt
+                ):
+                    websocket = await open_socket()
                 if websocket is not None:
                     try:
                         raw = await asyncio.wait_for(websocket.recv(), self.settings.poll_interval)
@@ -263,10 +339,11 @@ class ComfyUIClient:
                     except TimeoutError:
                         pass
                     except Exception:
-                        await websocket.close()
+                        with contextlib.suppress(Exception):
+                            await websocket.close()
                         websocket = None
                 else:
-                    await asyncio.sleep(self.settings.poll_interval)
+                    await self.pause(self.settings.poll_interval, cancelled)
             raise AppError(
                 "JOB_TIMEOUT",
                 "渲染等待超时，已保留 prompt_id；可读取历史恢复",
@@ -275,4 +352,5 @@ class ComfyUIClient:
             )
         finally:
             if websocket is not None:
-                await websocket.close()
+                with contextlib.suppress(Exception):
+                    await websocket.close()

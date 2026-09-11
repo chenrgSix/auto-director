@@ -1,5 +1,7 @@
 # API 与工作流契约
 
+C21 连接恢复：已取得 prompt_id 的作业保持 RUNNING，在 `render_timeout` 内对历史查询和产物下载重连，`progress.connection=reconnecting|connected`、`reconnect_attempt`、`retry_in` 表示连接状态，保留最后节点/采样进度。WebSocket 中断会重新连接，HTTP 轮询持续有效。超时仍为 UNKNOWN，既有 `/episodes/{id}/generate` 复用相同输入的原作业；未取得 prompt_id 必须先 reconcile。断网不取消远端，不自动重发 POST /prompt。取消请求无法确认时仍保留 UNKNOWN。
+
 C20：每镜时间线按 workflow.max_duration、用户显式 max_shot_duration 和模型实际合法时长校验；显存/质量模式不再额外施加 3/4 秒硬上限。旧预算在读取待确认预览、保存/批准和继续生成时刷新时长字段，保留故事、图片尺寸和素材。OOM 降级仍受工作流/模型与共享重试预算约束，不改变目标时间线。
 
 C19：`PATCH /episodes/{id}/workflows` 始终保留计划、镜头、视觉设定、已保存提示词和已有素材绑定。未渲染故事继续按 C18 校验并等待确认；已开始生成的故事保留原批准，不返回文字预览，不自动生成。已有结果沿用，缺失结果及显式重试使用新工作流；继续生成时重新读取节点与显存预算，不兼容时保留故事和素材并报错。换走的专属覆盖和 AI 映射不迁移到新 ID，原值、作业 JSON 与素材文件保留在历史中。

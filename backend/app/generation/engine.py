@@ -193,10 +193,18 @@ class RenderEngine:
                     async def on_submit(data):
                         nonlocal submitted
                         submitted = True
+                        job.update(data)
                         self.store.update("job", job_id, data)
 
                     async def on_progress(data):
-                        self.store.update("job", job_id, {"progress": data})
+                        def change(current):
+                            progress = current.get("progress") or {}
+                            if data.get("event") in {"executing", "execution_start"}:
+                                progress.pop("value", None)
+                                progress.pop("max", None)
+                            current["progress"] = {**progress, **data}
+
+                        self.store.update("job", job_id, change)
 
                     history = await client.execute(
                         job["patched_workflow"],
@@ -220,7 +228,12 @@ class RenderEngine:
                         target = self.assets.allocate(
                             job["episode_id"], Path(item["filename"]).suffix.lower()
                         )
-                        await client.download(item, target)
+                        await client.recover_read(
+                            lambda metadata=item, path=target: client.download(metadata, path),
+                            job["comfy_prompt_id"],
+                            on_progress,
+                            cancelled,
+                        )
                         record = await self.assets.register(
                             target, job["episode_id"], job["type"], job["shot_id"]
                         )
