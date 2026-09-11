@@ -1,5 +1,7 @@
 # API 与工作流契约
 
+C31：`DELETE /workflows/{id}` 成功后，内置工作流与用户工作流均保持删除状态，服务重启不重新导入。首次初始化仍提供两份内置模板；既有默认选择及 Episode 引用保护保持，409 明确显示“未删除”，引用冲突的 details.episodes 包含 ID/title。旧 settings 的默认能力映射只迁移现存工作流，不补建缺失记录；无 API 请求格式或表结构变更。
+
 C30：Shot 可选 render_cursor 保存当前尝试号、retry_version、起始重试余量、基础参数和重试范围；Episode 可选 render_recovery 保存恢复游标及 step_key→Job ID 映射。均为现有 JSON 聚合的扩展，无表迁移。继续生成按原作业快照恢复 UNKNOWN，包括 OOM 降分辨率、分段与中间帧；已确认的 OOM 决策重放但不重新提交，已完成步骤复用。恢复上下文跨重启和本地后处理失败保留，镜头通过后清理；显式重跑/换绑/时间线修改清除旧恢复上下文。无 prompt_id、跨短片未结算或步骤身份不符仍拒绝，不能通过恢复绕过未知提交保护。
 
 C29：Workflow 增加 configuration_version，标识最后一次可执行配置更改；原 version 继续记录全部更新。预览 workflow_versions 兼容配置版本到当前记录版本区间，重复检测、无变化保存和名称更新不阻止确认；真正的参数/绑定/能力变更仍返回 PREVIEW_STALE。旧 Workflow 首次检查使用原 version 作为配置基线，无表迁移。
