@@ -27,6 +27,7 @@ from app.generation.parameters import (
 from app.generation.preview import (
     apply_edits,
     prepare_review,
+    preview_video,
     prompt_view,
     rebind_story,
     refresh_timing_limits,
@@ -348,7 +349,7 @@ class GenerationService:
     def preview_profiles(self, episode):
         return [
             self.router.select("image", episode.get("image_workflow_id")),
-            self.router.select("video", episode.get("video_workflow_id")),
+            preview_video(episode, self.router.select("video", episode.get("video_workflow_id"))),
             self.router.resolve(
                 WorkflowCapability.TEXT_TO_IMAGE, episode.get("reference_workflow_id")
             ),
@@ -762,13 +763,13 @@ class GenerationService:
             # Keep prepared content, dimensions and explicit user duration limits intact.
             for key in ("max_duration", "render_max_duration"):
                 budget[key] = fresh_budget[key]
+            override_roles = role_overrides(video, parameter_overrides(episode, video))
+            budget["fps"] = generation_fps(video, budget["fps"], override_roles.get("fps"))
             budget["render_max_duration"] = render_maximum(video, budget)
             budget["max_duration"] = min(budget["max_duration"], budget["render_max_duration"])
             validate_overrides(
                 video, parameter_overrides(episode, video), episode.get("advanced_mode", False)
             )
-            override_roles = role_overrides(video, parameter_overrides(episode, video))
-            budget["fps"] = generation_fps(video, budget["fps"], override_roles.get("fps"))
             ceilings = dict(budget)
             budget.update(
                 {

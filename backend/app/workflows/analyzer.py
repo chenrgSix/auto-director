@@ -7,7 +7,7 @@ from typing import Any
 
 from app.core.errors import AppError
 from app.core.limits import MAX_SHOT_SECONDS
-from app.workflows.frame_timing import generation_fps
+from app.workflows.frame_timing import frame_count, generation_fps
 from app.workflows.ownership import (
     canonicalize,
     decorate_parameters,
@@ -429,11 +429,7 @@ def patch(
                 or not 0 < value <= MAX_SHOT_SECONDS
             ):
                 raise AppError("WORKFLOW_INVALID", "duration/fps 超出允许范围")
-            value = (
-                math.ceil((value * fps - binding.frame_offset) / binding.frame_multiple)
-                * binding.frame_multiple
-                + binding.frame_offset
-            )
+            value = frame_count(binding.model_dump(), value, fps)
         key = f"{binding.node_id}.{binding.input}"
         if key in parameters:
             if role == "duration" and parameters[key]["type"] == "integer":

@@ -34,6 +34,17 @@ def require_current_preview(episode, profiles):
         raise AppError("PREVIEW_STALE", "工作流配置已变更，请更新分镜预览后确认", status=409)
 
 
+def preview_video(episode, video):
+    snapshot = episode.get("preview") or {}
+    if (
+        "remote_video" not in video
+        and snapshot.get("workflow_versions", {}).get(video["id"]) == video["version"]
+        and snapshot.get("video_parameter_snapshot") is not None
+    ):
+        return {**video, "parameters": deepcopy(snapshot["video_parameter_snapshot"])}
+    return video
+
+
 def prompt_view(episode, shot, image, video):
     """Show effective prompt inputs, including AI mappings and fixed user overrides."""
     values, locked, hints = {}, {}, {}
@@ -93,7 +104,10 @@ def validate_review_prompts(episode, image, video):
 
 def refresh_timing_limits(episode, video):
     """Refresh legacy duration ceilings without changing prepared content or image sizes."""
+    video = preview_video(episode, video)
     budget = episode["budget"]
+    roles = role_overrides(video, parameter_overrides(episode, video))
+    budget["fps"] = generation_fps(video, budget["fps"], roles.get("fps"))
     budget.update(duration_limits(episode, video["capabilities"]))
     budget["render_max_duration"] = render_maximum(video, budget)
     budget["max_duration"] = min(budget["max_duration"], budget["render_max_duration"])
@@ -104,6 +118,7 @@ def refresh_timing_limits(episode, video):
 
 
 def validate_timing(episode, video):
+    video = preview_video(episode, video)
     refresh_timing_limits(episode, video)
     fit_budget_dimensions(episode, video, episode["budget"])
     snapshot = episode.get("preview") or {}
@@ -139,6 +154,7 @@ def prepare_review(episode, image, video, reference):
         "fixed_duration": episode.get("fixed_shot_duration"),
         "render_max_duration": episode["budget"]["render_max_duration"],
         "remote_video": uses_remote_video(video),
+        "video_parameter_snapshot": deepcopy(video["parameters"]),
     }
     validate_timing(episode, video)
     validate_review_prompts(episode, image, video)
@@ -212,10 +228,10 @@ def rebind_story(episode, image, video, reference):
         {"devices": [{"vram_free": available}]},
         remote_video=uses_remote_video(video),
     )
-    budget["render_max_duration"] = render_maximum(video, budget)
-    budget["max_duration"] = min(budget["max_duration"], budget["render_max_duration"])
     roles = role_overrides(video, parameter_overrides(episode, video))
     budget["fps"] = generation_fps(video, budget["fps"], roles.get("fps"))
+    budget["render_max_duration"] = render_maximum(video, budget)
+    budget["max_duration"] = min(budget["max_duration"], budget["render_max_duration"])
     ceilings = dict(budget)
     budget.update(
         {role: roles[role] for role in ("width", "height", "fps", "batch", "seed") if role in roles}

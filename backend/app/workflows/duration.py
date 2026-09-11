@@ -6,6 +6,7 @@ from fractions import Fraction
 from app.core.errors import AppError
 from app.core.limits import MAX_SHOT_SECONDS
 from app.workflows.analyzer import check_value
+from app.workflows.frame_timing import frame_count, frame_seconds, generation_fps
 
 
 def duration_limits(episode: dict, capabilities: dict) -> dict:
@@ -17,14 +18,17 @@ def duration_limits(episode: dict, capabilities: dict) -> dict:
     }
 
 
-def fit_duration(profile: dict, seconds: float, maximum: float, *, round_down=False) -> float:
+def fit_duration(
+    profile: dict, seconds: float, maximum: float, *, round_down=False, fps=16
+) -> float:
     binding = profile.get("bindings", {}).get("duration", {})
-    if binding.get("transform", "identity") != "identity":
-        return seconds
     key = f"{binding.get('node_id')}.{binding.get('input')}"
     item = next((p for p in profile["parameters"] if p["key"] == key), None)
     if not item:
         return seconds
+    if binding.get("transform") == "duration_to_frames":
+        fps = generation_fps(profile, fps)
+        return fit_frame_duration(binding, item, seconds, maximum, fps, round_down=round_down)
     lower = max(1, item.get("min") or 1)
     upper = min(maximum, item["max"] if item.get("max") is not None else maximum)
     if item.get("enum"):
@@ -62,6 +66,37 @@ def fit_duration(profile: dict, seconds: float, maximum: float, *, round_down=Fa
     return max(valid) if round_down else min(valid)
 
 
+def fit_frame_duration(binding, item, seconds, maximum, fps, *, round_down):
+    requested = min(seconds, maximum) if round_down else seconds
+    try:
+        check_value(item, frame_count(binding, requested, fps))
+        if 1 <= requested <= maximum:
+            return requested
+    except AppError:
+        pass
+    candidates = []
+    # Product limits bound this scan to at most 3601 frames, independent of node maxima.
+    for frames in range(1, frame_count(binding, maximum, fps) + 1):
+        duration = frame_seconds(binding, frames, fps)
+        if not 1 <= duration <= maximum or frame_count(binding, duration, fps) != frames:
+            continue
+        if (round_down and duration > seconds) or (not round_down and duration < seconds):
+            continue
+        try:
+            check_value(item, frames)
+        except AppError:
+            continue
+        candidates.append(duration)
+    if not candidates:
+        raise AppError(
+            "WORKFLOW_INVALID",
+            f"视频帧数无可用值：参数 {item['key']} 在 {fps:g} FPS、最多 {maximum:g} 秒内"
+            f"无法满足 {seconds:g} 秒目标，请检查帧数范围、步长与绑定对齐",
+            {"parameter": item, "requested_seconds": seconds, "fps": fps, "max_seconds": maximum},
+        )
+    return max(candidates) if round_down else min(candidates)
+
+
 def uses_remote_video(profile: dict) -> bool:
     """Prefer live metadata; old persisted profiles retain verified API node identities."""
     if "remote_video" in profile:
@@ -80,4 +115,4 @@ def render_maximum(profile: dict, budget: dict | None = None) -> float:
         profile["capabilities"]["max_duration"],
         budget.get("render_max_duration", budget.get("max_duration", MAX_SHOT_SECONDS)),
     )
-    return fit_duration(profile, maximum, maximum, round_down=True)
+    return fit_duration(profile, maximum, maximum, round_down=True, fps=budget.get("fps", 16))

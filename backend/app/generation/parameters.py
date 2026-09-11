@@ -7,7 +7,7 @@ from app.core.limits import MAX_BATCH, MAX_DIMENSION, MAX_FPS, MAX_SHOT_SECONDS,
 from app.workflows.analyzer import check_value, validate_ai_parameters
 from app.workflows.dimensions import fit_dimensions
 from app.workflows.duration import fit_duration, render_maximum
-from app.workflows.frame_timing import generation_fps
+from app.workflows.frame_timing import frame_seconds, generation_fps
 from app.workflows.ownership import decorate_parameters, is_asset_role
 
 
@@ -86,11 +86,7 @@ def usable_ai_values(profile: dict, values: dict, *, stage_prompt=False) -> dict
 def duration_seconds(profile: dict, value, fps: float) -> float:
     binding = profile["bindings"].get("duration", {})
     if binding.get("transform") == "duration_to_frames":
-        value = (
-            value / binding["frame_fps"]
-            if binding.get("frame_fps")
-            else (value - binding.get("frame_offset", 1)) / fps
-        )
+        value = frame_seconds(binding, value, fps)
     return float(value)
 
 
@@ -188,7 +184,9 @@ def resolve_parameters(
     )
     if profile.get("media_type", profile.get("type")) == "video" and "duration" in values:
         timeline = values["duration"]
-        values["duration"] = fit_duration(profile, timeline, render_maximum(profile, budget))
+        fps = values.get("fps", 16)
+        maximum = render_maximum(profile, {**(budget or {}), "fps": fps})
+        values["duration"] = fit_duration(profile, timeline, maximum, fps=fps)
         values["timeline_duration"] = timeline
     sources = {}
     for item in profile["parameters"]:
