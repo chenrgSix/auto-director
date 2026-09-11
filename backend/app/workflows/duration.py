@@ -53,12 +53,24 @@ def fit_duration(profile: dict, seconds: float, maximum: float, *, round_down=Fa
     return max(valid) if round_down else min(valid)
 
 
+def uses_remote_video(profile: dict) -> bool:
+    """Prefer live metadata; old persisted profiles retain verified API node identities."""
+    if "remote_video" in profile:
+        return profile["remote_video"] is True
+    node_id = profile.get("bindings", {}).get("duration", {}).get("node_id")
+    node = profile.get("workflow", {}).get(node_id, {})
+    return profile.get("media_type", profile.get("type")) == "video" and any(
+        item.get("id") == node_id and item.get("class_type") == node.get("class_type")
+        for item in profile.get("execution_info", {}).get("api_nodes", [])
+    )
+
+
 def render_maximum(profile: dict, budget: dict | None = None) -> float:
     budget = budget or {}
     maximum = min(
         profile["capabilities"]["max_duration"],
         budget.get("render_max_duration", budget.get("max_duration", MAX_SHOT_SECONDS)),
     )
-    if budget.get("low_memory") and not profile.get("remote_video"):
+    if budget.get("low_memory") and not uses_remote_video(profile):
         maximum = min(maximum, 3)
     return fit_duration(profile, maximum, maximum, round_down=True)

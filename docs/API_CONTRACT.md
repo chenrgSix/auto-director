@@ -16,7 +16,7 @@ C16 替代 C15 的空值回退：生成阶段的 `prompt` 角色统一使用该�
 
 `POST /episodes/{id}/approve` 接收 `{expected_version}`（202），原子记录 `preview_approved_at` 并入队渲染。保存和确认都使用最新版本；配置变动返回 `PREVIEW_STALE`（409），更新 preview 后再确认。未经确认调用 generate/compose/镜头 retry/timeline 返回 `PREVIEW_REQUIRED`（409）。确认后的失败重试沿用原 generate 行为，已有提示词不会重新请求模型。
 
-Episode 的 `preview` 保存工作流版本、capability、时间线单镜 min/max、合法渲染上限和固定时长；Shot 保存 `preview_prompt_view` 与 `preview_edited_fields`。这些是现有 JSON 聚合的增量字段，旧记录缺省 `preview_required=false`，无需数据库表迁移或重算已有短片；旧客户端省略该字段仍可直接 generate。更换工作流清空预览及确认状态，保留历史作业和素材。
+Episode 的 `preview` 保存工作流版本、capability、时间线单镜 min/max、合法渲染上限、固定时长及 `remote_video` 执行方式。后者只在相同 workflow 版本下复用，旧记录按已验证的 duration API 节点身份兼容，避免保存时误套本地 3 秒上限。Shot 保存 `preview_prompt_view` 与 `preview_edited_fields`。这些是现有 JSON 聚合的增量字段，旧记录缺省 `preview_required=false`，无需数据库表迁移或重算已有短片；旧客户端省略该字段仍可直接 generate。更换工作流清空预览及确认状态，保留历史作业和素材。
 
 ### 模型测试（C09）
 

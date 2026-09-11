@@ -1,10 +1,17 @@
 # 验收记录
 
+## C17 云端预览保存与实际第 4、7、9 镜修复（2026-09-11）
+
+- 完整 `make check`：**304 passed**（63.75 秒），64 个 Python 文件 Ruff/格式及前端门禁全部通过。新增 11 项：已验证/未提前验证云端工作流的 5/90 秒预览保存、5 秒确认和实际夹具 patch；旧快照兼容、版本失效；实时本地标记、其他 API 节点、节点类型变化、仅 cloud 标签及缺失元数据均不能跳过显存限制。
+- 实际 `81006c7c-da6b-41bc-8ac9-4f4de8184490` 经现有 PATCH preview API 成功从 version=28 保存至 29，仍为 AWAITING_REVIEW。计划/Bible/预算/时长/标题/原始画面描述/LLM 指标不变，18×5=90 秒；重复动态 prompt 归档至各 Shot.legacy_ai_prompt_parameters。修复前后 JSON 和全库散列备份在 ignored `data/repairs/c16-preview-81006c7c/`，仅该 Episode 记录改变，其他短片、工作流、作业、资产保持原值。
+- 第 4、7、9 镜首帧/尾帧/视频提示词分别为 1054/936/1128、1160/1041/1280、1057/1162/1249 字符；9 次基于真实工作流的离线 resolver + deepcopy patch 验证通过。没有向 ComfyUI 提交任务，没有重新调用真实导演或配音模型；真实视觉质量与远端 CI 不在本次验收内。
+- 正式浏览器刷新后逐一选择第 4、7、9 镜，文本框长度与 API 一致，空 AI 提示消失，开始按钮可用，未点击开始。截图：[实际分镜修复](evidence/preview-shots-repaired.png)。
+
 ## C16 画面提示词来源与旁白分离（2026-09-11）
 
 - 完整 `make check`：**293 passed**（63.13 秒），63 个 Python 文件 Ruff/格式、前端 lint/typecheck/build 通过。新增 15 项 schema 重复角色拒绝/一次纠正、无旁白仍要求画面非空、首尾帧/视频/参考最终 patch、自定义 AI/高级覆盖、90 秒旧记录归档保存及原子回滚回归。
 - 隔离浏览器：旁白脚本独立标明尚未合成音频；修改视频画面提示词、保存并刷新后两者分别保留，开始按钮可用。截图：[旁白独立展示](evidence/preview-narration-separated.png)。未做真实模型质量或远端 CI 验收。
-- 正式 8000 已加载 C16；当前短片原始记录备份于 ignored `data/repairs/c16-preview-81006c7c/before.json`。实际保存被旧云端视频标识丢失问题拒绝（错误的 3 秒显存上限与工作流最低 4 秒冲突）；version=28、无渲染提交，实际修复保存待 C17 完成。
+- 正式 8000 已加载 C16；当前短片原始记录备份于 ignored `data/repairs/c16-preview-81006c7c/before.json`。首次保存被旧云端视频标识丢失问题拒绝（错误的 3 秒显存上限与工作流最低 4 秒冲突），失败未改动 version；随后由 C17 完成修复与实际保存。
 
 ## C15 空 AI 提示词与开始按钮修复（2026-09-11）
 

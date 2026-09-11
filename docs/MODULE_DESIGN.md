@@ -6,6 +6,8 @@ C16：`prompt` 角色只有阶段画面提示词一个生成来源；首帧、�
 
 新 Agent schema 仍严格限定 AI owner/type/min/max/enum，但不接受由阶段提示词自动绑定的 prompt 角色。上下文标明 workflow 的 media_type、capability 和 source。Shot 增加 narration_text（旧数据可缺省），只存旁白脚本，画面描述不得因无旁白而留空；页面单独展示并注明未合成音频。本轮不接入 TTS，不推断旧文本是否为旁白或改写已完成作业。
 
+C17：预览快照同时保存 `remote_video`，保存/确认时只在工作流版本匹配时复用此执行方式。旧快照缺失时，从已验证 `execution_info.api_nodes` 中核对 duration 绑定节点 ID 与 class_type；实时 `remote_video=false` 优先于缓存，不能仅凭 cloud 标签豁免本地显存限制。实际生成继续读取最新 ComfyUI 元数据，图片显存策略、workflow 上限和单镜时长校验不变。
+
 GenerationService 在现有队列中增加 preview 操作。沿用设备/节点检查、时长预算、Director、Bible 和 Shot Agent，在任何参考图/关键帧渲染前结束。逐镜保存提示词并显示进度，最后进入 AWAITING_REVIEW；重启保留待确认状态，取消或中断可以复用已有结果继续准备。网页不再创建后立即 generate。
 
 `generation/preview.py` 负责实际提示词视图、编辑和时长校验，复用 ParameterResolver 的工作流/显存/高级时长限制。编辑只接受现有镜头 ID 与顺序、标题、时长和三个正向提示词；同步 Shot 与 plan.shots。首帧连续复用、I2V 尾帧、用户指定素材和固定 prompt 标注不可修改原因。其他动态参数和负面/运动约束本轮只读。

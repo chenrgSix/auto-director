@@ -13,6 +13,7 @@ from app.generation.parameters import (
     usable_ai_values,
 )
 from app.workflows.analyzer import check_value
+from app.workflows.duration import uses_remote_video
 
 PROMPT_FIELDS = ("start_frame_prompt", "end_frame_prompt", "video_prompt")
 PROMPT_LABELS = dict(zip(PROMPT_FIELDS, ("首帧提示词", "尾帧提示词", "视频提示词"), strict=True))
@@ -85,6 +86,13 @@ def validate_review_prompts(episode, image, video):
 
 
 def validate_timing(episode, video):
+    snapshot = episode.get("preview") or {}
+    if (
+        "remote_video" not in video
+        and "remote_video" in snapshot
+        and snapshot.get("workflow_versions", {}).get(video["id"]) == video["version"]
+    ):
+        video = {**video, "remote_video": snapshot["remote_video"]}
     shots = episode["shots"]
     total = sum((Decimal(str(s["duration"])) for s in shots), Decimal(0))
     if abs(total - Decimal(str(episode["target_duration"]))) > Decimal("0.005"):
@@ -110,6 +118,7 @@ def prepare_review(episode, image, video, reference):
         "max_duration": episode["budget"]["max_duration"],
         "fixed_duration": episode.get("fixed_shot_duration"),
         "render_max_duration": episode["budget"]["render_max_duration"],
+        "remote_video": uses_remote_video(video),
     }
     validate_timing(episode, video)
     validate_review_prompts(episode, image, video)
