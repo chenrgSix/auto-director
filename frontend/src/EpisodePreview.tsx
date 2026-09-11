@@ -46,6 +46,9 @@ export function EpisodePreview({ episode, busy, setBusy, refresh, notify }: {
   const [dirty, setDirty] = useState(false);
   const [selected, setSelected] = useState(0);
   const [error, setError] = useState<string>();
+  if (!dirty && episode.version > base.version) {
+    setBase(episode); setEdits(editableShots(episode));
+  }
   const stale = episode.version > base.version;
   const preview = base.preview!;
   const total = edits.reduce((sum, shot) => sum + shot.duration, 0);

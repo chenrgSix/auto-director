@@ -3,17 +3,20 @@
 from copy import deepcopy
 from decimal import Decimal
 
+from app.agents.directing import generation_budget
 from app.agents.schemas import ShotPlan
 from app.core.errors import AppError
 from app.core.limits import MIN_SHOT_SECONDS
 from app.generation.parameters import (
+    duration_seconds,
     parameter_overrides,
     resolve_parameters,
     role_overrides,
     usable_ai_values,
+    validate_strategy,
 )
 from app.workflows.analyzer import check_value
-from app.workflows.duration import uses_remote_video
+from app.workflows.duration import render_maximum, uses_remote_video
 
 PROMPT_FIELDS = ("start_frame_prompt", "end_frame_prompt", "video_prompt")
 PROMPT_LABELS = dict(zip(PROMPT_FIELDS, ("首帧提示词", "尾帧提示词", "视频提示词"), strict=True))
@@ -175,3 +178,77 @@ def archive_duplicate_prompts(shot, *profiles):
                 mapping[profile["id"]] = usable
             else:
                 mapping.pop(profile["id"], None)
+
+
+def rebind_story(episode, image, video, reference):
+    """Reconcile an unrendered story locally; callers retain the previous state in history."""
+    snapshot = episode.get("preview") or {}
+    if (
+        "remote_video" in snapshot
+        and snapshot.get("workflow_versions", {}).get(video["id"]) == video["version"]
+    ):
+        video = {**video, "remote_video": snapshot["remote_video"]}
+    available = (episode.get("budget") or {}).get("vram_free", 0)
+    budget = generation_budget(
+        episode,
+        video["capabilities"],
+        {"devices": [{"vram_free": available}]},
+        remote_video=uses_remote_video(video),
+    )
+    budget["render_max_duration"] = render_maximum(video, budget)
+    budget["max_duration"] = min(budget["max_duration"], budget["render_max_duration"])
+    roles = role_overrides(video, parameter_overrides(episode, video))
+    ceilings = dict(budget)
+    budget.update(
+        {role: roles[role] for role in ("width", "height", "fps", "batch", "seed") if role in roles}
+    )
+    validate_strategy(
+        budget, budget["max_duration"], low_memory=budget["low_memory"], ceilings=ceilings
+    )
+    episode["budget"] = budget
+    episode["fixed_shot_duration"] = (
+        duration_seconds(video, roles["duration"], budget["fps"]) if "duration" in roles else None
+    )
+    for shot in episode["shots"]:
+        try:
+            resolve_parameters(
+                video,
+                {**budget, "duration": shot["duration"]},
+                {},
+                parameter_overrides(episode, video),
+                episode.get("advanced_mode", False),
+                budget,
+            )
+        except AppError as exc:
+            raise AppError(
+                "PREVIEW_INVALID",
+                f"第 {shot['index'] + 1} 镜「{shot['title']}」的 {shot['duration']:g} 秒与新工作流不兼容："
+                f"{exc.message}。原故事与工作流未改动，请先调整分镜或选择兼容的工作流。",
+                {"shot_id": shot["id"], "field": "duration", "cause": exc.as_dict()},
+            ) from exc
+    # AI values belong to a workflow/stage, not to node names reused by another workflow.
+    outputs = [(episode.get("bible"), (reference,))]
+    outputs += [(shot.get("prompts"), (image, video)) for shot in episode["shots"]]
+    for output, profiles in outputs:
+        if output is None:
+            continue
+        mapping = output.get("ai_parameters", {})
+        selected = {p["id"] for p in profiles}
+        for id in list(mapping):
+            if id not in selected:
+                mapping.pop(id)
+        for profile in profiles:
+            usable_ai_values(profile, mapping.get(profile["id"], {}), stage_prompt=True)
+    episode.update(
+        preview_required=True, preview_approved_at=None, error=None, queued_operation=None
+    )
+    if (
+        episode.get("bible")
+        and episode["shots"]
+        and all(s.get("prompts") for s in episode["shots"])
+    ):
+        prepare_review(episode, image, video, reference)
+        episode["status"] = "AWAITING_REVIEW"
+    else:
+        episode["preview"] = {"workflow_versions": workflow_versions((image, video, reference))}
+        episode["status"] = "DRAFT"

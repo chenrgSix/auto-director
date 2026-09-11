@@ -242,12 +242,15 @@ def test_preview_rejects_render_bypasses_and_workflow_drift(system):
     assert client.post(f"/api/v1/episodes/{id}/preview").status_code == 202
     refreshed = wait_preview(client, id)
     assert refreshed["status"] == "AWAITING_REVIEW"
-    assert refreshed["shots"][0]["id"] != episode["shots"][0]["id"]
+    assert refreshed["shots"][0]["id"] == episode["shots"][0]["id"]
+    assert refreshed["plan"] == episode["plan"]
+    assert refreshed["metrics"]["llm_calls"] == episode["metrics"]["llm_calls"]
     replacement = imported(app)
     changed = rebind(client, refreshed, image_workflow_id=replacement["id"]).json()
     assert (
         changed["preview_required"]
-        and changed["preview"] is None
+        and changed["status"] == "AWAITING_REVIEW"
+        and changed["preview"]["workflow_versions"][replacement["id"]] == replacement["version"]
         and not changed.get("preview_approved_at")
     )
     assert client.post(f"/api/v1/episodes/{id}/generate").status_code == 409

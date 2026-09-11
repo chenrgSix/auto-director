@@ -26,6 +26,7 @@ from app.generation.preview import (
     apply_edits,
     prepare_review,
     prompt_view,
+    rebind_story,
     require_current_preview,
     validate_review_prompts,
     validate_timing,
@@ -213,6 +214,7 @@ class GenerationService:
             selection = request.model_dump(exclude={"expected_version"})
             if all(episode.get(key) == value for key, value in selection.items()):
                 return
+            preserve_story = bool(episode.get("plan")) and not self.has_rendered_content(episode)
             profiles = [
                 self.router.select("image", request.image_workflow_id),
                 self.router.select("video", request.video_workflow_id),
@@ -283,10 +285,13 @@ class GenerationService:
             )
             episode.update(
                 **configuration,
-                **reset,
                 workflow_binding_revision=episode.get("workflow_binding_revision", 0) + 1,
                 workflow_binding_history=history,
             )
+            if preserve_story:
+                rebind_story(episode, *profiles)
+            else:
+                episode.update(reset)
 
         return self.store.update("episode", id, change)
 
@@ -323,6 +328,23 @@ class GenerationService:
                 return True
         return False
 
+    def has_rendered_content(self, episode):
+        return bool(
+            self.has_current_jobs(episode)
+            or episode.get("references")
+            or episode.get("final_video_asset_id")
+            or any(
+                shot.get(field)
+                for shot in episode.get("shots", [])
+                for field in (
+                    "start_frame_asset_id",
+                    "end_frame_asset_id",
+                    "actual_end_frame_asset_id",
+                    "video_asset_id",
+                )
+            )
+        )
+
     def check_review_state(self, episode, expected_version):
         if episode["version"] != expected_version:
             raise AppError("CONFLICT", "分镜已变更，请重新载入后再确认", status=409)
@@ -358,14 +380,16 @@ class GenerationService:
                 if (
                     episode["status"] in ACTIVE
                     or episode.get("preview_approved_at")
-                    or self.has_current_jobs(episode)
-                    or episode["references"]
+                    or self.has_rendered_content(episode)
                 ):
                     raise AppError("CONFLICT", "已开始渲染或任务尚未结束，不能重新预览", status=409)
                 profiles = self.preview_profiles(episode)
                 previous = episode.get("preview") or {}
                 if previous.get("workflow_versions") != workflow_versions(profiles):
-                    episode.update(plan=None, bible=None, shots=[], budget=None)
+                    if episode.get("plan"):
+                        rebind_story(episode, *profiles)
+                    else:
+                        episode.update(budget=None)
                 episode.update(
                     preview_required=True,
                     preview={"workflow_versions": workflow_versions(profiles)},

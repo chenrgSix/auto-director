@@ -12,7 +12,7 @@ GenerationService 在现有队列中增加 preview 操作。沿用设备/节点�
 
 `generation/preview.py` 负责实际提示词视图、编辑和时长校验，复用 ParameterResolver 的工作流/显存/高级时长限制。编辑只接受现有镜头 ID 与顺序、标题、时长和三个正向提示词；同步 Shot 与 plan.shots。首帧连续复用、I2V 尾帧、用户指定素材和固定 prompt 标注不可修改原因。其他动态参数和负面/运动约束本轮只读。
 
-保存和确认均在 SQLite 聚合事务中校验 expected_version。确认原子记录批准时间并入队；未经确认的 generate/compose/retry/timeline 入口被拦截。preview 保存工作流版本，配置变动后需更新预览；更新时重建失效计划，工作流重绑定清除当前预览和批准，但历史完成作业不阻止新绑定准备预览。旧 Episode 缺省不需要预览，没有表结构迁移。
+保存和确认均在 SQLite 聚合事务中校验 expected_version。确认原子记录批准时间并入队；未经确认的 generate/compose/retry/timeline 入口被拦截。preview 保存工作流版本，配置变动后需更新预览。C18 起未渲染故事通过 `rebind_story` 复用，更新预算、动态参数作用域及派生视图，不重写已有计划/提示词；清除批准、再次等待用户确认。旧绑定的历史作业不阻止新绑定保留故事。旧 Episode 缺省不需要预览，没有表结构迁移。
 
 确认后仍使用原生成、实际尾帧连续性、QA、OOM 和 FFmpeg 流程。已编辑提示词通过 Shot.preview_edited_fields 追踪，渲染时只排除对应 prompt 角色的重复 AI 值，防止覆盖用户预览修改；其他 AI-owned 参数保持，创建时的高级覆盖仍最高。普通重试和 OOM 视频分段同样保留该优先级。
 
@@ -42,11 +42,13 @@ Provider 每次调用复制配置，避免异步请求期间在线配置变动�
 
 `GenerationService.change_workflows` 在现有 Episode 原子更新中校验 `expected_version`、活动状态和未完成作业，然后经 CapabilityRouter 检查显式工作流身份、本地绑定和保留的高级覆盖。API 无网络等待，不调用 enqueue；表单保存后由用户单独继续生成。
 
-工作流切换可能改变单镜时长、素材条件与 AI 参数 schema，因此采用整体重置生成状态：旧状态存入 `workflow_binding_history`，当前 plan/bible/budget/shots/references/continuity/成片引用清空。原始创作参数与累计统计保留；旧作业、QA 与素材文件不删除，不改写已提交 ComfyUI JSON。历史快照不嵌套已有历史，避免递归膨胀。
+工作流切换先归档旧状态到 `workflow_binding_history`。C18 按当前绑定的作业及素材区分：未渲染且已有计划时，保留 plan/镜头 ID、顺序、时长、Bible 内容、提示词、旁白与用户编辑，只更新适用预算和预览。已渲染的记录仍重置当前生成状态，旧作业、QA、素材文件及提交 JSON 保留。历史快照不嵌套已有历史。
+
+新预算使用已保存的设备可用显存及当前配置计算，保留同版本云端视频执行方式，逐镜验证时长；不兼容时原子拒绝，不偷偷缩短镜头或重写故事。AI 映射按 Bible 的参考 workflow、Shot 的图像/视频 workflow 分别保留，旧模型节点值不迁移到新 ID；新模型未填写的可选自定义 AI 参数使用自身 workflow 默认值。原始映射仍在绑定历史，现存映射保持严格校验。新能力更新尾帧锁定等视图，素材生成时继续由 AssetResolver/Continuity 自动绑定。
 
 只保留仍被选中的 workflow ID 的 override，旧式 image/video 参数仅在对应媒体工作流未更换时保留；重新验证并计算允许的上传资产。`workflow_binding_revision` 为渲染 step_key 加前缀，防止图结构相同的新 profile 命中旧引用缓存；旧记录缺失版本继续原缓存语义。无需升级数据库或重做流水线架构。
 
-`EpisodeWorkflows.tsx` 提供名称概览、分媒体/能力选择和当前默认填充。默认填充点击时读取最新配置；编辑时保存 Episode 版本，不被定时刷新覆盖。运行/未完成作业时入口禁用，服务端仍独立校验；保存成功后详情回到 DRAFT，历史快照可在作业记录中查看。
+`EpisodeWorkflows.tsx` 提供名称概览、分媒体/能力选择和当前默认填充。默认填充点击时读取最新配置；编辑时保存 Episode 版本，不被定时刷新覆盖。运行/未完成作业时入口禁用，服务端仍独立校验；保存成功后，完整未渲染分镜保持待确认，其余按准备/重置分支处理；前端未编辑的预览自动载入新版本，未保存编辑继续保留并提示版本变化。
 
 ## C06 快速导入与 AI 建议
 

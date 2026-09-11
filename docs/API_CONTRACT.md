@@ -1,5 +1,7 @@
 # API 与工作流契约
 
+C18：`PATCH /episodes/{id}/workflows` 在已有故事但当前绑定尚无渲染作业/素材时，保留计划、镜头 ID/顺序/时长、视觉设定和创作提示词（含用户编辑与旁白脚本）。更新后完整分镜保持 `AWAITING_REVIEW`；未准备完成的内容可继续准备，已有内容不重写。新绑定的时长/覆盖/提示词不兼容时整笔拒绝并保留旧记录。换走的工作流专属 AI 参数仅从活动映射移除，原值保留在绑定历史；未更换的合法参数继续使用，不把旧节点值映射到新模型。保存不调用 LLM/ComfyUI、不自动确认或生成。已有渲染作业/素材时仍使用归档重置流程。
+
 ## 基础约定
 
 Base `/api/v1`，JSON；ID 由服务端生成；UTC ISO 时间。验证失败 422，不存在 404，状态冲突 409，外部执行失败提供可读 `error.code/message/details`。仅本地单用户使用，默认绑定 loopback；跨域与公网 ComfyUI 需要显式配置。
@@ -16,7 +18,7 @@ C16 替代 C15 的空值回退：生成阶段的 `prompt` 角色统一使用该�
 
 `POST /episodes/{id}/approve` 接收 `{expected_version}`（202），原子记录 `preview_approved_at` 并入队渲染。保存和确认都使用最新版本；配置变动返回 `PREVIEW_STALE`（409），更新 preview 后再确认。未经确认调用 generate/compose/镜头 retry/timeline 返回 `PREVIEW_REQUIRED`（409）。确认后的失败重试沿用原 generate 行为，已有提示词不会重新请求模型。
 
-Episode 的 `preview` 保存工作流版本、capability、时间线单镜 min/max、合法渲染上限、固定时长及 `remote_video` 执行方式。后者只在相同 workflow 版本下复用，旧记录按已验证的 duration API 节点身份兼容，避免保存时误套本地 3 秒上限。Shot 保存 `preview_prompt_view` 与 `preview_edited_fields`。这些是现有 JSON 聚合的增量字段，旧记录缺省 `preview_required=false`，无需数据库表迁移或重算已有短片；旧客户端省略该字段仍可直接 generate。更换工作流清空预览及确认状态，保留历史作业和素材。
+Episode 的 `preview` 保存工作流版本、capability、时间线单镜 min/max、合法渲染上限、固定时长及 `remote_video` 执行方式。后者只在相同 workflow 版本下复用，旧记录按已验证的 duration API 节点身份兼容，避免保存时误套本地 3 秒上限。Shot 保存 `preview_prompt_view` 与 `preview_edited_fields`。这些是现有 JSON 聚合的增量字段，旧记录缺省 `preview_required=false`，无需数据库表迁移或重算已有短片；旧客户端省略该字段仍可直接 generate。更换工作流更新预览并清除确认状态；未渲染故事保留，已有渲染结果按 C08/C18 分支处理，历史作业和素材保持。
 
 ### 模型测试（C09）
 
@@ -30,7 +32,7 @@ Episode 的 `preview` 保存工作流版本、capability、时间线单镜 min/m
 
 `PATCH /episodes/{id}/workflows` 接收 `expected_version`（详情响应的 version）及显式 `image_workflow_id`、`reference_workflow_id`、`video_workflow_id`。参考项必须为 TEXT_TO_IMAGE，其余按媒体类型校验；全部要求本地绑定完整，不请求 AI/ComfyUI。版本过期、Episode 运行或仍有 QUEUED/RUNNING/UNKNOWN 作业返回 409，失败不修改数据。
 
-实际更换时增加 `workflow_binding_revision`，旧绑定、计划/Bible、镜头/参考/成片与相关覆盖归档到 `workflow_binding_history[].previous_state`。当前生成状态重置为 DRAFT；启用预览的短片需再次 preview/approve，旧式短片可 generate 重新规划；保留 Idea/时长/比例/风格与历史作业/素材文件。仅保留仍选中工作流的覆盖；已换走媒体的旧式参数覆盖清空。相同 ID 提交不重置进度。渲染缓存按绑定版本隔离，旧数据缺失版本按 0 处理，无数据库迁移。
+实际更换时增加 `workflow_binding_revision`，旧绑定、计划/Bible、镜头/参考/成片与相关覆盖归档到 `workflow_binding_history[].previous_state`。C18 起，已有故事但当前绑定无渲染作业/素材时保留创作内容：完整分镜返回 AWAITING_REVIEW，部分准备结果保留并允许继续准备；需再次 approve，但不重新调用已完成的导演/Bible/Shot。若当前绑定已产生作业/素材，则沿用 DRAFT 与生成状态重置流程。仅保留仍选中工作流的覆盖，已换走媒体的旧式参数覆盖清空；AI 映射按阶段绑定筛选，不复制到新 ID。相同 ID 提交不重置进度。渲染缓存按绑定版本隔离，旧版本缺省 0，无数据库迁移。不兼容的镜头时长以 PREVIEW_INVALID 返回具体镜头，失败保留原记录。
 
 ## 已实现 API
 

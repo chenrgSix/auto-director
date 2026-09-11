@@ -42,8 +42,9 @@ export function EpisodeWorkflows({ episode, busy, locked, setBusy, onSaved, noti
     if (!draft) return;
     setBusy(true); setError(undefined);
     try {
-      await api(`/episodes/${episode.id}/workflows`, 'PATCH', draft);
-      setDraft(undefined); onSaved(); notify('工作流绑定已更新，点击“继续生成”按新配置重新规划');
+      const saved = await api<Episode>(`/episodes/${episode.id}/workflows`, 'PATCH', draft);
+      setDraft(undefined); onSaved();
+      notify(saved.shots.length ? '工作流已更换，故事与分镜已保留，请检查后确认生成' : '工作流已更新，可继续准备短片');
     } catch (error) { setError((error as Error).message); }
     finally { setBusy(false); }
   }
@@ -54,7 +55,8 @@ export function EpisodeWorkflows({ episode, busy, locked, setBusy, onSaved, noti
       {FIELDS.map(([key, label]) => <p className="muted" key={key}>{label}：{workflows.data?.find(item => item.id === episode[key])?.name || episode[key] || '未配置'}</p>)}
       <button disabled={busy || locked || !workflows.data} onClick={() => { setError(undefined); setDraft({ expected_version: episode.version, image_workflow_id: episode.image_workflow_id, reference_workflow_id: episode.reference_workflow_id, video_workflow_id: episode.video_workflow_id }); }}>更换工作流</button>
     </> : <>
-      <p className="muted">更换后将重置当前计划、视觉设定和生成结果，保留创作要求。旧计划、作业与素材保留在历史记录中；已换走工作流的高级参数覆盖会移除。保存后点击“继续生成”重新规划。</p>
+      <p className="muted">尚未开始渲染时，更换工作流会保留故事、分镜时长、视觉设定和已保存的提示词，只更新生成配置。新工作流不兼容时会提示原因，保留原配置。保存不会自动开始生成。</p>
+      <p className="muted">若当前配置已产生渲染作业或素材，更换将归档并重置当前计划及生成结果。已换走工作流的专属参数不会套用到新工作流。</p>
       <div className="fields two">{FIELDS.map(([key, label]) => <div className="field" key={key}>
         <label htmlFor={`episode-${key}`}>{label}</label>
         <select id={`episode-${key}`} disabled={busy || locked} value={draft[key] || ''} onChange={event => setDraft({ ...draft, [key]: event.target.value })}>
@@ -67,7 +69,7 @@ export function EpisodeWorkflows({ episode, busy, locked, setBusy, onSaved, noti
       <div className="actions">
         <button disabled={busy} onClick={() => setDraft(undefined)}>取消更换</button>
         <button disabled={busy || locked || !workflows.data} onClick={() => void defaults()}>使用当前默认</button>
-        <button className="primary" disabled={busy || locked || !changed || FIELDS.some(([key]) => !draft[key])} onClick={() => void save()}>保存绑定并重置计划</button>
+        <button className="primary" disabled={busy || locked || !changed || FIELDS.some(([key]) => !draft[key])} onClick={() => void save()}>保存工作流</button>
       </div>
     </>}
     {locked && <p className="muted">请先等待生成结束，或停止并核对未完成作业后再更换。</p>}
