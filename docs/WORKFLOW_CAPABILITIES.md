@@ -26,7 +26,7 @@ C11：Shot.duration 表示时间线长度，视频作业另记 timeline_duration
 
 ### C04 通用 AI 参数
 
-Bible/Shot 增加 `ai_parameters: {"workflow_id": {"node.field": value}}`。运行时按当前选定工作流的 AI owner 字段构造输出 schema，两层映射均禁止未知键，参数限制来自最新 object_info；本地严格检查 type/min/max/enum，拒绝数字字符串、布尔冒充数字、非有限数和错误 owner。Provider 沿用一次纠正机会，仍非法则返回 `LLM_INVALID_OUTPUT`。
+Bible/Shot 使用 `ai_parameters: {"workflow_id": {"node.field": value}}`。运行时按当前选定工作流的 AI owner 字段构造输出 schema，两层映射均禁止未知键，参数限制来自最新 object_info；本地严格检查 type/min/max/enum，拒绝数字字符串、布尔冒充数字、非有限数和错误 owner。Provider 沿用一次纠正机会，仍非法则返回 `LLM_INVALID_OUTPUT`。C16 起 `prompt` 角色由当前阶段的画面描述自动绑定，不再允许在映射中重复生成；首帧、尾帧、视频使用各自提示词，旁白进入独立的 `narration_text` 脚本字段。上下文提供 media_type/capability/source；其他 AI 参数和高级覆盖契约保持不变，旧重复映射由预览/渲染兼容过滤，保存时归档保留。
 
 ParameterResolver 将合法 AI 值覆盖旧语义自动值或工作流默认值，再应用高级用户覆盖。非角色参数经独立 AI 通道进入 deepcopy patch，不受用户 editable 锁影响；锁只控制用户覆盖。作业保存 `ai_parameter_values` 并纳入缓存签名，执行前按最新节点约束再次校验。旧 Bible/Shot/Job 无映射时按空值读取，继续使用原语义自动值及模板默认，无需重写已提交图或数据库迁移。
 

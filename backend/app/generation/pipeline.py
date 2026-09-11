@@ -546,22 +546,10 @@ class GenerationService:
             self.shot(episode["id"], shot_id).get("prompts") if shot_id else episode.get("bible")
         ) or {}
         generated = usable_ai_values(
-            profile, output.get("ai_parameters", {}).get(profile["id"], {})
+            profile,
+            output.get("ai_parameters", {}).get(profile["id"], {}),
+            stage_prompt="prompt" in values,
         )
-        if shot_id:
-            shot = self.shot(episode["id"], shot_id)
-            field = {
-                "SHOT_START_FRAME": "start_frame_prompt",
-                "SHOT_END_FRAME": "end_frame_prompt",
-                "SHOT_VIDEO": "video_prompt",
-                "VIDEO_SEGMENT": "video_prompt",
-            }.get(type)
-            if field in shot.get("preview_edited_fields", []):
-                # A reviewed prompt must not be replaced by a duplicate AI-owned role.
-                prompt_keys = {p["key"] for p in profile["parameters"] if p.get("role") == "prompt"}
-                generated = {
-                    key: value for key, value in generated.items() if key not in prompt_keys
-                }
         job = self.engine.create_job(
             profile,
             values,
@@ -698,7 +686,11 @@ class GenerationService:
                     self.check_cancel(id)
                     if not shot["prompts"]:
                         prompts = await agents.shot(
-                            episode["bible"], shot, continuity, ai_parameters(image, video)
+                            episode["bible"],
+                            shot,
+                            continuity,
+                            ai_parameters(image, video),
+                            idea=episode["idea"],
                         )
                         shot = self.update_shot(
                             id, shot["id"], prompts=prompts.model_dump(mode="json")
@@ -840,7 +832,11 @@ class GenerationService:
             shot = self.update_shot(id, sid, **frame_changes)
         if not shot["prompts"]:
             prompts = await agents.shot(
-                episode["bible"], shot, continuity, ai_parameters(image, video)
+                episode["bible"],
+                shot,
+                continuity,
+                ai_parameters(image, video),
+                idea=episode["idea"],
             )
             shot = self.update_shot(id, sid, prompts=prompts.model_dump(mode="json"))
         prompts = shot["prompts"]

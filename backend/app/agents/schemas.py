@@ -1,7 +1,7 @@
 from enum import StrEnum
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from app.core.limits import (
     MAX_EPISODE_SECONDS,
@@ -70,14 +70,41 @@ class VisualBible(StrictModel):
 
 class ShotPrompts(StrictModel):
     ai_parameters: dict[str, dict[str, Any]] = Field(default_factory=dict)
-    image_prompt: str = Field(min_length=1, max_length=6000)
-    start_frame_prompt: str = Field(min_length=1, max_length=6000)
-    end_frame_prompt: str = Field(min_length=1, max_length=6000)
-    video_prompt: str = Field(min_length=1, max_length=6000)
+    image_prompt: str = Field(
+        min_length=1, max_length=6000, description="Visual image description, never narration."
+    )
+    start_frame_prompt: str = Field(
+        min_length=1, max_length=6000, description="Visual state at the start of this shot."
+    )
+    end_frame_prompt: str = Field(
+        min_length=1,
+        max_length=6000,
+        description="Visual state at the end, distinct from the start.",
+    )
+    video_prompt: str = Field(
+        min_length=1,
+        max_length=6000,
+        description="Visible action and camera motion over this shot.",
+    )
+    narration_text: str = Field(
+        default="",
+        max_length=2000,
+        description=(
+            "Optional spoken narration script in the user's language, separate from visual prompts. "
+            "Empty for a silent shot or when narration was not requested. This does not render audio."
+        ),
+    )
     negative_prompt: str = Field(min_length=1, max_length=4000)
     motion_strength: float = Field(ge=0, le=1)
     camera_motion: str = Field(min_length=1, max_length=300)
     continuity_state: dict[str, str] = Field(default_factory=dict)
+
+    @field_validator("image_prompt", "start_frame_prompt", "end_frame_prompt", "video_prompt")
+    @classmethod
+    def nonblank_visual_prompt(cls, value):
+        if not value.strip():
+            raise ValueError("Visual prompts must not be blank, even when narration is silent")
+        return value
 
 
 class QAResult(StrictModel):

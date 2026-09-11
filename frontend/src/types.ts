@@ -31,7 +31,7 @@ export type QA = { stage: string; character_consistency: number; scene_consisten
 export type Shot = {
   id: string; title: string; index: number; duration: number; enabled: boolean; status: string; action: string; camera: string;
   transition_from_previous: string; start_frame_asset_id: string | null; end_frame_asset_id: string | null; video_asset_id: string | null;
-  prompts: { start_frame_prompt: string; end_frame_prompt: string; video_prompt: string; negative_prompt: string; camera_motion?: string; motion_strength?: number; ai_parameters?: Record<string, Record<string, Value>> } | null;
+  prompts: { start_frame_prompt: string; end_frame_prompt: string; video_prompt: string; negative_prompt: string; narration_text?: string; camera_motion?: string; motion_strength?: number; ai_parameters?: Record<string, Record<string, Value>> } | null;
   preview_prompt_view?: { values: Record<PreviewPromptField, string>; locked: Partial<Record<PreviewPromptField, string>>; hints?: Partial<Record<PreviewPromptField, string>> };
   error: Problem | null; qa: QA[];
 };

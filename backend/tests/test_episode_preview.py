@@ -62,6 +62,8 @@ def edits(episode):
 
 
 class PromptProvider(CreativeProvider):
+    """Replay legacy AI output that predates the stage-prompt schema constraint."""
+
     async def generate_json(self, system, context, schema, *, images=None):
         result = await super().generate_json(system, context, schema, images=images)
         if issubclass(schema, ShotPrompts):
@@ -69,7 +71,7 @@ class PromptProvider(CreativeProvider):
             for item in context["workflow_parameters"]:
                 if item["role"] == "prompt":
                     mapping.setdefault(item["workflow_id"], {})[item["key"]] = "AI role prompt"
-            result = schema.model_validate({**result.model_dump(), "ai_parameters": mapping})
+            result = ShotPrompts.model_validate({**result.model_dump(), "ai_parameters": mapping})
         return result
 
 
@@ -83,7 +85,10 @@ def test_preview_is_render_free_edits_reach_patch_and_approval_reuses_plan(syste
     assert not episode["references"] and not app.state.store.list("asset", id)
     assert not app.state.store.list("job", id) and not comfy.prompts
     assert all(method == "GET" for method, _ in comfy.calls)
-    assert episode["shots"][0]["preview_prompt_view"]["values"]["video_prompt"] == "AI role prompt"
+    assert (
+        episode["shots"][0]["preview_prompt_view"]["values"]["video_prompt"]
+        == episode["shots"][0]["prompts"]["video_prompt"]
+    )
     assert "start_frame_prompt" in episode["shots"][1]["preview_prompt_view"]["locked"]
     body = edits(episode)
     body["shots"][0].update(
@@ -344,7 +349,7 @@ def test_blank_ai_prompt_uses_prepared_prompts_in_preview_and_final_patch(system
                 data = result.model_dump()
                 for values in data["ai_parameters"].values():
                     values["positive.text"] = blank
-                return schema.model_validate(data)
+                return ShotPrompts.model_validate(data)
             return result
 
     app.state.generation.provider_factory = BlankPromptProvider

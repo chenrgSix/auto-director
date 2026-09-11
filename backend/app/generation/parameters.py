@@ -25,6 +25,9 @@ def ai_parameters(*profiles: dict) -> list[dict]:
     return [
         {
             "workflow_id": profile["id"],
+            "media_type": profile.get("media_type", profile.get("type")),
+            "capability": profile.get("capability"),
+            "source": "stage_prompt" if item.get("role") == "prompt" else "ai_parameters",
             **{
                 key: item.get(key)
                 for key in ("key", "field", "role", "owner", "type", "min", "max", "enum")
@@ -60,18 +63,21 @@ def role_overrides(profile: dict, overrides: dict) -> dict:
     }
 
 
-def usable_ai_values(profile: dict, values: dict) -> dict:
-    """An empty optional AI prompt cannot erase the prepared shot/reference prompt.
+def usable_ai_values(profile: dict, values: dict, *, stage_prompt=False) -> dict:
+    """Stage prompts have one source; a legacy AI mapping cannot replace them.
 
     Validate first so filtering never hides unknown keys, wrong owners or invalid types.
-    Other blank fields and explicit user overrides retain their existing semantics.
+    Without a stage prompt, retain the legacy blank-only fallback. Custom AI parameters
+    and explicit user overrides retain their existing semantics.
     """
     validate_ai_parameters(profile, values)
     prompt_keys = {p["key"] for p in profile["parameters"] if p.get("role") == "prompt"}
     return {
         key: value
         for key, value in values.items()
-        if not (key in prompt_keys and isinstance(value, str) and not value.strip())
+        if not (
+            key in prompt_keys and (stage_prompt or (isinstance(value, str) and not value.strip()))
+        )
     }
 
 

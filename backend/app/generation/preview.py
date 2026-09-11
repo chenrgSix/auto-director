@@ -35,12 +35,16 @@ def prompt_view(episode, shot, image, video):
         role = "prompt"
         parameters = [p for p in profile["parameters"] if p.get("role") == role]
         generated = shot["prompts"].get("ai_parameters", {}).get(profile["id"], {})
-        usable = usable_ai_values(profile, generated)
+        usable_ai_values(profile, generated, stage_prompt=True)
         value = shot["prompts"][field]
-        if field not in shot.get("preview_edited_fields", []):
-            value = role_overrides(profile, usable).get(role, value)
-            if generated.keys() != usable.keys():
-                hints[field] = f"AI 动态提示词为空，已使用本镜的{PROMPT_LABELS[field]}。"
+        duplicates = [generated[p["key"]] for p in parameters if p["key"] in generated]
+        if duplicates:
+            reason = (
+                "AI 动态提示词为空"
+                if all(not v.strip() for v in duplicates)
+                else "旧动态提示词重复"
+            )
+            hints[field] = f"{reason}，已使用本镜的{PROMPT_LABELS[field]}。"
         overrides = role_overrides(profile, parameter_overrides(episode, profile))
         values[field] = overrides.get(role, value)
         if not parameters or any(
@@ -138,9 +142,27 @@ def apply_edits(episode, request, image, video):
         if not item.title.strip():
             raise AppError("PREVIEW_INVALID", "镜头标题不能为空")
         shot.update(title=item.title, duration=item.duration, preview_edited_fields=sorted(edited))
+        archive_duplicate_prompts(shot, image, video)
         shot["preview_prompt_view"] = prompt_view(episode, shot, image, video)
     validate_timing(episode, video)
     validate_review_prompts(episode, image, video)
     episode["plan"]["shots"] = [
         {key: deepcopy(shot[key]) for key in ShotPlan.model_fields} for shot in episode["shots"]
     ]
+
+
+def archive_duplicate_prompts(shot, *profiles):
+    """Persist the repaired mapping on explicit save, retaining original AI output."""
+    mapping = shot["prompts"].get("ai_parameters", {})
+    for profile in profiles:
+        generated = mapping.get(profile["id"], {})
+        usable = usable_ai_values(profile, generated, stage_prompt=True)
+        removed = {key: value for key, value in generated.items() if key not in usable}
+        if removed:
+            shot.setdefault("legacy_ai_prompt_parameters", {}).setdefault(profile["id"], {}).update(
+                removed
+            )
+            if usable:
+                mapping[profile["id"]] = usable
+            else:
+                mapping.pop(profile["id"], None)

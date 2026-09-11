@@ -2,7 +2,9 @@
 
 ## C14 分镜预览与确认
 
-C15：`usable_ai_values` 在校验原始 AI 映射后，只忽略 prompt 角色的空/纯空白字符串。`prompt_view` 和 GenerationService.render 共用此函数，保证显示与最终 patch 都回退到已准备的分镜/参考提示词；不改写存储中的原始 AI 输出，显式用户覆盖仍最高。详情读取只刷新同一工作流版本下的派生视图，旧空预览无需重跑。保存/确认检查实际必填提示词，锁定或未使用输入不阻塞；前端错误列表精确到镜头与字段。
+C16：`prompt` 角色只有阶段画面提示词一个生成来源；首帧、尾帧、视频及各参考资产分别取对应描述，再加入 Visual Bible/连续性约束。`usable_ai_values(stage_prompt=True)` 先校验旧 AI 映射，再移除重复 prompt（含非空旁白），其他自定义参数继续进入 ParameterResolver，用户高级覆盖最高。Bible 的原始 AI 映射不嵌入画面文本，避免污染参考图。预览 GET 只读兼容；显式保存时将重复项归档到 Shot.legacy_ai_prompt_parameters，更新持久化视图，失败整笔回滚，计划/时长保持。
+
+新 Agent schema 仍严格限定 AI owner/type/min/max/enum，但不接受由阶段提示词自动绑定的 prompt 角色。上下文标明 workflow 的 media_type、capability 和 source。Shot 增加 narration_text（旧数据可缺省），只存旁白脚本，画面描述不得因无旁白而留空；页面单独展示并注明未合成音频。本轮不接入 TTS，不推断旧文本是否为旁白或改写已完成作业。
 
 GenerationService 在现有队列中增加 preview 操作。沿用设备/节点检查、时长预算、Director、Bible 和 Shot Agent，在任何参考图/关键帧渲染前结束。逐镜保存提示词并显示进度，最后进入 AWAITING_REVIEW；重启保留待确认状态，取消或中断可以复用已有结果继续准备。网页不再创建后立即 generate。
 

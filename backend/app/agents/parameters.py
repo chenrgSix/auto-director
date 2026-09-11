@@ -9,7 +9,7 @@ from app.workflows.analyzer import validate_ai_parameters
 def constrained_output(base, specifications: list[dict]):
     workflows = {}
     for item in specifications:
-        if item["owner"] == "ai":
+        if item["owner"] == "ai" and item.get("role") != "prompt":
             workflows.setdefault(item["workflow_id"], {})[item["key"]] = item
     properties = {}
     for workflow_id, parameters in workflows.items():
@@ -60,6 +60,11 @@ def constrained_output(base, specifications: list[dict]):
             dict[str, dict[str, object]],
             Field(
                 default_factory=dict,
+                description=(
+                    "Additional AI-owned workflow inputs only. The prompt role is supplied "
+                    "automatically from the current stage's visual prompt; never duplicate it "
+                    "here or use it for narration."
+                ),
                 json_schema_extra={"properties": properties, "additionalProperties": False},
             ),
         ),

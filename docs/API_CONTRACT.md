@@ -6,7 +6,7 @@ Base `/api/v1`，JSON；ID 由服务端生成；UTC ISO 时间。验证失败 42
 
 ### 分镜预览与确认（C14）
 
-C15 兼容修复：空/纯空白的 AI-owned `prompt` 不再覆盖已准备的逐镜/参考提示词；预览与渲染使用同一规则。先验证 AI 参数身份和类型，再排除这一角色的空白值，不吞掉非法参数；其他字段（包括允许为空的 negative）和显式用户覆盖保持原值。详情 GET 只读刷新旧待确认记录的 `preview_prompt_view`，其中 `hints` 解释回退，不改变 version、原计划或 AI 输出。
+C16 替代 C15 的空值回退：生成阶段的 `prompt` 角色统一使用该阶段的分镜/参考画面提示词，旧 AI 映射中的同角色值（包括非空旁白）不能覆盖它。先验证旧映射的身份和类型再排除重复项，其他动态字段和高级用户覆盖保持原值。新 Agent schema 不允许重复填写 `prompt` 角色，`ShotPrompts.narration_text` 单独保存旁白脚本（旧记录缺省为空；不表示已生成配音）。详情 GET 只读刷新派生视图，不改变版本；保存预览时将重复项归档至 `shots[].legacy_ai_prompt_parameters`，保留原始内容，刷新持久化视图，沿用版本与状态保护。
 
 真正缺少可编辑提示词时，保存/确认返回 `PREVIEW_INVALID`，message 包含镜头编号、标题和字段，details 包含 `shot_id/field`。未使用或锁定的提示词允许保留空值，不能通过编辑接口改变锁定值。网页校验区分别显示总时长差额、每镜时长范围和具体字段错误，支持定位镜头。
 
@@ -135,7 +135,7 @@ Episode 状态遵循原文 §36；增加 `QUEUED` 表示已入队，`PREPARING_P
 
 `GET /settings` 同时提供只读 `limits` 和 `default_capabilities`。`GET /jobs` 返回 `requested_parameter_values` 与 `parameter_sources`，记录实际参数来自 user、对应 owner 或 OOM 强制降级；提交图与内部 profile_snapshot 仍不直接公开。
 
-Agent 的 Bible/Shot 输出增加 `ai_parameters: {"workflow_id":{"node.field":value}}`，只能包含当前上下文内 owner=ai 的参数。严格校验失败返回 `LLM_INVALID_OUTPUT`，高级用户 override 不能掩盖非法 AI 输出。Episode 读取保留该映射；旧记录缺省为空。I2V 的 `end_frame_asset_id` 可为空，其 `actual_end_frame_asset_id` 仍是实际视频提取的尾帧。
+Agent 的 Bible/Shot 输出使用 `ai_parameters: {"workflow_id":{"node.field":value}}`，只能包含当前上下文内 owner=ai 且非自动阶段 prompt 的参数。严格校验失败返回 `LLM_INVALID_OUTPUT`，高级用户 override 不能掩盖非法 AI 输出。Episode 读取保留该映射；旧记录缺省为空。I2V 的 `end_frame_asset_id` 可为空，其 `actual_end_frame_asset_id` 仍是实际视频提取的尾帧。
 
 C04 路由不增加必填请求字段：显式 image/video/reference_workflow_id 优先；省略时通过 `default_capabilities` 解析默认项，旧媒体默认项保留能力选择及同能力回退语义。创建响应中保存最终 ID，生成时不随默认项变化重新选型。reference_workflow_id 始终要求 TEXT_TO_IMAGE。
 

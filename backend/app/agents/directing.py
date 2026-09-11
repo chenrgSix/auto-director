@@ -290,7 +290,9 @@ class Directors:
             "Act as Bible Agent. Specify distinct, stable character identities, environment, visual style, "
             "lighting and continuity rules for this episode only. Preserve the exact subject count in the idea. "
             "Fill ai_parameters[workflow_id][parameter_key] for the listed AI-owned parameters, "
-            "respecting their types, bounds and enums. Never fill unlisted workflows or parameters.",
+            "respecting their types, bounds and enums. Never fill unlisted workflows or parameters. "
+            "Inputs with source=stage_prompt are supplied automatically for each reference image; "
+            "do not put them in ai_parameters. Keep narration out of visual descriptions.",
             {
                 "idea": episode["idea"],
                 "style": episode["style"],
@@ -301,7 +303,7 @@ class Directors:
         )
 
     async def shot(
-        self, bible: dict, shot: dict, continuity: dict, workflow_parameters=None
+        self, bible: dict, shot: dict, continuity: dict, workflow_parameters=None, *, idea=""
     ) -> ShotPrompts:
         return await self.provider.generate_json(
             "Act as Shot Agent. Build actionable image/start/end/video/negative prompts. "
@@ -309,8 +311,16 @@ class Directors:
             "Describe one action, camera, light, identity and negative constraints. Prompts should be in English. "
             "Respect the AI-owned workflow parameter types, ranges and enum options. "
             "Fill ai_parameters[workflow_id][parameter_key] for the listed parameters only. "
+            "Inputs with source=stage_prompt are supplied automatically from start_frame_prompt, "
+            "end_frame_prompt or video_prompt according to the render stage; never put these "
+            "prompt-role inputs in ai_parameters. Respect each workflow's media_type and capability. "
+            "Visual prompts must describe visible subjects, scene and motion, never spoken narration "
+            "or a narrator's voice. If the idea requests narration, put the spoken script only in "
+            "narration_text, in the user's language, short enough for this shot's duration. "
+            "A silent shot may have empty narration_text but must still have complete visual prompts. "
             "continuity_state describes the expected subject position, direction, environment and time at the end.",
             {
+                "idea": idea,
                 "bible": bible,
                 "shot": shot,
                 "continuity": continuity,
@@ -339,7 +349,10 @@ class Directors:
 def anchored_prompt(bible: dict, prompt: str, continuity: dict) -> str:
     return "\n\n".join(
         [
-            "Episode visual bible: " + json.dumps(bible, ensure_ascii=False),
+            "Episode visual bible: "
+            + json.dumps(
+                {k: v for k, v in bible.items() if k != "ai_parameters"}, ensure_ascii=False
+            ),
             prompt,
             "Continuity constraints: " + json.dumps(continuity, ensure_ascii=False),
         ]
