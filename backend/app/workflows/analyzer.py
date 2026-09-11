@@ -7,6 +7,7 @@ from typing import Any
 
 from app.core.errors import AppError
 from app.core.limits import MAX_SHOT_SECONDS
+from app.workflows.frame_timing import generation_fps
 from app.workflows.ownership import (
     canonicalize,
     decorate_parameters,
@@ -394,6 +395,13 @@ def patch(
     issues = validate_bindings(profile)
     if issues:
         raise AppError("WORKFLOW_INVALID", "工作流绑定无效", issues)
+    values = dict(values)
+    if profile["bindings"].get("duration", {}).get("frame_fps"):
+        fps_binding = profile["bindings"].get("fps", {})
+        fps_override = (parameter_values or {}).get(
+            f"{fps_binding.get('node_id')}.{fps_binding.get('input')}"
+        )
+        values["fps"] = generation_fps(profile, values.get("fps", 16), fps_override)
     graph = deepcopy(profile["workflow"])
     decorated = deepcopy(profile)
     decorate_parameters(decorated)

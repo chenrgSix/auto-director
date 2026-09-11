@@ -52,6 +52,7 @@ from app.generation.workflow_state import (
 from app.media.service import Assets, compose, extract_frame
 from app.workflows.analyzer import refresh_profile, validate_bindings
 from app.workflows.duration import render_maximum
+from app.workflows.frame_timing import generation_fps
 from app.workflows.ownership import is_asset_role
 from app.workflows.router import CapabilityRouter
 from app.workflows.schema import WorkflowCapability
@@ -743,6 +744,7 @@ class GenerationService:
                 video, parameter_overrides(episode, video), episode.get("advanced_mode", False)
             )
             override_roles = role_overrides(video, parameter_overrides(episode, video))
+            budget["fps"] = generation_fps(video, budget["fps"], override_roles.get("fps"))
             ceilings = dict(budget)
             budget.update(
                 {

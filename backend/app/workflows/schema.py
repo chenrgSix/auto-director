@@ -39,7 +39,15 @@ class Binding(BaseModel):
     input: str
     transform: Literal["identity", "duration_to_frames"] = "identity"
     frame_multiple: int = Field(default=4, ge=1, le=32)
-    frame_offset: int = Field(default=1, ge=0, le=1)
+    frame_offset: int = Field(default=1, ge=0, le=31)
+    # Optional model timebase, e.g. native audio/video models fixed at 24 FPS.
+    frame_fps: int | None = Field(default=None, ge=1, le=120)
+
+    @model_validator(mode="after")
+    def validate_frame_clock(self):
+        if self.frame_fps is not None and self.transform != "duration_to_frames":
+            raise ValueError("固定生成帧率仅用于帧数转换")
+        return self
 
 
 class Capabilities(BaseModel):

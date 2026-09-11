@@ -6,6 +6,7 @@ from app.core.errors import AppError
 from app.core.limits import MAX_BATCH, MAX_DIMENSION, MAX_FPS, MAX_SHOT_SECONDS, MIN_DIMENSION
 from app.workflows.analyzer import check_value, validate_ai_parameters
 from app.workflows.duration import fit_duration, render_maximum
+from app.workflows.frame_timing import generation_fps
 from app.workflows.ownership import decorate_parameters, is_asset_role
 
 
@@ -84,7 +85,11 @@ def usable_ai_values(profile: dict, values: dict, *, stage_prompt=False) -> dict
 def duration_seconds(profile: dict, value, fps: float) -> float:
     binding = profile["bindings"].get("duration", {})
     if binding.get("transform") == "duration_to_frames":
-        value = (value - binding.get("frame_offset", 1)) / fps
+        value = (
+            value / binding["frame_fps"]
+            if binding.get("frame_fps")
+            else (value - binding.get("frame_offset", 1)) / fps
+        )
     return float(value)
 
 
@@ -129,6 +134,8 @@ def resolve_parameters(
     values, bound_assets, raw = dict(automatic), dict(assets), dict(overrides)
     values.update(role_overrides(profile, ai_values or {}))
     roles = role_overrides(profile, overrides)
+    if profile.get("bindings", {}).get("duration", {}).get("frame_fps"):
+        values["fps"] = generation_fps(profile, values.get("fps", 16), roles.get("fps"))
     for role, value in roles.items():
         if is_asset_role(role):
             if not (recovery and role in {"start_frame", "end_frame"} and assets.get(role)):

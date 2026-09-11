@@ -1,5 +1,11 @@
 # 验收记录
 
+## C22 帧数与固定生成 FPS（2026-09-11）
+
+- 完整 `make check` 为 **367 passed**，87.12 秒；Ruff/格式、ESLint、TypeScript、构建通过。6 项新增回归覆盖 1/3/5 秒→39/73/124 帧、24 FPS 保存、deepcopy、参数冲突、旧 4n+1 兼容、零渲染预览和确认后 5 秒 FFmpeg 成片。
+- 实际 `MiniMaxH3AudioConditioningT8.length` 节点元数据明确 `24fps; snapped up to the 17n+5 H3 grid`，与作者 features.json 一致；13 类节点与模型依赖检查通过。使用实际图预检 5 秒→124 帧、CreateVideo.fps=24，零 POST /prompt。
+- 通过 8000 页面选择 6.length，填入倍数 17、偏移 5、固定 FPS 24，保存成功；「首尾帧-MiniMax-真」version=3、binding_issues=[]。全库散列比较只有该 Workflow 改变，短片/资产/默认工作流不变。备份与预检在忽略目录 data/repairs/c22-frame-clock/。未新做真实模型生成与画质验收。
+
 ## C21 重连与重跑收尾（2026-09-11）
 
 - 最终 `make check`：Ruff/格式、ESLint、TypeScript、Vite 构建通过；pytest **361 passed**，86.17 秒。新增 8 项连接恢复与 11 项重跑回归。

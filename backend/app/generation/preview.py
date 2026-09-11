@@ -18,6 +18,7 @@ from app.generation.parameters import (
 from app.generation.workflow_state import scope_ai_parameters
 from app.workflows.analyzer import check_value
 from app.workflows.duration import duration_limits, render_maximum, uses_remote_video
+from app.workflows.frame_timing import generation_fps
 
 PROMPT_FIELDS = ("start_frame_prompt", "end_frame_prompt", "video_prompt")
 PROMPT_LABELS = dict(zip(PROMPT_FIELDS, ("首帧提示词", "尾帧提示词", "视频提示词"), strict=True))
@@ -212,6 +213,7 @@ def rebind_story(episode, image, video, reference):
     budget["render_max_duration"] = render_maximum(video, budget)
     budget["max_duration"] = min(budget["max_duration"], budget["render_max_duration"])
     roles = role_overrides(video, parameter_overrides(episode, video))
+    budget["fps"] = generation_fps(video, budget["fps"], roles.get("fps"))
     ceilings = dict(budget)
     budget.update(
         {role: roles[role] for role in ("width", "height", "fps", "batch", "seed") if role in roles}

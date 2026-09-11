@@ -35,6 +35,7 @@ export function WorkflowEditor({ workflow, isDefault, notify, refresh, maxShotSe
   const dirty = Object.entries(changes).some(([key, value]) => JSON.stringify(value) !== JSON.stringify(saved[key as keyof Workflow]));
   useEffect(() => onDirtyChange(dirty), [dirty, onDirtyChange]);
   const draft = {...saved, capabilities: caps, capability, parameter_values: parameters};
+  const testFps = bindings.duration?.frame_fps ?? 16;
   const required = requiredRoles(capability);
   if (caps.supports_video_reference && workflow.media_type === 'video') required.push('reference_video');
   const missing = required.filter(role => !bindingReady(draft, bindings, role)).map(roleLabel);
@@ -114,7 +115,7 @@ export function WorkflowEditor({ workflow, isDefault, notify, refresh, maxShotSe
       await persist();
       const checked = await api<Workflow>(`/workflows/${workflow.id}/validate`, 'POST'); acceptWorkflow(checked); refresh();
       if (!checked.validation?.valid) { setError('请先处理上方检查结果，再试跑。'); return; }
-      const job = await api<Job>(`/workflows/${workflow.id}/test-run`, 'POST', {values: {prompt: testPrompt, duration: testDuration, fps: 16}, asset_bindings: testAssets});
+      const job = await api<Job>(`/workflows/${workflow.id}/test-run`, 'POST', {values: {prompt: testPrompt, duration: testDuration, fps: testFps}, asset_bindings: testAssets});
       setJobId(job.id); refresh(); notify('试跑已进入渲染队列');
     } catch (reason) { failure(reason); }
     finally { setBusy(false); }
@@ -137,7 +138,7 @@ export function WorkflowEditor({ workflow, isDefault, notify, refresh, maxShotSe
     <section className="panel workflow-pane" role="tabpanel" id="pane-checks" aria-labelledby="tab-checks" data-pane="checks" hidden={pane !== 'checks'}>
       <div className="execution-info"><h3>{saved.execution_info?.mode === 'cloud' ? '包含云端 API 节点' : saved.execution_info?.mode === 'local' ? '已检查：未发现 ComfyUI 云端 API 节点' : '运行方式尚未确认'}</h3><p>{saved.execution_info?.mode === 'cloud' ? 'ComfyUI 虽然部署在本地，这些节点仍调用云端服务，可能要求登录或 API 密钥。若要本地生成，请选用本地模型节点的工作流。' : saved.execution_info?.mode === 'local' ? '当前节点元数据未标记云端 API。模型是否安装、节点是否可用，请查看下面的依赖检查。第三方节点的外部服务需按其自身说明确认。' : '点击下方检查，从 ComfyUI 的节点元数据确认；不会根据工作流或模型名称猜测。'}</p>{saved.execution_info?.api_nodes.map(node => <small key={node.id}>{node.title} · {node.class_type}（{node.id}）</small>)}</div>
       <WorkflowReadiness workflow={saved} dirty={dirty} busy={busy} onCheck={() => void save(true)} onLocate={locate} />
-      <div className="test-panel capabilities" data-test-inputs><h3>试跑验证</h3><p className="muted">以下操作会提交真实生成任务。先检查配置，再提供测试描述与素材。</p><div className="field"><label htmlFor="test-prompt">测试画面描述</label><textarea id="test-prompt" rows={3} value={testPrompt} onChange={event => setTestPrompt(event.target.value)} /></div>{workflow.media_type === 'video' && <div className="field"><label htmlFor="test-duration">试跑时长（秒，16 FPS）</label><input id="test-duration" type="number" required min={1} max={caps.max_duration} step={0.1} value={testDuration} onChange={event => setTestDuration(Number(event.target.value))} /></div>}{Object.keys(bindings).filter(isAssetRole).map(role => <label key={role} className="file-field"><span>{roleLabel(role)} {testAssets[role] && <Check size={14} />}</span><input type="file" accept={role === 'reference_video' ? 'video/*' : role === 'reference_audio' ? 'audio/*' : 'image/png,image/jpeg,image/webp'} onChange={event => void upload(role, event.target.files?.[0])} /></label>)}<button type="button" disabled={!testPrompt.trim() || !!missing.length || !!unboundAssets.length} onClick={() => void testRun()}><Play size={15} />保存并试跑</button>{jobId && <TestJob id={jobId} kind={workflow.media_type} notify={notify} />}</div>
+      <div className="test-panel capabilities" data-test-inputs><h3>试跑验证</h3><p className="muted">以下操作会提交真实生成任务。先检查配置，再提供测试描述与素材。</p><div className="field"><label htmlFor="test-prompt">测试画面描述</label><textarea id="test-prompt" rows={3} value={testPrompt} onChange={event => setTestPrompt(event.target.value)} /></div>{workflow.media_type === 'video' && <div className="field"><label htmlFor="test-duration">试跑时长（秒，{testFps} FPS）</label><input id="test-duration" type="number" required min={1} max={caps.max_duration} step={0.1} value={testDuration} onChange={event => setTestDuration(Number(event.target.value))} /></div>}{Object.keys(bindings).filter(isAssetRole).map(role => <label key={role} className="file-field"><span>{roleLabel(role)} {testAssets[role] && <Check size={14} />}</span><input type="file" accept={role === 'reference_video' ? 'video/*' : role === 'reference_audio' ? 'audio/*' : 'image/png,image/jpeg,image/webp'} onChange={event => void upload(role, event.target.files?.[0])} /></label>)}<button type="button" disabled={!testPrompt.trim() || !!missing.length || !!unboundAssets.length} onClick={() => void testRun()}><Play size={15} />保存并试跑</button>{jobId && <TestJob id={jobId} kind={workflow.media_type} notify={notify} />}</div>
     </section>
   </fieldset></form>;
 }

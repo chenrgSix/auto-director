@@ -1,5 +1,11 @@
 # 模块设计
 
+## C22 帧数绑定与固定生成时钟
+
+秒数是导演时间线单位，工作流可用 length/num_frames 接收 `ceil((seconds×fps-offset)/multiple)×multiple+offset`。Binding 可配置偏移 0～31（兼容旧 0/1）和可选 frame_fps。固定时钟通过 generation_fps 统一预览、规划预算、试跑、Resolver 和 patch；与高级 FPS 覆盖冲突时拒绝，不让保存节点 FPS 与模型时钟不同而导致音画变速。旧绑定不指定 frame_fps 时行为保持。
+
+MiniMax H3 T8 的 24 FPS、17n+5 来自实际节点 `/object_info/MiniMaxH3AudioConditioningT8` 及[节点作者的时间契约](https://github.com/T8mars/comfyui-minimax-h3-audio-T8/blob/main/features.json)。该案例绑定 `6.length`、帧数倍数 17、偏移 5、固定 FPS 24，输出 FPS 绑定 `12.fps`；5 秒生成 124 帧，沿用 FFmpeg 时间线裁剪。没有按节点名称自动推断或重新引入规则识别。
+
 ## C21 连接恢复与重跑
 
 GenerationService.rerun 原子校验版本/状态/选择，计算启用时间线上的连续性依赖，归档受影响镜头与旧成片，再失效指定素材并入队；复用导演计划、Bible 和提示词。不清理旧作业或资产文件。seed_offset 与 retry_version 分别控制新候选随机性和作业身份，显式用户覆盖继续由 ParameterResolver 最终决定。只有用户选定的镜头及连续依赖重做已有结果，其他镜头仅按普通续跑补齐缺失结果，完成后拼接当前时间线。

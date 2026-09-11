@@ -1,6 +1,6 @@
 export type Value = string | number | boolean;
 export type Problem = { code: string; message: string; details?: unknown };
-export type Binding = { node_id: string; input: string; transform?: string; frame_multiple?: number; frame_offset?: number };
+export type Binding = { node_id: string; input: string; transform?: string; frame_multiple?: number; frame_offset?: number; frame_fps?: number | null };
 export type Capabilities = { supports_start_frame: boolean; supports_end_frame: boolean; supports_video_reference: boolean; supports_multi_reference: boolean; max_duration: number; low_memory_workflow_id: string | null };
 export type WorkflowCapability = 'TEXT_TO_IMAGE' | 'IMAGE_TO_IMAGE' | 'FIRST_LAST_TO_VIDEO' | 'IMAGE_TO_VIDEO';
 export const CAPABILITY_LABELS: Record<WorkflowCapability, string> = { TEXT_TO_IMAGE: '文生图', IMAGE_TO_IMAGE: '图生图', FIRST_LAST_TO_VIDEO: '首尾帧生成视频', IMAGE_TO_VIDEO: '首帧生成视频' };
