@@ -1,5 +1,7 @@
 # API 与工作流契约
 
+C23：网页「整片重新生成」沿用 `POST /episodes/{id}/rerun`，省略 shot_ids，默认 scope=video，可选 keyframes；确认后才提交。旧成片 ID 与时长在入队前归档，即使新一轮生成失败或取消，先前全部 rerun_history 与资产文件仍保留，预览/下载复用资产接口。没有新增接口或数据库迁移。
+
 C22：`Binding.frame_offset` 扩展为 0～31，`frame_multiple` 保持 1～32，支持 17n+5；可选 `frame_fps`（1～120）只用于 `duration_to_frames`。有固定生成时钟时，规划/预览/试跑/Resolver/patch 统一使用该 FPS，显式 FPS 参数覆盖与之冲突时拒绝。旧绑定未指定时保持原 FPS 策略和逆变换兼容；指定固定时钟后的显式帧数时长按帧数/FPS 计算。自动分镜按秒数×FPS 向上对齐帧数，不改变时间线秒数；生成/保存节点 FPS 必须与模型时钟一致。
 
 C21 重跑：`POST /episodes/{id}/rerun` 接受 `{expected_version, scope:"video"|"keyframes", shot_ids?:string[], new_seed?:boolean}`，返回 202。省略 shot_ids 表示全部启用镜头；空列表、重复、其他短片或禁用镜头拒绝。`video` 沿用已有关键帧，`keyframes` 重做关键帧及视频；后续连续性依赖一并失效，跳过禁用镜头，到独立切镜停止。保存 `rerun_history`（旧成片、镜头/提示词/QA/资产绑定与影响范围），不删资产或改写计划、Bible、参考图。默认递增镜头 seed_offset；new_seed=false 沿用原种子，明确高级 seed 覆盖仍优先。新结果完成后重新导出整片。

@@ -40,7 +40,7 @@ export type PreviewShotEdit = Pick<Shot, 'id' | 'title' | 'duration'> & Record<P
 export type Episode = {
   version: number; image_workflow_id: string; video_workflow_id: string; reference_workflow_id: string;
   workflow_binding_history?: unknown[];
-  rerun_history?: { id: string; created_at: string; scope: string; shot_ids: string[]; affected_shot_ids: string[]; new_seed: boolean; final_video_asset_id: string | null; shots: Shot[] }[];
+  rerun_history?: { id: string; created_at: string; scope: string; shot_ids: string[]; affected_shot_ids: string[]; new_seed: boolean; final_video_asset_id: string | null; final_duration?: number | null; shots: Shot[] }[];
   recoverable_workflow_revision?: number;
   refresh_workflow_budget?: boolean;
   id: string; idea: string; title: string | null; target_duration: number; aspect_ratio: string; style: string; quality: string;

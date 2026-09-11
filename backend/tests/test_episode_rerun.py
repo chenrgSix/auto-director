@@ -2,6 +2,7 @@ from copy import deepcopy
 
 import pytest
 
+from app.core.errors import AppError
 from tests.test_api_pipeline import wait_episode
 from tests.test_capabilities import image_to_video_graph
 
@@ -114,6 +115,55 @@ def test_all_keyframes_rerun_preserves_reference_assets(system):
         assert a["prompts"] == b["prompts"]
         assert a["video_asset_id"] != b["video_asset_id"]
         assert a["start_frame_asset_id"] != b["start_frame_asset_id"]
+
+
+def test_repeated_whole_film_rerun_keeps_all_old_videos_after_failure(system, monkeypatch):
+    client, _, _ = system
+    original = complete(system, target_duration=2, max_shot_duration=1)
+    second = rerun(client, original)
+    assert second["final_video_asset_id"] != original["final_video_asset_id"]
+    assert second["rerun_history"][0]["shots"] == original["shots"]
+    for before, after in zip(original["shots"], second["shots"], strict=True):
+        assert before["video_asset_id"] != after["video_asset_id"]
+    old_ids = {
+        asset
+        for episode in (original, second)
+        for asset in [
+            episode["final_video_asset_id"],
+            *[s["video_asset_id"] for s in episode["shots"]],
+        ]
+    }
+    old_files = {id: client.get(f"/api/v1/assets/{id}/file").content for id in old_ids}
+
+    async def fail_composition(*args, **kwargs):
+        raise AppError("FFMPEG_FAILED", "Synthetic composition failure")
+
+    monkeypatch.setattr("app.generation.pipeline.compose", fail_composition)
+    current = second
+    # A second failure must not hide successful versions behind an empty final-video snapshot.
+    for attempt in range(2):
+        response = client.post(
+            f"/api/v1/episodes/{current['id']}/rerun",
+            json={"expected_version": current["version"], "scope": "video"},
+        )
+        assert response.status_code == 202, response.text
+        queued = response.json()
+        assert queued["rerun_history"][1]["final_video_asset_id"] == second["final_video_asset_id"]
+        current = wait_episode(client, current["id"])
+        assert current["status"] == "FAILED"
+        assert current["error"]["code"] == "FFMPEG_FAILED"
+        assert current["final_video_asset_id"] is None
+        assert len(current["rerun_history"]) == attempt + 2
+        assert current["rerun_history"][0] == second["rerun_history"][0]
+        assert current["rerun_history"][1]["shots"] == second["shots"]
+        for key in ["plan", "bible", "references"]:
+            assert current[key] == original[key]
+        for id, content in old_files.items():
+            download = client.get(f"/api/v1/assets/{id}/file?download=true")
+            assert download.status_code == 200
+            assert download.content == content
+            assert "attachment" in download.headers["content-disposition"]
+    assert current["rerun_history"][-1]["final_video_asset_id"] is None
 
 
 def test_rerun_rejects_invalid_or_stale_selection_without_changes(system):
