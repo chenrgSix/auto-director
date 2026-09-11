@@ -103,6 +103,19 @@ async def inspect_media(path: Path) -> dict:
     return {"kind": "video" if extension in VIDEO_EXT else "audio", **data}
 
 
+def require_video_duration(metadata: dict, duration: float, fps: float) -> None:
+    video = metadata.get("video") or {}
+    actual = metadata.get("duration", 0)
+    if video.get("duration") not in {None, "N/A"}:
+        actual = min(actual, float(video["duration"]))
+    if not video or actual + 1 / fps + 0.002 < duration:
+        raise AppError(
+            "VIDEO_TOO_SHORT",
+            f"生成视频仅 {actual:g} 秒，短于本镜需要的 {duration:g} 秒；请检查工作流时长/FPS 绑定",
+            {"actual": actual, "required": duration, "fps": fps},
+        )
+
+
 async def extract_frame(
     source: Path, target: Path, fraction: float = 1, *, duration_limit: float | None = None
 ) -> Path:
@@ -148,6 +161,7 @@ async def compose(
         elapsed, previous_frame = Fraction(0), 0
         for index, (path, duration) in enumerate(clips):
             metadata = await probe(path)
+            require_video_duration(metadata, duration, fps)
             if not metadata["video"] or metadata["duration"] < duration - max(0.15, 1 / fps):
                 raise AppError(
                     "COMPOSE_FAILED",

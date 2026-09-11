@@ -54,7 +54,7 @@ from app.generation.workflow_state import (
     resume_story,
     story_snapshot,
 )
-from app.media.service import Assets, compose, extract_frame
+from app.media.service import Assets, compose, extract_frame, require_video_duration
 from app.workflows.analyzer import refresh_profile, validate_bindings
 from app.workflows.duration import render_maximum
 from app.workflows.frame_timing import generation_fps
@@ -678,6 +678,54 @@ class GenerationService:
 
         return self.store.update("episode", id, change)
 
+    def repair_short_videos(self, id, fps):
+        if self.engine.unresolved():
+            return  # Settle accepted work before changing any step identities.
+        episode = self.store.get("episode", id)
+        invalid = set()
+        for shot in episode["shots"]:
+            if not shot["enabled"] or not shot.get("video_asset_id"):
+                continue
+            asset = self.store.get("asset", shot["video_asset_id"])
+            try:
+                require_video_duration(asset["metadata"], shot["duration"], fps)
+            except AppError as exc:
+                if exc.code != "VIDEO_TOO_SHORT":
+                    raise
+                invalid.add(shot["id"])
+        if not invalid:
+            return
+
+        def change(current):
+            scopes, previous_changed = {}, False
+            for shot in current["shots"]:
+                if not shot["enabled"]:
+                    continue
+                dependent = previous_changed and shot["transition_from_previous"] in CONTINUOUS
+                if dependent or shot["id"] in invalid:
+                    scopes[shot["id"]] = "keyframes" if dependent else "video"
+                previous_changed = shot["id"] in scopes
+            current.setdefault("rerun_history", []).append(
+                {
+                    "id": uid(),
+                    "created_at": now(),
+                    "scope": "video",
+                    "reason": "VIDEO_TOO_SHORT",
+                    "shot_ids": sorted(invalid),
+                    "affected_shot_ids": list(scopes),
+                    "new_seed": False,
+                    "final_video_asset_id": current.get("final_video_asset_id"),
+                    "final_duration": current.get("final_duration"),
+                    "shots": [deepcopy(s) for s in current["shots"] if s["id"] in scopes],
+                }
+            )
+            for shot in current["shots"]:
+                if shot["id"] in scopes:
+                    self.invalidate(shot, scopes[shot["id"]])
+            current.update(final_video_asset_id=None, final_duration=None)
+
+        self.store.update("episode", id, change)
+
     async def render(
         self,
         episode: dict,
@@ -786,6 +834,8 @@ class GenerationService:
             if "duration" in override_roles:
                 fixed_duration = duration_seconds(video, override_roles["duration"], budget["fps"])
                 validate_strategy({"duration": fixed_duration}, budget["max_duration"])
+            if not preview_only:
+                self.repair_short_videos(id, budget["fps"])
             episode = self.stage(
                 id,
                 "PLANNING",
@@ -1174,9 +1224,14 @@ class GenerationService:
                 )
                 return
             except AppError as exc:
-                if exc.code not in {"QA_FAILED", "OUT_OF_MEMORY"} or retries["remaining"] == 0:
+                if (
+                    exc.code not in {"QA_FAILED", "OUT_OF_MEMORY", "VIDEO_TOO_SHORT"}
+                    or retries["remaining"] == 0
+                ):
                     raise
                 retries["remaining"] -= 1
+                if exc.code == "VIDEO_TOO_SHORT":
+                    retry_scope = "video"
                 if exc.code == "OUT_OF_MEMORY":
                     retry_scope = (
                         "video"

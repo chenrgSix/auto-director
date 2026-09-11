@@ -1,5 +1,7 @@
 # API 与工作流契约
 
+C28：新增 VIDEO_TOO_SHORT，details 包含 actual/required/fps。视频技术校验始终启用，与视觉 QA 开关独立；失败产物保留在 Job.output_asset_ids，自动重试只重做视频并消耗共享预算。继续生成时自动归档并修复旧版错误通过的短视频及连续依赖，其他镜头与已有文件保持；重新导出也拒绝过短片段。
+
 C27：帧数型 duration 的节点 min/max/step/enum 参与合法渲染秒数与导演上限计算，采用最终生成 FPS 和绑定倍数/偏移。无交集在素材创建前返回 WORKFLOW_INVALID；已准备故事保持不变。preview 增加同版本的 video_parameter_snapshot，读取/保存/确认沿用规划时实时约束，实际渲染仍复检远端元数据。
 
 C26：详情 GET 的 warnings 不再显示当前已绑定 reference_image 的旧「无输入」提示；只读派生，不增加版本。更换工作流和继续生成时持久化相同规则，先前警告保留在 workflow_binding_history，其他警告和所有素材保持。

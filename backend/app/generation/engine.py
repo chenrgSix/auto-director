@@ -8,7 +8,7 @@ from app.core.errors import AppError
 from app.db.store import Store, now
 from app.generation.parameters import resolve_parameters
 from app.generation.resolvers import AssetResolver
-from app.media.service import Assets
+from app.media.service import Assets, require_video_duration
 from app.workflows.analyzer import patch, refresh_profile, validate_dependencies, workflow_hash
 from app.workflows.ownership import canonicalize
 
@@ -27,6 +27,17 @@ class RenderEngine:
 
     def unresolved(self) -> list[dict]:
         return [job for job in self.store.list("job") if job["status"] == "UNKNOWN"]
+
+    def validate_outputs(self, job, records):
+        values = job["input_values"]
+        if (
+            job["profile_snapshot"].get("media_type", job["profile_snapshot"].get("type"))
+            == "video"
+        ):
+            duration = values.get("timeline_duration", values.get("duration"))
+            if duration is not None:
+                for record in records:
+                    require_video_duration(record["metadata"], duration, values.get("fps", 16))
 
     def create_job(
         self,
@@ -110,7 +121,13 @@ class RenderEngine:
         async with self.lock:
             job = self.store.get("job", job_id)
             if job["status"] == "COMPLETED":
-                return [self.store.get("asset", id) for id in job["output_asset_ids"]]
+                records = [self.store.get("asset", id) for id in job["output_asset_ids"]]
+                try:
+                    self.validate_outputs(job, records)
+                except AppError as exc:
+                    self.store.update("job", job_id, {"status": "FAILED", "error": exc.as_dict()})
+                    raise
+                return records
             unresolved = [item for item in self.unresolved() if item["id"] != job_id]
             if unresolved:
                 raise AppError(
@@ -238,6 +255,11 @@ class RenderEngine:
                             target, job["episode_id"], job["type"], job["shot_id"]
                         )
                         records.append(record)
+                    # Keep rejected outputs accessible in job history for inspection.
+                    self.store.update(
+                        "job", job_id, {"output_asset_ids": [r["id"] for r in records]}
+                    )
+                    self.validate_outputs(job, records)
                     self.store.update(
                         "job",
                         job_id,
