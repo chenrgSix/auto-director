@@ -60,6 +60,21 @@ def role_overrides(profile: dict, overrides: dict) -> dict:
     }
 
 
+def usable_ai_values(profile: dict, values: dict) -> dict:
+    """An empty optional AI prompt cannot erase the prepared shot/reference prompt.
+
+    Validate first so filtering never hides unknown keys, wrong owners or invalid types.
+    Other blank fields and explicit user overrides retain their existing semantics.
+    """
+    validate_ai_parameters(profile, values)
+    prompt_keys = {p["key"] for p in profile["parameters"] if p.get("role") == "prompt"}
+    return {
+        key: value
+        for key, value in values.items()
+        if not (key in prompt_keys and isinstance(value, str) and not value.strip())
+    }
+
+
 def duration_seconds(profile: dict, value, fps: float) -> float:
     binding = profile["bindings"].get("duration", {})
     if binding.get("transform") == "duration_to_frames":

@@ -295,7 +295,7 @@ def episodes(request: Request):
 
 @router.get("/episodes/{id}")
 def episode(request: Request, id: str):
-    return resources(request).store.get("episode", id)
+    return resources(request).generation.detail(id)
 
 
 @router.delete("/episodes/{id}", status_code=204)

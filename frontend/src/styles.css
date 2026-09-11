@@ -281,4 +281,8 @@ summary { cursor: pointer; font-size: 12px; color: #c0c8ac; line-height: 1.8; }
 .preview-footer { position: sticky; bottom: 12px; z-index: 3; display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 18px 20px; margin: 20px 0; background: #35482e; border: 1px solid #687b50; border-radius: 8px; box-shadow: 0 8px 24px #0004; }
 .preview-footer strong, .preview-footer small { display: block; font-size: 12px; }
 .preview-footer small { font-size: 11px; color: #b5c59d; margin-top: 5px; }
+.preview-validation ul { padding-left: 20px; margin-bottom: 0; }
+.preview-validation li { margin: 8px 0; overflow-wrap: anywhere; }
+.preview-validation button { text-align: left; white-space: normal; line-height: 1.8; }
+.preview-editor [aria-invalid="true"] { border-color: #d4967b; }
 @media (max-width: 720px) { .preview-heading { display: block; }.preview-step { margin-top: 16px; }.preview-grid { grid-template-columns: 1fr; }.preview-shot-list { max-height: 240px; }.preview-editor { padding: 16px; }.preview-editor .fields.two { grid-template-columns: 1fr; }.preview-footer { flex-direction: column; align-items: stretch; padding: 12px; bottom: 6px; }.preview-footer .actions { justify-content: flex-end; }.preview-footer button { font-size: 12px; }.preview-summary { font-size: 12px; } }

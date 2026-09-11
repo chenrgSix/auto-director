@@ -2,6 +2,8 @@
 
 ## C14 分镜预览与确认
 
+C15：`usable_ai_values` 在校验原始 AI 映射后，只忽略 prompt 角色的空/纯空白字符串。`prompt_view` 和 GenerationService.render 共用此函数，保证显示与最终 patch 都回退到已准备的分镜/参考提示词；不改写存储中的原始 AI 输出，显式用户覆盖仍最高。详情读取只刷新同一工作流版本下的派生视图，旧空预览无需重跑。保存/确认检查实际必填提示词，锁定或未使用输入不阻塞；前端错误列表精确到镜头与字段。
+
 GenerationService 在现有队列中增加 preview 操作。沿用设备/节点检查、时长预算、Director、Bible 和 Shot Agent，在任何参考图/关键帧渲染前结束。逐镜保存提示词并显示进度，最后进入 AWAITING_REVIEW；重启保留待确认状态，取消或中断可以复用已有结果继续准备。网页不再创建后立即 generate。
 
 `generation/preview.py` 负责实际提示词视图、编辑和时长校验，复用 ParameterResolver 的工作流/显存/高级时长限制。编辑只接受现有镜头 ID 与顺序、标题、时长和三个正向提示词；同步 Shot 与 plan.shots。首帧连续复用、I2V 尾帧、用户指定素材和固定 prompt 标注不可修改原因。其他动态参数和负面/运动约束本轮只读。

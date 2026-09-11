@@ -5,6 +5,8 @@ from copy import deepcopy
 import pytest
 
 from app.agents.schemas import ShotPrompts
+from app.core.errors import AppError
+from app.generation.parameters import resolve_parameters, usable_ai_values
 from tests.fakes import FakeProvider
 from tests.test_ai_parameters import CreativeProvider, configure_ai_parameters
 from tests.test_api_pipeline import wait_episode
@@ -328,3 +330,133 @@ def test_fixed_duration_preview_rejects_retiming(system):
     body = edits(episode)
     body["shots"][0]["duration"], body["shots"][1]["duration"] = 1, 3
     assert client.patch(f"/api/v1/episodes/{episode['id']}/preview", json=body).status_code == 400
+
+
+@pytest.mark.parametrize("blank", ["", " \n\t"])
+def test_blank_ai_prompt_uses_prepared_prompts_in_preview_and_final_patch(system, blank):
+    client, app, comfy = system
+    configure_ai_parameters(client, comfy)
+
+    class BlankPromptProvider(PromptProvider):
+        async def generate_json(self, system, context, schema, *, images=None):
+            result = await super().generate_json(system, context, schema, images=images)
+            if issubclass(schema, ShotPrompts):
+                data = result.model_dump()
+                for values in data["ai_parameters"].values():
+                    values["positive.text"] = blank
+                return schema.model_validate(data)
+            return result
+
+    app.state.generation.provider_factory = BlankPromptProvider
+    episode = preview(system, target_duration=1)
+    shot = episode["shots"][0]
+    for field in ("start_frame_prompt", "end_frame_prompt", "video_prompt"):
+        assert shot["preview_prompt_view"]["values"][field] == shot["prompts"][field]
+        assert "AI 动态提示词为空" in shot["preview_prompt_view"]["hints"][field]
+    assert not comfy.prompts
+    id = episode["id"]
+    assert (
+        client.post(
+            f"/api/v1/episodes/{id}/approve", json={"expected_version": episode["version"]}
+        ).status_code
+        == 202
+    )
+    final = wait_episode(client, id)
+    assert final["status"] == "COMPLETED", final["error"]
+    for job in app.state.store.list("job", id):
+        prompt = job["patched_workflow"]["positive"]["inputs"]["text"]
+        assert prompt.strip()
+        if job["shot_id"]:
+            field = {
+                "SHOT_START_FRAME": "start_frame_prompt",
+                "SHOT_END_FRAME": "end_frame_prompt",
+                "SHOT_VIDEO": "video_prompt",
+            }[job["type"]]
+            assert shot["prompts"][field] in prompt
+            assert job["patched_workflow"]["sampler"]["inputs"]["denoise"] == (
+                0.6 if field == "video_prompt" else 0.4
+            )
+    assert final["metrics"]["llm_calls"] == episode["metrics"]["llm_calls"]
+
+
+def test_old_blank_preview_views_refresh_without_mutating_stored_plan(system):
+    client, app, _ = system
+    episode = preview(system)
+    id = episode["id"]
+
+    def old_record(record):
+        record["shots"][0]["prompts"]["ai_parameters"] = {"default_image": {"positive.text": ""}}
+        view = record["shots"][0]["preview_prompt_view"]
+        view["values"].update(start_frame_prompt="", end_frame_prompt="")
+        view.pop("hints", None)
+
+    before = app.state.store.update("episode", id, old_record)
+    detail = client.get(f"/api/v1/episodes/{id}").json()
+    assert detail["version"] == before["version"]
+    assert (
+        detail["plan"] == before["plan"]
+        and detail["shots"][0]["prompts"] == before["shots"][0]["prompts"]
+    )
+    assert (
+        detail["shots"][0]["preview_prompt_view"]["values"]["start_frame_prompt"]
+        == "Lion starts walking"
+    )
+    assert app.state.store.get("episode", id) == before
+    request = edits(detail)
+    request["shots"][0]["title"] = "Saved without regenerating"
+    result = client.patch(f"/api/v1/episodes/{id}/preview", json=request)
+    assert result.status_code == 200, result.text
+
+
+@pytest.mark.parametrize(
+    "key,value",
+    [("positive.text", None), ("positive.text", 42), ("unknown.text", ""), ("sampler.steps", "")],
+)
+def test_blank_prompt_filter_does_not_hide_invalid_ai_values(system, key, value):
+    _, app, _ = system
+    profile = app.state.store.get("workflow", "default_image")
+    with pytest.raises(AppError) as error:
+        usable_ai_values(profile, {key: value})
+    assert error.value.code == "LLM_INVALID_OUTPUT"
+
+
+@pytest.mark.parametrize("override", ["", "Explicit fixed prompt"])
+def test_blank_ai_fallback_does_not_replace_explicit_user_override(system, override):
+    _, app, _ = system
+    profile = app.state.store.get("workflow", "default_image")
+    ai = usable_ai_values(profile, {"positive.text": " ", "negative.text": ""})
+    assert ai == {"negative.text": ""}
+    values, _, _, sources = resolve_parameters(
+        profile,
+        {"prompt": "Prepared frame", "negative": "prepared negative"},
+        {},
+        {"positive.text": override},
+        True,
+        ai_values=ai,
+    )
+    assert values["prompt"] == override and sources["positive.text"] == "user"
+    assert values["negative"] == ""
+
+
+def test_unused_i2v_tail_can_be_empty_and_missing_required_prompt_identifies_shot(system):
+    client, app, _ = system
+    video = imported(app, "IMAGE_TO_VIDEO")
+    episode = preview(system, target_duration=1, video_workflow_id=video["id"])
+    id = episode["id"]
+
+    def clear_unused(record):
+        record["shots"][0]["prompts"]["end_frame_prompt"] = ""
+
+    app.state.store.update("episode", id, clear_unused)
+    detail = client.get(f"/api/v1/episodes/{id}").json()
+    body = edits(detail)
+    body["shots"][0]["title"] = "I2V without unused tail"
+    result = client.patch(f"/api/v1/episodes/{id}/preview", json=body)
+    assert result.status_code == 200, result.text
+    body = edits(result.json())
+    body["shots"][0]["video_prompt"] = " "
+    invalid = client.patch(f"/api/v1/episodes/{id}/preview", json=body)
+    assert invalid.status_code == 400
+    assert "第 1 镜" in invalid.json()["error"]["message"]
+    assert "视频提示词不能为空" in invalid.json()["error"]["message"]
+    assert invalid.json()["error"]["details"]["shot_id"] == detail["shots"][0]["id"]

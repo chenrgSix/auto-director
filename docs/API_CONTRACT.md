@@ -6,6 +6,10 @@ Base `/api/v1`，JSON；ID 由服务端生成；UTC ISO 时间。验证失败 42
 
 ### 分镜预览与确认（C14）
 
+C15 兼容修复：空/纯空白的 AI-owned `prompt` 不再覆盖已准备的逐镜/参考提示词；预览与渲染使用同一规则。先验证 AI 参数身份和类型，再排除这一角色的空白值，不吞掉非法参数；其他字段（包括允许为空的 negative）和显式用户覆盖保持原值。详情 GET 只读刷新旧待确认记录的 `preview_prompt_view`，其中 `hints` 解释回退，不改变 version、原计划或 AI 输出。
+
+真正缺少可编辑提示词时，保存/确认返回 `PREVIEW_INVALID`，message 包含镜头编号、标题和字段，details 包含 `shot_id/field`。未使用或锁定的提示词允许保留空值，不能通过编辑接口改变锁定值。网页校验区分别显示总时长差额、每镜时长范围和具体字段错误，支持定位镜头。
+
 网页创建时携带 `preview_required: true`，然后 `POST /episodes/{id}/preview`（202）。队列完成导演规划、Visual Bible 与逐镜 ShotPrompts，停在 `AWAITING_REVIEW`，不创建渲染 Job 或生成 Asset；仅向 ComfyUI 读取设备及节点约束。`PREPARING_PROMPTS` 为活动状态，可取消；未完成时重试 preview 复用已有计划和提示词。
 
 `PATCH /episodes/{id}/preview` 接收 `{expected_version, shots:[{id,title,duration,start_frame_prompt,end_frame_prompt,video_prompt}]}`。必须包含当前全部镜头及原顺序；只允许待确认时修改，检查标题/文本长度、总时长、单镜 workflow/显存约束及固定时长覆盖。失败原子回滚。只编辑创作提示词，不接受任意 `ai_parameters` 注入。高级固定 prompt、锁定参数、连续镜头复用首帧以及 I2V 不使用的尾帧不能编辑，详情 `shots[].preview_prompt_view` 返回实际输入与锁定原因。

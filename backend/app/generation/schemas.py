@@ -72,9 +72,10 @@ class PreviewShotUpdate(StrictModel):
     id: str = Field(min_length=1)
     title: str = Field(min_length=1, max_length=200)
     duration: float = Field(ge=1, le=MAX_SHOT_SECONDS)
-    start_frame_prompt: str = Field(min_length=1, max_length=6000)
-    end_frame_prompt: str = Field(min_length=1, max_length=6000)
-    video_prompt: str = Field(min_length=1, max_length=6000)
+    # Whether a prompt is required depends on capability, continuity and explicit inputs.
+    start_frame_prompt: str = Field(max_length=6000)
+    end_frame_prompt: str = Field(max_length=6000)
+    video_prompt: str = Field(max_length=6000)
 
 
 class PreviewUpdate(StrictModel):

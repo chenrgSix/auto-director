@@ -18,13 +18,16 @@ from app.generation.parameters import (
     parameter_overrides,
     resolve_parameters,
     role_overrides,
+    usable_ai_values,
     validate_overrides,
     validate_strategy,
 )
 from app.generation.preview import (
     apply_edits,
     prepare_review,
+    prompt_view,
     require_current_preview,
+    validate_review_prompts,
     validate_timing,
     workflow_versions,
 )
@@ -296,6 +299,16 @@ class GenerationService:
             ),
         ]
 
+    def detail(self, id: str) -> dict:
+        episode = self.store.get("episode", id)
+        if episode["status"] == "AWAITING_REVIEW" and episode.get("preview"):
+            profiles = self.preview_profiles(episode)
+            if episode["preview"]["workflow_versions"] == workflow_versions(profiles):
+                # Refresh derived views for old previews without rewriting user data/version.
+                for shot in episode["shots"]:
+                    shot["preview_prompt_view"] = prompt_view(episode, shot, *profiles[:2])
+        return episode
+
     def has_current_jobs(self, episode):
         revision = episode.get("workflow_binding_revision", 0)
         for job in self.store.list("job", episode["id"]):
@@ -339,6 +352,7 @@ class GenerationService:
                 profiles = self.preview_profiles(episode)
                 require_current_preview(episode, profiles)
                 validate_timing(episode, profiles[1])
+                validate_review_prompts(episode, *profiles[:2])
                 episode["preview_approved_at"] = now()
             elif operation == "preview":
                 if (
@@ -531,7 +545,9 @@ class GenerationService:
         output = (
             self.shot(episode["id"], shot_id).get("prompts") if shot_id else episode.get("bible")
         ) or {}
-        generated = output.get("ai_parameters", {}).get(profile["id"], {})
+        generated = usable_ai_values(
+            profile, output.get("ai_parameters", {}).get(profile["id"], {})
+        )
         if shot_id:
             shot = self.shot(episode["id"], shot_id)
             field = {

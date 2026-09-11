@@ -1,5 +1,15 @@
 # 验收记录
 
+## C15 空 AI 提示词与开始按钮修复（2026-09-11）
+
+复现：实际短片 `81006c7c-da6b-41bc-8ac9-4f4de8184490` 为 AWAITING_REVIEW，18×5 秒=90 秒。第 4、7、9 镜的 AI-owned 图像 prompt 是空字符串，原始 start/end_frame_prompt 完整，但保存的 preview_prompt_view 被覆盖为空；原网页把字段失败统一显示成“请检查各镜时长与提示词”。
+
+完整 `make check` 通过，Ruff/格式（62 Python 文件）、ESLint、TypeScript/Vite 及 pytest **278 passed**（61.15 秒，无跳过）。新增 10 项回归验证空/纯空白 AI prompt 回退到既有提示词且进入最终 patch、其他 AI 参数保留、不额外调用模型、旧视图只读更新、非法 AI 类型/owner/未知键仍拒绝、显式用户覆盖（含空字符串）保持、未使用 I2V 尾帧和具体字段错误。
+
+隔离浏览器：空白视频提示词明确显示“第 1 镜…视频提示词不能为空”，点击可定位；合计 9/10 秒时显示“还差 1.00 秒”且仍拦截开始。正式服务无活动任务后更新，实际 90 秒页面显示开始按钮 enabled=true，并解释空值回退。[页面证据](evidence/preview-blank-prompt-fixed.png)。
+
+数据库完整记录前后相同，SHA-256 为 `28e4dbe57face536b538c3c8bb5b67d34c0007c2bc23ad624965db149e222464`，version 仍为 28。所有原始 prompts、plan 和镜头时长不变，API 仅更新派生预览；该单集无渲染 Job。未点击真实开始、未调用真实 LLM/ComfyUI 渲染，未执行远端 CI。
+
 ## C14 分镜预览与确认生成（2026-09-11）
 
 工程门禁：完整 `make check` 成功，Ruff/格式（62 个 Python 文件）、ESLint、TypeScript 与 Vite 构建通过；pytest **268 passed**，58.76 秒，无跳过。新增 `test_episode_preview.py` 16 项回归覆盖：

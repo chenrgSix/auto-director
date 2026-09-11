@@ -6,10 +6,16 @@ from decimal import Decimal
 from app.agents.schemas import ShotPlan
 from app.core.errors import AppError
 from app.core.limits import MIN_SHOT_SECONDS
-from app.generation.parameters import parameter_overrides, resolve_parameters, role_overrides
+from app.generation.parameters import (
+    parameter_overrides,
+    resolve_parameters,
+    role_overrides,
+    usable_ai_values,
+)
 from app.workflows.analyzer import check_value
 
 PROMPT_FIELDS = ("start_frame_prompt", "end_frame_prompt", "video_prompt")
+PROMPT_LABELS = dict(zip(PROMPT_FIELDS, ("首帧提示词", "尾帧提示词", "视频提示词"), strict=True))
 
 
 def workflow_versions(profiles):
@@ -23,15 +29,18 @@ def require_current_preview(episode, profiles):
 
 def prompt_view(episode, shot, image, video):
     """Show effective prompt inputs, including AI mappings and fixed user overrides."""
-    values, locked = {}, {}
+    values, locked, hints = {}, {}, {}
     for field in PROMPT_FIELDS:
         profile = video if field == "video_prompt" else image
         role = "prompt"
         parameters = [p for p in profile["parameters"] if p.get("role") == role]
         generated = shot["prompts"].get("ai_parameters", {}).get(profile["id"], {})
+        usable = usable_ai_values(profile, generated)
         value = shot["prompts"][field]
         if field not in shot.get("preview_edited_fields", []):
-            value = role_overrides(profile, generated).get(role, value)
+            value = role_overrides(profile, usable).get(role, value)
+            if generated.keys() != usable.keys():
+                hints[field] = f"AI 动态提示词为空，已使用本镜的{PROMPT_LABELS[field]}。"
         overrides = role_overrides(profile, parameter_overrides(episode, profile))
         values[field] = overrides.get(role, value)
         if not parameters or any(
@@ -40,6 +49,7 @@ def prompt_view(episode, shot, image, video):
             locked[field] = "工作流未开放此提示词编辑"
         if role in overrides:
             locked[field] = "使用创建时的高级固定覆盖"
+            hints.pop(field, None)
         asset_role = "end_frame" if field == "end_frame_prompt" else "start_frame"
         video_overrides = role_overrides(video, parameter_overrides(episode, video))
         if field != "video_prompt" and asset_role in video_overrides:
@@ -52,7 +62,22 @@ def prompt_view(episode, shot, image, video):
             locked[field] = "延续上镜实际尾帧，不单独生成首帧"
         if field == "end_frame_prompt" and video["capability"] == "IMAGE_TO_VIDEO":
             locked[field] = "此工作流仅使用首帧"
-    return {"values": values, "locked": locked}
+    return {"values": values, "locked": locked, "hints": hints}
+
+
+def validate_review_prompts(episode, image, video):
+    for shot in episode["shots"]:
+        view = prompt_view(episode, shot, image, video)
+        for field in PROMPT_FIELDS:
+            if field in view["locked"]:
+                continue
+            value = view["values"][field]
+            if not isinstance(value, str) or not value.strip():
+                raise AppError(
+                    "PREVIEW_INVALID",
+                    f"第 {shot['index'] + 1} 镜「{shot['title']}」的{PROMPT_LABELS[field]}不能为空",
+                    {"shot_id": shot["id"], "field": field},
+                )
 
 
 def validate_timing(episode, video):
@@ -83,6 +108,7 @@ def prepare_review(episode, image, video, reference):
         "render_max_duration": episode["budget"]["render_max_duration"],
     }
     validate_timing(episode, video)
+    validate_review_prompts(episode, image, video)
 
 
 def apply_edits(episode, request, image, video):
@@ -96,7 +122,11 @@ def apply_edits(episode, request, image, video):
             if value == view["values"][field]:
                 continue
             if not value.strip():
-                raise AppError("PREVIEW_INVALID", "提示词不能为空")
+                raise AppError(
+                    "PREVIEW_INVALID",
+                    f"第 {shot['index'] + 1} 镜「{shot['title']}」的{PROMPT_LABELS[field]}不能为空",
+                    {"shot_id": shot["id"], "field": field},
+                )
             if field in view["locked"]:
                 raise AppError("OVERRIDE_NOT_ALLOWED", view["locked"][field])
             profile = video if field == "video_prompt" else image
@@ -110,6 +140,7 @@ def apply_edits(episode, request, image, video):
         shot.update(title=item.title, duration=item.duration, preview_edited_fields=sorted(edited))
         shot["preview_prompt_view"] = prompt_view(episode, shot, image, video)
     validate_timing(episode, video)
+    validate_review_prompts(episode, image, video)
     episode["plan"]["shots"] = [
         {key: deepcopy(shot[key]) for key in ShotPlan.model_fields} for shot in episode["shots"]
     ]

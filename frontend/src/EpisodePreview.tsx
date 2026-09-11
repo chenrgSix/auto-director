@@ -5,6 +5,30 @@ import type { Notify } from './App';
 import type { Episode, PreviewPromptField, PreviewShotEdit } from './types';
 import { ErrorNotice } from './ui';
 
+const promptLabels: Record<PreviewPromptField, string> = { start_frame_prompt: '首帧提示词', end_frame_prompt: '尾帧提示词', video_prompt: '视频提示词' };
+type PreviewIssue = { message: string; index?: number; field?: keyof PreviewShotEdit };
+
+function previewIssues(episode: Episode, edits: PreviewShotEdit[], total: number): PreviewIssue[] {
+  const preview = episode.preview!;
+  const issues: PreviewIssue[] = [];
+  if (Number.isFinite(total) && Math.abs(total - episode.target_duration) > 0.005) {
+    issues.push({ message: `当前合计 ${total.toFixed(2)} 秒，目标 ${episode.target_duration} 秒，${total < episode.target_duration ? '还差' : '超出'} ${Math.abs(total - episode.target_duration).toFixed(2)} 秒。` });
+  }
+  edits.forEach((shot, index) => {
+    const add = (field: keyof PreviewShotEdit, message: string) => issues.push({ index, field, message: `第 ${index + 1} 镜「${shot.title || '未命名'}」：${message}` });
+    if (!Number.isFinite(shot.duration)) add('duration', '请填写镜头时长。');
+    else if (shot.duration < preview.min_duration || shot.duration > preview.max_duration) add('duration', `时长须为 ${preview.min_duration}～${preview.max_duration} 秒。`);
+    else if (preview.fixed_duration != null && Math.abs(shot.duration - preview.fixed_duration) > 0.011) add('duration', `高级设置要求固定 ${preview.fixed_duration} 秒。`);
+    if (!shot.title.trim()) add('title', '镜头标题不能为空。');
+    for (const field of Object.keys(promptLabels) as PreviewPromptField[]) {
+      if (episode.shots[index].preview_prompt_view?.locked[field] || (field === 'end_frame_prompt' && preview.capability === 'IMAGE_TO_VIDEO')) continue;
+      if (!shot[field].trim()) add(field, `${promptLabels[field]}不能为空。`);
+      else if (shot[field].length > 6000) add(field, `${promptLabels[field]}不能超过 6000 字符。`);
+    }
+  });
+  return issues;
+}
+
 function editableShots(episode: Episode): PreviewShotEdit[] {
   return episode.shots.map(shot => ({
     id: shot.id, title: shot.title, duration: shot.duration,
@@ -25,10 +49,9 @@ export function EpisodePreview({ episode, busy, setBusy, refresh, notify }: {
   const stale = episode.version > base.version;
   const preview = base.preview!;
   const total = edits.reduce((sum, shot) => sum + shot.duration, 0);
-  const valid = Number.isFinite(total) && Math.abs(total - base.target_duration) <= 0.005 && edits.every(shot =>
-    shot.duration >= preview.min_duration && shot.duration <= preview.max_duration &&
-    (preview.fixed_duration == null || Math.abs(shot.duration - preview.fixed_duration) <= 0.011) &&
-    shot.title.trim() && shot.start_frame_prompt.trim() && shot.end_frame_prompt.trim() && shot.video_prompt.trim());
+  const issues = previewIssues(base, edits, total);
+  const valid = issues.length === 0;
+  const invalidField = (field: keyof PreviewShotEdit) => issues.some(issue => issue.index === selected && issue.field === field);
   const edit = edits[selected];
   const shot = base.shots[selected];
   const fields: { field: PreviewPromptField; label: string }[] = [
@@ -55,20 +78,21 @@ export function EpisodePreview({ episode, busy, setBusy, refresh, notify }: {
   function submit(event: FormEvent) { event.preventDefault(); void save(true); }
   return <section className="preview-panel">
     <div className="preview-heading"><div><span className="eyebrow">STORYBOARD REVIEW</span><h2>先看分镜，再开始拍摄。</h2><p>查看镜头节奏和画面提示词。满意后直接开始，也可以先修改并保存。</p></div><span className="preview-step"><Check size={14} />规划完成 · 等待你的确认</span></div>
-    <div className="preview-summary"><strong>{edits.length} 个镜头 · 合计 {total.toFixed(2)} / {base.target_duration} 秒</strong><span>单镜 {preview.min_duration}～{preview.max_duration} 秒{preview.fixed_duration != null && ` · 高级设置固定为 ${preview.fixed_duration} 秒`}</span></div>
+    <div className="preview-summary"><strong>{edits.length} 个镜头 · 合计 {Number.isFinite(total) ? total.toFixed(2) : '—'} / {base.target_duration} 秒</strong><span>单镜 {preview.min_duration}～{preview.max_duration} 秒{preview.fixed_duration != null && ` · 高级设置固定为 ${preview.fixed_duration} 秒`}</span></div>
     <p className="muted preview-note">当前是文字分镜预览，尚未生成图片或视频。提示词会结合视觉设定和实际连续帧使用；修改时长后，请同步检查动作是否适合新的节奏。</p>
     {error && <ErrorNotice>{error}</ErrorNotice>}
+    {!!issues.length && <div className="notice preview-validation" role="alert"><strong>开始前请处理以下问题</strong><ul>{issues.map((issue, index) => <li key={index}>{issue.index == null ? issue.message : <button className="text-button" type="button" onClick={() => setSelected(issue.index!)}>{issue.message} 查看此镜</button>}</li>)}</ul></div>}
     {stale && <div className="notice">分镜已在其他页面更新。当前编辑仍保留，请重新载入后确认。<button disabled={busy} onClick={reload}>放弃本页修改并载入最新分镜</button></div>}
     <form onSubmit={submit}>
       <div className="preview-grid"><aside className="panel preview-shot-list" aria-label="分镜列表">{edits.map((item, index) => <button key={item.id} type="button" className={`preview-shot ${index === selected ? 'selected' : ''}`} aria-pressed={index === selected} onClick={() => setSelected(index)}><span>{String(index + 1).padStart(2, '0')}</span><div><strong>{item.title}</strong><small>{item.duration.toFixed(2)} 秒</small></div></button>)}</aside>
         <div className="panel preview-editor"><div className="panel-title">镜头 {selected + 1} <span>{shot.transition_from_previous}</span></div>
-          <div className="fields two"><div className="field"><label htmlFor="preview-title">镜头标题</label><input id="preview-title" value={edit.title} required maxLength={200} disabled={busy} onChange={event => change({ title: event.target.value })} /></div><div className="field"><label htmlFor="preview-duration">镜头时长（秒）</label><input id="preview-duration" type="number" min={preview.min_duration} max={preview.max_duration} step="0.01" required value={Number.isFinite(edit.duration) ? edit.duration : ''} disabled={busy || preview.fixed_duration != null} onChange={event => change({ duration: event.target.value === '' ? NaN : Number(event.target.value) })} /></div></div>
+          <div className="fields two"><div className="field"><label htmlFor="preview-title">镜头标题</label><input id="preview-title" value={edit.title} required maxLength={200} aria-invalid={invalidField('title')} disabled={busy} onChange={event => change({ title: event.target.value })} /></div><div className="field"><label htmlFor="preview-duration">镜头时长（秒）</label><input id="preview-duration" type="number" min={preview.min_duration} max={preview.max_duration} step="0.01" required value={Number.isFinite(edit.duration) ? edit.duration : ''} aria-invalid={invalidField('duration')} disabled={busy || preview.fixed_duration != null} onChange={event => change({ duration: event.target.value === '' ? NaN : Number(event.target.value) })} /></div></div>
           <div className="preview-direction"><p><strong>画面动作</strong>{shot.action}</p><p><strong>镜头语言</strong>{shot.camera}</p><small>这是导演的原始构思。调整画面或运镜，请修改下方提示词。</small></div>
-          {fields.map(({ field, label }) => <div className="field" key={field}><label htmlFor={`preview-${field}`}>{label}</label><textarea id={`preview-${field}`} value={edit[field]} required maxLength={6000} rows={5} disabled={busy || !!shot.preview_prompt_view?.locked[field]} onChange={event => change({ [field]: event.target.value })} />{shot.preview_prompt_view?.locked[field] && <small>{shot.preview_prompt_view.locked[field]}</small>}</div>)}
+          {fields.map(({ field, label }) => <div className="field" key={field}><label htmlFor={`preview-${field}`}>{label}</label><textarea id={`preview-${field}`} value={edit[field]} required maxLength={6000} rows={5} aria-invalid={invalidField(field)} disabled={busy || !!shot.preview_prompt_view?.locked[field]} onChange={event => change({ [field]: event.target.value })} />{shot.preview_prompt_view?.locked[field] && <small>{shot.preview_prompt_view.locked[field]}</small>}{shot.preview_prompt_view?.hints?.[field] && <small>{shot.preview_prompt_view.hints[field]}</small>}</div>)}
           <details className="preview-extra"><summary>其他生成约束与 AI 参数（只读）</summary><p>负面提示词：{shot.prompts?.negative_prompt}</p><p>运镜参数：{shot.prompts?.camera_motion} · 运动强度：{shot.prompts?.motion_strength}</p><pre>{JSON.stringify(shot.prompts?.ai_parameters ?? {}, null, 2)}</pre></details>
         </div>
       </div>
-      <div className="preview-footer"><div><strong>{dirty ? '有未保存的修改' : '分镜已保存'}</strong><small>{!valid ? `请检查各镜时长与提示词，时长合计须为 ${base.target_duration} 秒。` : '开始生成会自动保存当前修改。'}</small></div><div className="actions"><button type="button" disabled={busy || !dirty || !valid || stale} onClick={() => void save()}><Save size={15} />保存分镜</button><button className="primary" type="submit" disabled={busy || !valid || stale}><Play size={15} />{busy ? '正在处理…' : '开始视频生成'}</button></div></div>
+      <div className="preview-footer"><div><strong>{dirty ? '有未保存的修改' : '分镜已保存'}</strong><small>{issues[0]?.message ?? '开始生成会自动保存当前修改。'}</small></div><div className="actions"><button type="button" disabled={busy || !dirty || !valid || stale} onClick={() => void save()}><Save size={15} />保存分镜</button><button className="primary" type="submit" disabled={busy || !valid || stale}><Play size={15} />{busy ? '正在处理…' : '开始视频生成'}</button></div></div>
     </form>
   </section>;
 }
