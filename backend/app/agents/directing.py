@@ -16,6 +16,7 @@ from app.agents.schemas import (
     Transition,
     VisualBible,
 )
+from app.core.cancellation import run_cancellable
 from app.core.errors import AppError
 from app.core.limits import (
     MAX_EPISODE_SHOTS,
@@ -163,8 +164,16 @@ def generation_budget(
 
 
 class Directors:
-    def __init__(self, provider: LLMProvider):
+    def __init__(self, provider: LLMProvider, *, check_cancel: Callable[[], None] | None = None):
         self.provider = provider
+        self.check_cancel = check_cancel
+
+    async def generate_json(self, *args, **kwargs):
+        if self.check_cancel is None:
+            return await self.provider.generate_json(*args, **kwargs)
+        return await run_cancellable(
+            lambda: self.provider.generate_json(*args, **kwargs), self.check_cancel
+        )
 
     async def plan(
         self, episode: dict, maximum: float, *, check_cancel: Callable[[], None] = lambda: None
@@ -241,7 +250,7 @@ class Directors:
         schema = planning_schema(PlanBatch if segment["segment_count"] > 1 else EpisodePlan, timing)
         for attempt in range(2):
             check_cancel()
-            plan = await self.provider.generate_json(
+            plan = await self.generate_json(
                 "Act as Director. Plan the current time segment of one coherent episode. "
                 "Use the entire idea and episode_duration for the overall story arc; keep title/logline about the whole episode. "
                 "Continue from previous_shots when present. Only resolve the full story in is_final_segment. "
@@ -281,7 +290,7 @@ class Directors:
         raise AppError("LLM_INVALID_OUTPUT", "无法规划镜头")
 
     async def bible(self, episode: dict, plan: dict, workflow_parameters=None) -> VisualBible:
-        return await self.provider.generate_json(
+        return await self.generate_json(
             "Act as Bible Agent. Specify distinct, stable character identities, environment, visual style, "
             "lighting and continuity rules for this episode only. Preserve the exact subject count in the idea. "
             "Fill ai_parameters[workflow_id][parameter_key] for the listed AI-owned parameters, "
@@ -300,7 +309,7 @@ class Directors:
     async def shot(
         self, bible: dict, shot: dict, continuity: dict, workflow_parameters=None, *, idea=""
     ) -> ShotPrompts:
-        return await self.provider.generate_json(
+        return await self.generate_json(
             "Act as Shot Agent. Build actionable image/start/end/video/negative prompts. "
             "Inherit the Bible and continuity. End frame is the same subjects, location and lighting seconds later. "
             "Describe one action, camera, light, identity and negative constraints. Prompts should be in English. "
@@ -325,7 +334,7 @@ class Directors:
         )
 
     async def qa(self, bible: dict, shot: dict, paths: list, stage: str) -> QAResult:
-        return await self.provider.generate_json(
+        return await self.generate_json(
             "Act as visual QA. Inspect the supplied actual frames; do not infer success from prompts. "
             "Rate identity/count, scene, style, action, transition and artifacts from 0 to 1. "
             "artifact_score is BAD when high. Explain failures. For keyframes assess the intended endpoints; "

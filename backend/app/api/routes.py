@@ -304,14 +304,27 @@ def episode(request: Request, id: str):
 async def delete_episode(request: Request, id: str, delete_assets: bool = False):
     state = resources(request)
     item = state.store.get("episode", id)
-    if (
-        id in state.generation.busy
-        or item["status"] in ACTIVE
-        or any(
-            job["status"] in {"QUEUED", "RUNNING", "UNKNOWN"} for job in state.store.list("job", id)
+    if id in state.generation.busy:
+        message = (
+            "正在停止后台任务，清理完成后即可删除，请稍候"
+            if item["status"] == "CANCELLED"
+            else "短片仍在后台执行或排队，请先取消任务再删除"
         )
-    ):
-        raise AppError("CONFLICT", "请先停止并核对该单集的未完成作业", status=409)
+        raise AppError("CONFLICT", message, status=409)
+    if item["status"] in ACTIVE:
+        raise AppError("CONFLICT", "短片正在生成，请先取消任务再删除", status=409)
+    pending = [
+        {"id": job["id"], "status": job["status"]}
+        for job in state.store.list("job", id)
+        if job["status"] in {"QUEUED", "RUNNING", "UNKNOWN"}
+    ]
+    if pending:
+        raise AppError(
+            "CONFLICT",
+            "该短片还有未结算的 ComfyUI 作业，请在作业记录中恢复或核对后再删除",
+            {"jobs": pending},
+            status=409,
+        )
     if delete_assets:
         await state.assets.delete_episode(id)
     for job in state.store.list("job", id):

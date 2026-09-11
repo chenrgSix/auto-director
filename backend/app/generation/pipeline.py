@@ -7,6 +7,7 @@ from copy import deepcopy
 
 from app.agents.directing import Directors, anchored_prompt, generation_budget
 from app.agents.provider import LLMProvider
+from app.core.cancellation import run_cancellable
 from app.core.config import Settings
 from app.core.errors import AppError
 from app.core.limits import MAX_EPISODE_SHOTS
@@ -510,6 +511,14 @@ class GenerationService:
         if episode["status"] not in ACTIVE:
             return episode
         result = self.store.update("episode", id, {"status": "CANCELLED"})
+        # Queue operations are synchronous here; the worker cannot take an item mid-removal.
+        for _ in range(self.queue.qsize()):
+            kind, queued_id = self.queue.get_nowait()
+            if kind != "job" and queued_id == id:
+                self.busy.discard(id)
+            else:
+                self.queue.put_nowait((kind, queued_id))
+            self.queue.task_done()
         return result
 
     def find_shot(self, shot_id: str) -> tuple[dict, dict]:
@@ -705,7 +714,11 @@ class GenerationService:
             WorkflowCapability.TEXT_TO_IMAGE, episode.get("reference_workflow_id")
         )
         provider = self.provider_factory()
-        agents = Directors(provider)
+
+        def check_cancel():
+            self.check_cancel(id)
+
+        agents = Directors(provider, check_cancel=check_cancel)
         preview_complete = False
         try:
             if episode.get("preview_required") and not preview_only:
@@ -720,8 +733,8 @@ class GenerationService:
                         self.store.update("episode", id, {"preview_approved_at": None})
                         raise
             async with self.engine.client() as client:
-                system = await client.system()
-                object_info = await client.object_info()
+                system = await run_cancellable(client.system, check_cancel)
+                object_info = await run_cancellable(client.object_info, check_cancel)
             image, video, reference_profile = (
                 refresh_profile(profile, object_info, parameter_overrides(episode, profile))
                 for profile in (image, video, reference_profile)
