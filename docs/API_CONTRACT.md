@@ -1,5 +1,7 @@
 # API 与工作流契约
 
+C25：系统自动宽高必须同时满足视频/图像工作流尺寸约束，向下对齐且不提高预算；不可满足时在生成前返回 WORKFLOW_INVALID，包含具体尺寸和工作流约束。Episode 顶层 width/height、高级覆盖与手动试跑维持显式值并严格校验。budget 可选 explicit_dimensions 记录用户顶层尺寸，旧记录恢复时从 Episode 补齐；无表结构迁移。适配不重新规划、不删除首尾帧或旧视频。
+
 C24：`POST /episodes/{id}/cancel` 仍将状态标为 CANCELLED，取消本地模型及只读预检等待，后台清理完成前 DELETE/重入继续返回 409；已排队但未执行的短片移出本地队列。DELETE 的冲突消息区分后台停止中、生成中、未结算 ComfyUI 作业，并附作业 ID/状态便于核对。不能通过取消或删除绕过 UNKNOWN 防重复执行保护，删除资产仍只由 delete_assets 显式控制。
 
 C23：网页「整片重新生成」沿用 `POST /episodes/{id}/rerun`，省略 shot_ids，默认 scope=video，可选 keyframes；确认后才提交。旧成片 ID 与时长在入队前归档，即使新一轮生成失败或取消，先前全部 rerun_history 与资产文件仍保留，预览/下载复用资产接口。没有新增接口或数据库迁移。

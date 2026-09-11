@@ -16,6 +16,7 @@ from app.generation.engine import RenderEngine
 from app.generation.parameters import (
     ai_parameters,
     duration_seconds,
+    fit_budget_dimensions,
     parameter_overrides,
     resolve_parameters,
     role_overrides,
@@ -769,6 +770,7 @@ class GenerationService:
             validate_strategy(
                 budget, budget["max_duration"], low_memory=budget["low_memory"], ceilings=ceilings
             )
+            fit_budget_dimensions(episode, video, budget)
             fixed_duration = None
             if "duration" in override_roles:
                 fixed_duration = duration_seconds(video, override_roles["duration"], budget["fps"])

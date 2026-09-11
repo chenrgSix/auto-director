@@ -5,6 +5,7 @@ from copy import deepcopy
 from app.core.errors import AppError
 from app.core.limits import MAX_BATCH, MAX_DIMENSION, MAX_FPS, MAX_SHOT_SECONDS, MIN_DIMENSION
 from app.workflows.analyzer import check_value, validate_ai_parameters
+from app.workflows.dimensions import fit_dimensions
 from app.workflows.duration import fit_duration, render_maximum
 from app.workflows.frame_timing import generation_fps
 from app.workflows.ownership import decorate_parameters, is_asset_role
@@ -126,6 +127,17 @@ def validate_strategy(values: dict, maximum: float, *, low_memory=False, ceiling
         )
 
 
+def fit_budget_dimensions(episode, video, budget):
+    """Keep explicit episode dimensions exact; adapt legacy automatic budgets in place."""
+    explicit = [role for role in ("width", "height") if episode.get(role) is not None]
+    if explicit:
+        budget["explicit_dimensions"] = explicit
+    else:
+        budget.pop("explicit_dimensions", None)
+    locked = set(explicit) | role_overrides(video, parameter_overrides(episode, video)).keys()
+    budget.update(fit_dimensions(video, budget, locked=locked))
+
+
 def resolve_parameters(
     profile, automatic, assets, overrides, advanced, budget=None, *, recovery=False, ai_values=None
 ):
@@ -159,6 +171,17 @@ def resolve_parameters(
     maximum = min(
         profile["capabilities"]["max_duration"],
         (budget or {}).get("max_duration", MAX_SHOT_SECONDS),
+    )
+    values = fit_dimensions(
+        profile,
+        values,
+        automatic=budget is not None,
+        locked=()
+        if recovery
+        else set(roles)
+        | set(role_overrides(profile, ai_values or {}))
+        | set((budget or {}).get("explicit_dimensions", [])),
+        ceilings=budget if (budget or {}).get("low_memory") else None,
     )
     validate_strategy(
         values, maximum, low_memory=(budget or {}).get("low_memory", False), ceilings=budget

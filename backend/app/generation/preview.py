@@ -9,6 +9,7 @@ from app.core.errors import AppError
 from app.core.limits import MIN_SHOT_SECONDS
 from app.generation.parameters import (
     duration_seconds,
+    fit_budget_dimensions,
     parameter_overrides,
     resolve_parameters,
     role_overrides,
@@ -104,6 +105,7 @@ def refresh_timing_limits(episode, video):
 
 def validate_timing(episode, video):
     refresh_timing_limits(episode, video)
+    fit_budget_dimensions(episode, video, episode["budget"])
     snapshot = episode.get("preview") or {}
     if (
         "remote_video" not in video
@@ -221,6 +223,7 @@ def rebind_story(episode, image, video, reference):
     validate_strategy(
         budget, budget["max_duration"], low_memory=budget["low_memory"], ceilings=ceilings
     )
+    fit_budget_dimensions(episode, video, budget)
     episode["budget"] = budget
     episode["fixed_shot_duration"] = (
         duration_seconds(video, roles["duration"], budget["fps"]) if "duration" in roles else None
