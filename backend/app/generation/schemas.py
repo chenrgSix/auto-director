@@ -73,6 +73,14 @@ class EpisodeWorkflowRestore(StrictModel):
     history_revision: int = Field(ge=0)
 
 
+class EpisodeRerun(StrictModel):
+    expected_version: int = Field(ge=1)
+    scope: Literal["video", "keyframes"]
+    # Omitted means all enabled shots. Never interpret an empty selection as all.
+    shot_ids: list[str] | None = Field(default=None, min_length=1, max_length=LEGACY_MAX_SHOTS)
+    new_seed: bool = True
+
+
 class PreviewShotUpdate(StrictModel):
     id: str = Field(min_length=1)
     title: str = Field(min_length=1, max_length=200)

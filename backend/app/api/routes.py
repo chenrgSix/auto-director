@@ -16,6 +16,7 @@ from app.db.store import uid
 from app.generation.schemas import (
     ACTIVE,
     EpisodeCreate,
+    EpisodeRerun,
     EpisodeWorkflowRestore,
     EpisodeWorkflowsUpdate,
     PreviewApproval,
@@ -323,6 +324,11 @@ async def delete_episode(request: Request, id: str, delete_assets: bool = False)
 @router.post("/episodes/{id}/generate", status_code=202)
 async def generate(request: Request, id: str):
     return resources(request).generation.enqueue(id)
+
+
+@router.post("/episodes/{id}/rerun", status_code=202)
+async def rerun_episode(request: Request, id: str, body: EpisodeRerun):
+    return resources(request).generation.rerun(id, body)
 
 
 @router.post("/episodes/{id}/preview", status_code=202)

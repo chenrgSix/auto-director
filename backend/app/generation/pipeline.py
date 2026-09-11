@@ -37,6 +37,7 @@ from app.generation.resolvers import AssetResolver, ContinuityManager
 from app.generation.schemas import (
     ACTIVE,
     EpisodeCreate,
+    EpisodeRerun,
     EpisodeWorkflowRestore,
     EpisodeWorkflowsUpdate,
     PreviewUpdate,
@@ -532,26 +533,81 @@ class GenerationService:
 
     def retry(self, shot_id: str, scope: str) -> dict:
         episode, _ = self.find_shot(shot_id)
-        if episode.get("preview_required") and not episode.get("preview_approved_at"):
-            raise AppError("PREVIEW_REQUIRED", "请先确认分镜", status=409)
-        if episode["status"] in ACTIVE or episode["id"] in self.busy:
+        return self.rerun(
+            episode["id"],
+            EpisodeRerun(expected_version=episode["version"], scope=scope, shot_ids=[shot_id]),
+        )
+
+    def rerun(self, id: str, request: EpisodeRerun) -> dict:
+        if id in self.busy:
             raise AppError("CONFLICT", "请先等待或取消当前生成", status=409)
+        if self.engine.unresolved():
+            raise AppError(
+                "UNRESOLVED_JOB", "存在未确认的作业，请先恢复或核对原任务再重跑", status=409
+            )
+        if any(j["status"] in {"RUNNING", "QUEUED"} for j in self.store.list("job", id)):
+            raise AppError("CONFLICT", "当前仍有未结束的作业，暂不能重跑", status=409)
 
         def change(current):
-            index = next(i for i, shot in enumerate(current["shots"]) if shot["id"] == shot_id)
-            self.invalidate(current["shots"][index], scope)
-            for shot in current["shots"][index + 1 :]:
-                if shot["transition_from_previous"] not in CONTINUOUS:
-                    break
-                self.invalidate(shot)
-            current.update(final_video_asset_id=None, status="FAILED", error=None)
+            if current["version"] != request.expected_version:
+                raise AppError("CONFLICT", "短片已更新，请刷新后重新选择重跑范围", status=409)
+            if current["status"] in ACTIVE:
+                raise AppError("CONFLICT", "请先等待或取消当前生成", status=409)
+            if current.get("preview_required") and not current.get("preview_approved_at"):
+                raise AppError("PREVIEW_REQUIRED", "请先确认分镜", status=409)
+            enabled = {s["id"] for s in current["shots"] if s["enabled"]}
+            selected = set(request.shot_ids) if request.shot_ids is not None else enabled
+            if (
+                not selected
+                or not selected <= enabled
+                or (request.shot_ids is not None and len(selected) != len(request.shot_ids))
+            ):
+                raise AppError("CONFLICT", "请选择当前短片中启用且不重复的镜头", status=409)
+            scopes, previous_changed = {}, False
+            for shot in current["shots"]:
+                if not shot["enabled"]:
+                    continue
+                dependent = previous_changed and shot["transition_from_previous"] in CONTINUOUS
+                if dependent or shot["id"] in selected:
+                    scopes[shot["id"]] = "keyframes" if dependent else request.scope
+                previous_changed = shot["id"] in scopes
+            snapshot = {
+                "id": uid(),
+                "created_at": now(),
+                "scope": request.scope,
+                "shot_ids": sorted(selected),
+                "affected_shot_ids": list(scopes),
+                "new_seed": request.new_seed,
+                "final_video_asset_id": current.get("final_video_asset_id"),
+                "final_duration": current.get("final_duration"),
+                "shots": [deepcopy(s) for s in current["shots"] if s["id"] in scopes],
+            }
+            current.setdefault("rerun_history", []).append(snapshot)
+            for shot in current["shots"]:
+                if shot["id"] in scopes:
+                    self.invalidate(shot, scopes[shot["id"]])
+                    if request.new_seed:
+                        shot["seed_offset"] = (shot.get("seed_offset", 0) + 10000) % 2147483648
+            current.update(
+                final_video_asset_id=None,
+                final_duration=None,
+                status="QUEUED",
+                queued_operation="episode",
+                error=None,
+            )
 
-        self.store.update("episode", episode["id"], change)
-        return self.enqueue(episode["id"])
+        result = self.store.update("episode", id, change)
+        self.busy.add(id)
+        self.queue.put_nowait(("episode", id))
+        return result
 
     def timeline(self, id: str, request: TimelineUpdate) -> dict:
         if id in self.busy:
             raise AppError("CONFLICT", "当前任务尚未结束，暂不能编辑时间线", status=409)
+        if any(
+            job["status"] in {"QUEUED", "RUNNING", "UNKNOWN"} for job in self.store.list("job", id)
+        ):
+            raise AppError("CONFLICT", "请先恢复或核对未结束作业，再编辑时间线", status=409)
 
         def change(episode):
             if episode["status"] in ACTIVE:
@@ -922,7 +978,8 @@ class GenerationService:
             self.warn(id, "视频工作流不支持 reference_video，CONTINUE_VIDEO 已降级为帧连续。")
         base = {
             **budget,
-            "seed": episode["seed"] + shot["index"] * 100,
+            "seed": (episode["seed"] + shot["index"] * 100 + shot.get("seed_offset", 0))
+            % 2147483648,
             "negative": prompts["negative_prompt"],
             "motion_strength": prompts.get("motion_strength", 0.6),
             "camera_motion": prompts.get("camera_motion", "static"),

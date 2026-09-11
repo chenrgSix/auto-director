@@ -1,5 +1,9 @@
 # API 与工作流契约
 
+C21 重跑：`POST /episodes/{id}/rerun` 接受 `{expected_version, scope:"video"|"keyframes", shot_ids?:string[], new_seed?:boolean}`，返回 202。省略 shot_ids 表示全部启用镜头；空列表、重复、其他短片或禁用镜头拒绝。`video` 沿用已有关键帧，`keyframes` 重做关键帧及视频；后续连续性依赖一并失效，跳过禁用镜头，到独立切镜停止。保存 `rerun_history`（旧成片、镜头/提示词/QA/资产绑定与影响范围），不删资产或改写计划、Bible、参考图。默认递增镜头 seed_offset；new_seed=false 沿用原种子，明确高级 seed 覆盖仍优先。新结果完成后重新导出整片。
+
+重跑版本不匹配/运行中返回 409 CONFLICT；存在任何 UNKNOWN 作业返回 409 UNRESOLVED_JOB；未确认分镜返回 409 PREVIEW_REQUIRED。所有拒绝均不修改原成果、不排队。旧 `/shots/{id}/retry[-video|-keyframes]` 委托同一实现，亦保留历史和执行未知状态保护。重跑与恢复原任务是独立操作，未知任务不得借重跑解除防重复提交保护。
+
 C21 连接恢复：已取得 prompt_id 的作业保持 RUNNING，在 `render_timeout` 内对历史查询和产物下载重连，`progress.connection=reconnecting|connected`、`reconnect_attempt`、`retry_in` 表示连接状态，保留最后节点/采样进度。WebSocket 中断会重新连接，HTTP 轮询持续有效。超时仍为 UNKNOWN，既有 `/episodes/{id}/generate` 复用相同输入的原作业；未取得 prompt_id 必须先 reconcile。断网不取消远端，不自动重发 POST /prompt。取消请求无法确认时仍保留 UNKNOWN。
 
 C20：每镜时间线按 workflow.max_duration、用户显式 max_shot_duration 和模型实际合法时长校验；显存/质量模式不再额外施加 3/4 秒硬上限。旧预算在读取待确认预览、保存/批准和继续生成时刷新时长字段，保留故事、图片尺寸和素材。OOM 降级仍受工作流/模型与共享重试预算约束，不改变目标时间线。
