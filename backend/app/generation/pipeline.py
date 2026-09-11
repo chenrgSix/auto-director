@@ -36,6 +36,7 @@ from app.generation.preview import (
     validate_timing,
     workflow_versions,
 )
+from app.generation.recovery import prepare_recovery, recovery_profiles, replay_job
 from app.generation.resolvers import AssetResolver, ContinuityManager
 from app.generation.schemas import (
     ACTIVE,
@@ -286,6 +287,7 @@ class GenerationService:
                 workflow_binding_revision=episode.get("workflow_binding_revision", 0) + 1,
                 workflow_binding_history=history,
             )
+            episode.pop("render_recovery", None)
             if rendered and episode.get("plan"):
                 resume_story(episode, *profiles)
             elif episode.get("plan"):
@@ -543,6 +545,7 @@ class GenerationService:
 
     @staticmethod
     def invalidate(shot: dict, scope="keyframes") -> None:
+        shot.pop("render_cursor", None)
         shot.update(
             video_asset_id=None,
             actual_end_frame_asset_id=None,
@@ -606,6 +609,7 @@ class GenerationService:
                 "shots": [deepcopy(s) for s in current["shots"] if s["id"] in scopes],
             }
             current.setdefault("rerun_history", []).append(snapshot)
+            current.pop("render_recovery", None)
             for shot in current["shots"]:
                 if shot["id"] in scopes:
                     self.invalidate(shot, scopes[shot["id"]])
@@ -676,6 +680,7 @@ class GenerationService:
                     self.invalidate(shot)
                     invalidated.add(shot["id"])
             episode.update(final_video_asset_id=None, status="DRAFT", error=None)
+            episode.pop("render_recovery", None)
 
         return self.store.update("episode", id, change)
 
@@ -738,6 +743,15 @@ class GenerationService:
         shot_id=None,
     ) -> dict:
         self.check_cancel(episode["id"])
+        step_key = (
+            f"binding:{episode['workflow_binding_revision']}:{key}"
+            if episode.get("workflow_binding_revision")
+            else key
+        )
+        if existing := replay_job(self.store, episode["id"], step_key):
+            results = await self.engine.run(existing["id"], lambda: self.cancelled(episode["id"]))
+            self.check_cancel(episode["id"])
+            return results[0]
         parameters = parameter_overrides(episode, profile)
         output = (
             self.shot(episode["id"], shot_id).get("prompts") if shot_id else episode.get("bible")
@@ -755,9 +769,7 @@ class GenerationService:
             shot_id,
             type,
             parameters,
-            f"binding:{episode['workflow_binding_revision']}:{key}"
-            if episode.get("workflow_binding_revision")
-            else key,
+            step_key,
             advanced_mode=episode.get("advanced_mode", False),
             budget=episode.get("budget"),
             allowed_asset_ids=episode.get("allowed_asset_ids", []),
@@ -769,10 +781,15 @@ class GenerationService:
 
     async def generate(self, id: str, *, preview_only=False) -> None:
         episode = self.store.get("episode", id)
+        if not preview_only:
+            episode = prepare_recovery(self.store, episode, self.engine.unresolved())
         image = self.router.select("image", episode.get("image_workflow_id"))
         video = self.router.select("video", episode.get("video_workflow_id"))
         reference_profile = self.router.resolve(
             WorkflowCapability.TEXT_TO_IMAGE, episode.get("reference_workflow_id")
+        )
+        image, video, reference_profile = recovery_profiles(
+            self.store, episode, (image, video, reference_profile)
         )
         provider = self.provider_factory()
 
@@ -970,6 +987,10 @@ class GenerationService:
                 )
                 references = {**current["references"], key: result["id"]}
                 self.store.update("episode", id, {"references": references})
+                if (self.store.get("episode", id).get("render_recovery") or {}).get(
+                    "shot_id"
+                ) is None:
+                    self.clear_recovery(id)
             episode = self.store.get("episode", id)
             previous = None
             continuity = {}
@@ -1066,9 +1087,28 @@ class GenerationService:
         }
         retry_scope = "keyframes"
         retries = {"remaining": budget["max_retries"]}
-        for attempt in range(budget["max_retries"] + 1):
+        recovery = self.store.get("episode", id).get("render_recovery") or {}
+        cursor = recovery.get("cursor") if recovery.get("shot_id") == sid else None
+        start_attempt = 0
+        if cursor:
+            base = deepcopy(cursor["base"])
+            start_attempt = cursor["attempt"]
+            retries["remaining"] = min(cursor["remaining"], budget["max_retries"])
+            retry_scope = "video" if recovery.get("skip_keyframe_qa") else cursor["retry_scope"]
+        for attempt in range(start_attempt, budget["max_retries"] + 1):
             self.check_cancel(id)
             shot = self.shot(id, sid)
+            self.update_shot(
+                id,
+                sid,
+                render_cursor={
+                    "attempt": attempt,
+                    "retry_version": shot["retry_version"],
+                    "remaining": retries["remaining"],
+                    "base": deepcopy(base),
+                    "retry_scope": retry_scope,
+                },
+            )
             stamp = f"shot:{sid}:r{shot['retry_version']}:a{attempt}"
             try:
                 self.stage(id, "GENERATING_KEYFRAMES")
@@ -1223,6 +1263,7 @@ class GenerationService:
                     continuity_after={**continuity, **prompts["continuity_state"]},
                     error=None,
                 )
+                self.clear_recovery(id, sid)
                 return
             except AppError as exc:
                 if (
@@ -1253,6 +1294,22 @@ class GenerationService:
                     updates[f"{'end_frame' if needs_end else 'start_frame'}_asset_id"] = None
                 self.update_shot(id, sid, **updates)
         raise AppError("QA_FAILED", "镜头超出重试预算")
+
+    def clear_recovery(self, id, shot_id=None):
+        current = self.store.get("episode", id)
+        if not current.get("render_recovery") and not any(
+            s["id"] == shot_id and s.get("render_cursor") for s in current["shots"]
+        ):
+            return
+
+        def change(episode):
+            recovery = episode.get("render_recovery")
+            if recovery and recovery.get("shot_id") == shot_id:
+                episode.pop("render_recovery", None)
+            if shot_id:
+                next(s for s in episode["shots"] if s["id"] == shot_id).pop("render_cursor", None)
+
+        self.store.update("episode", id, change)
 
     async def render_video(
         self, episode, shot, image, video, base, references, video_inputs, stamp, retries

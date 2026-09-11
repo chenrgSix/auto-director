@@ -217,9 +217,8 @@ def archive_duplicate_prompts(shot, *profiles):
 def rebind_story(episode, image, video, reference):
     """Reconcile an unrendered story locally; callers retain the previous state in history."""
     snapshot = episode.get("preview") or {}
-    if (
-        "remote_video" in snapshot
-        and version_matches(video, snapshot.get("workflow_versions", {}).get(video["id"]))
+    if "remote_video" in snapshot and version_matches(
+        video, snapshot.get("workflow_versions", {}).get(video["id"])
     ):
         video = {**video, "remote_video": snapshot["remote_video"]}
     available = (episode.get("budget") or {}).get("vram_free", 0)
