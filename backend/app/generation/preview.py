@@ -20,6 +20,7 @@ from app.generation.workflow_state import scope_ai_parameters
 from app.workflows.analyzer import check_value
 from app.workflows.duration import duration_limits, render_maximum, uses_remote_video
 from app.workflows.frame_timing import generation_fps
+from app.workflows.versions import version_matches, versions_match
 
 PROMPT_FIELDS = ("start_frame_prompt", "end_frame_prompt", "video_prompt")
 PROMPT_LABELS = dict(zip(PROMPT_FIELDS, ("首帧提示词", "尾帧提示词", "视频提示词"), strict=True))
@@ -30,7 +31,7 @@ def workflow_versions(profiles):
 
 
 def require_current_preview(episode, profiles):
-    if (episode.get("preview") or {}).get("workflow_versions") != workflow_versions(profiles):
+    if not versions_match((episode.get("preview") or {}).get("workflow_versions", {}), profiles):
         raise AppError("PREVIEW_STALE", "工作流配置已变更，请更新分镜预览后确认", status=409)
 
 
@@ -38,7 +39,7 @@ def preview_video(episode, video):
     snapshot = episode.get("preview") or {}
     if (
         "remote_video" not in video
-        and snapshot.get("workflow_versions", {}).get(video["id"]) == video["version"]
+        and version_matches(video, snapshot.get("workflow_versions", {}).get(video["id"]))
         and snapshot.get("video_parameter_snapshot") is not None
     ):
         return {**video, "parameters": deepcopy(snapshot["video_parameter_snapshot"])}
@@ -125,7 +126,7 @@ def validate_timing(episode, video):
     if (
         "remote_video" not in video
         and "remote_video" in snapshot
-        and snapshot.get("workflow_versions", {}).get(video["id"]) == video["version"]
+        and version_matches(video, snapshot.get("workflow_versions", {}).get(video["id"]))
     ):
         video = {**video, "remote_video": snapshot["remote_video"]}
     shots = episode["shots"]
@@ -218,7 +219,7 @@ def rebind_story(episode, image, video, reference):
     snapshot = episode.get("preview") or {}
     if (
         "remote_video" in snapshot
-        and snapshot.get("workflow_versions", {}).get(video["id"]) == video["version"]
+        and version_matches(video, snapshot.get("workflow_versions", {}).get(video["id"]))
     ):
         video = {**video, "remote_video": snapshot["remote_video"]}
     available = (episode.get("budget") or {}).get("vram_free", 0)

@@ -61,6 +61,7 @@ from app.workflows.frame_timing import generation_fps
 from app.workflows.ownership import is_asset_role
 from app.workflows.router import CapabilityRouter
 from app.workflows.schema import WorkflowCapability
+from app.workflows.versions import versions_match
 
 logger = logging.getLogger(__name__)
 CONTINUOUS = {"CONTINUE_FRAME", "CONTINUE_VIDEO"}
@@ -368,7 +369,7 @@ class GenerationService:
             episode["recoverable_workflow_revision"] = history["revision"]
         if episode["status"] == "AWAITING_REVIEW" and episode.get("preview"):
             profiles = self.preview_profiles(episode)
-            if episode["preview"]["workflow_versions"] == workflow_versions(profiles):
+            if versions_match(episode["preview"]["workflow_versions"], profiles):
                 # Refresh derived views for old previews without rewriting user data/version.
                 refresh_timing_limits(episode, profiles[1])
                 for shot in episode["shots"]:
@@ -446,7 +447,7 @@ class GenerationService:
                     raise AppError("CONFLICT", "已开始渲染或任务尚未结束，不能重新预览", status=409)
                 profiles = self.preview_profiles(episode)
                 previous = episode.get("preview") or {}
-                if previous.get("workflow_versions") != workflow_versions(profiles):
+                if not versions_match(previous.get("workflow_versions", {}), profiles):
                     if episode.get("plan"):
                         rebind_story(episode, *profiles)
                     else:

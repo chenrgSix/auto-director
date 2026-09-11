@@ -217,7 +217,14 @@ async def test_workflow(request: Request, id: str, body: TestRun):
         body.parameter_values,
         "test:" + uid(),
     )
-    state.store.update("workflow", id, {"last_test_job_id": job["id"]})
+    state.store.update(
+        "workflow",
+        id,
+        {
+            "last_test_job_id": job["id"],
+            "configuration_version": profile.get("configuration_version", profile["version"]),
+        },
+    )
     state.generation.queue.put_nowait(("job", job["id"]))
     return public_job(job)
 

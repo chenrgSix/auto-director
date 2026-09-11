@@ -68,6 +68,7 @@ class WorkflowManager:
                 "validation": None,
                 "last_validated_at": None,
                 "last_test_job_id": None,
+                "configuration_version": 1,
             }
         )
         return self.describe(
@@ -104,6 +105,21 @@ class WorkflowManager:
                 else "IMAGE_TO_VIDEO"
             )
         candidate = canonicalize({**deepcopy(original), **updates})
+        executable_fields = (
+            "workflow",
+            "bindings",
+            "outputs",
+            "media_type",
+            "capability",
+            "capabilities",
+            "parameter_values",
+            "parameter_rules",
+        )
+        candidate["configuration_version"] = (
+            original["version"] + 1
+            if any(candidate.get(key) != original.get(key) for key in executable_fields)
+            else original.get("configuration_version", original["version"])
+        )
         # Keep incomplete bindings editable; a profile is runnable only after validation.
         if not validate_bindings(candidate):
             patch(candidate, {})
@@ -133,6 +149,9 @@ class WorkflowManager:
                 "workflow",
                 id,
                 {
+                    "configuration_version": profile.get(
+                        "configuration_version", profile["version"]
+                    ),
                     "parameters": profile["parameters"],
                     "validation": result,
                     "last_validated_at": now(),
