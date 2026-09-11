@@ -46,7 +46,9 @@ from app.generation.schemas import (
     TimelineUpdate,
 )
 from app.generation.workflow_state import (
+    REFERENCE_INPUT_WARNING,
     media_ids,
+    reconcile_reference_warning,
     recoverable_history,
     resume_story,
     story_snapshot,
@@ -295,6 +297,7 @@ class GenerationService:
                     preview=None,
                     preview_approved_at=None,
                 )
+            reconcile_reference_warning(episode, profiles[0])
 
         return self.store.update("episode", id, change)
 
@@ -353,6 +356,13 @@ class GenerationService:
 
     def detail(self, id: str) -> dict:
         episode = self.store.get("episode", id)
+        if REFERENCE_INPUT_WARNING in episode.get("warnings", []):
+            try:
+                image = self.router.select("image", episode.get("image_workflow_id"))
+            except AppError:
+                pass  # Keep the original warning if the current workflow cannot be resolved.
+            else:
+                reconcile_reference_warning(episode, image)
         if history := recoverable_history(episode):
             episode["recoverable_workflow_revision"] = history["revision"]
         if episode["status"] == "AWAITING_REVIEW" and episode.get("preview"):
@@ -857,9 +867,10 @@ class GenerationService:
             if episode["qa_enabled"] and not visual_qa:
                 self.warn(id, "未配置 VLM，视觉 QA 已跳过；仅执行媒体技术校验。")
             if "reference_image" not in image["bindings"]:
-                self.warn(
-                    id,
-                    "当前图像工作流无 reference_image 输入，参考资产未用于视觉条件；一致性依赖 Bible 文本。",
+                self.warn(id, REFERENCE_INPUT_WARNING)
+            elif REFERENCE_INPUT_WARNING in episode.get("warnings", []):
+                self.store.update(
+                    "episode", id, lambda current: reconcile_reference_warning(current, image)
                 )
             self.stage(id, "GENERATING_REFERENCES")
             descriptions = [

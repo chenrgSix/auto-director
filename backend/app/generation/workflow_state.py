@@ -4,6 +4,18 @@ from copy import deepcopy
 
 from app.generation.parameters import usable_ai_values
 
+REFERENCE_INPUT_WARNING = (
+    "当前图像工作流无 reference_image 输入，参考资产未用于视觉条件；一致性依赖 Bible 文本。"
+)
+
+
+def reconcile_reference_warning(episode, image):
+    if "reference_image" in image.get("bindings", {}):
+        episode["warnings"] = [
+            warning for warning in episode.get("warnings", []) if warning != REFERENCE_INPUT_WARNING
+        ]
+
+
 STORY_FIELDS = (
     "title",
     "status",
