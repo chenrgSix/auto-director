@@ -87,13 +87,13 @@ async def test_provider_repairs_schema_once_and_never_executes_extra_fields():
     assert "tools" not in calls[0]
 
 
-def test_low_vram_changes_clip_budget():
+def test_low_vram_changes_image_budget_but_keeps_configured_clip_duration():
     result = generation_budget(
         {"quality": "standard", "aspect_ratio": "9:16"},
         {"max_duration": 5},
         {"devices": [{"vram_free": 6 * 1024**3}]},
     )
-    assert result["max_duration"] == 3
+    assert result["max_duration"] == 5
     assert result["low_memory"]
     assert result["width"] == 384
 

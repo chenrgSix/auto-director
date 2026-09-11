@@ -23,6 +23,7 @@ from app.core.limits import (
     PLAN_BATCH_SHOTS,
     PREFERRED_MIN_SHOT_SECONDS,
 )
+from app.workflows.duration import duration_limits
 
 
 def allocate_centiseconds(
@@ -146,17 +147,11 @@ def generation_budget(
         (episode.get("width") or width) > width or (episode.get("height") or height) > height
     ):
         raise AppError("OVERRIDE_INVALID", "自定义分辨率超过低显存策略上限")
-    render_maximum = min(
-        capabilities["max_duration"],
-        30 if remote_video else 3 if low else 4 if quality == "fast" else 30,
-    )
-    maximum = min(render_maximum, episode.get("max_shot_duration") or 30)
     return {
         "width": episode.get("width") or width,
         "height": episode.get("height") or height,
         "fps": episode.get("fps", 16),
-        "max_duration": maximum,
-        "render_max_duration": render_maximum,
+        **duration_limits(episode, capabilities),
         "batch": 1,
         "max_retries": episode.get("max_retries")
         if episode.get("max_retries") is not None

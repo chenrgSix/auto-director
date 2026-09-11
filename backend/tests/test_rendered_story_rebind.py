@@ -9,9 +9,9 @@ from tests.test_episode_preview import preview
 from tests.test_episode_workflows import imported, rebind
 
 
-def fail_after_frames(system, monkeypatch, *, target_duration=4):
+def fail_after_frames(system, monkeypatch, *, target_duration=4, **preview_options):
     client, app, _ = system
-    episode = preview(system, target_duration=target_duration)
+    episode = preview(system, target_duration=target_duration, **preview_options)
     run = app.state.engine.run
 
     async def fail_video(job_id, *args, **kwargs):

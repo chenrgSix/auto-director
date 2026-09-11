@@ -8,6 +8,15 @@ from app.core.limits import MAX_SHOT_SECONDS
 from app.workflows.analyzer import check_value
 
 
+def duration_limits(episode: dict, capabilities: dict) -> dict:
+    """Use configured limits; device free memory cannot predict a model's clip capacity."""
+    maximum = min(capabilities["max_duration"], MAX_SHOT_SECONDS)
+    return {
+        "max_duration": min(maximum, episode.get("max_shot_duration") or MAX_SHOT_SECONDS),
+        "render_max_duration": maximum,
+    }
+
+
 def fit_duration(profile: dict, seconds: float, maximum: float, *, round_down=False) -> float:
     binding = profile.get("bindings", {}).get("duration", {})
     if binding.get("transform", "identity") != "identity":
@@ -71,6 +80,4 @@ def render_maximum(profile: dict, budget: dict | None = None) -> float:
         profile["capabilities"]["max_duration"],
         budget.get("render_max_duration", budget.get("max_duration", MAX_SHOT_SECONDS)),
     )
-    if budget.get("low_memory") and not uses_remote_video(profile):
-        maximum = min(maximum, 3)
     return fit_duration(profile, maximum, maximum, round_down=True)

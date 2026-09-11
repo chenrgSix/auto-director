@@ -27,6 +27,7 @@ from app.generation.preview import (
     prepare_review,
     prompt_view,
     rebind_story,
+    refresh_timing_limits,
     require_current_preview,
     validate_review_prompts,
     validate_timing,
@@ -354,6 +355,7 @@ class GenerationService:
             profiles = self.preview_profiles(episode)
             if episode["preview"]["workflow_versions"] == workflow_versions(profiles):
                 # Refresh derived views for old previews without rewriting user data/version.
+                refresh_timing_limits(episode, profiles[1])
                 for shot in episode["shots"]:
                     shot["preview_prompt_view"] = prompt_view(episode, shot, *profiles[:2])
         return episode
@@ -675,11 +677,10 @@ class GenerationService:
                 if episode.get("refresh_workflow_budget")
                 else episode.get("budget") or fresh_budget
             )
-            if video["remote_video"]:
-                # Old episodes may have applied the local 3-second ceiling to cloud video.
-                # Keep their image sizes, plans and already-rendered assets intact.
-                for key in ("max_duration", "render_max_duration"):
-                    budget[key] = fresh_budget[key]
+            # Discard legacy VRAM/quality duration caps for local and remote workflows.
+            # Keep prepared content, dimensions and explicit user duration limits intact.
+            for key in ("max_duration", "render_max_duration"):
+                budget[key] = fresh_budget[key]
             budget["render_max_duration"] = render_maximum(video, budget)
             budget["max_duration"] = min(budget["max_duration"], budget["render_max_duration"])
             validate_overrides(

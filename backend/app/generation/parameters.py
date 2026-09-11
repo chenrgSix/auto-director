@@ -115,7 +115,10 @@ def validate_strategy(values: dict, maximum: float, *, low_memory=False, ceiling
         type(values["duration"]) not in {int, float}
         or not 1 <= values["duration"] <= maximum + 1e-9
     ):
-        raise AppError("WORKFLOW_INVALID", "单镜时长超出 workflow / 显存策略上限")
+        raise AppError(
+            "WORKFLOW_INVALID",
+            f"单镜时长 {values['duration']} 秒超出配置上限（允许 1～{maximum:g} 秒）",
+        )
 
 
 def resolve_parameters(

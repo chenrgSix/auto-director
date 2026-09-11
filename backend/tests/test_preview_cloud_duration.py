@@ -2,7 +2,6 @@ from copy import deepcopy
 
 import pytest
 
-from app.core.errors import AppError
 from app.workflows.duration import render_maximum, uses_remote_video
 from tests.test_api_pipeline import wait_episode
 from tests.test_episode_preview import edits, preview
@@ -76,7 +75,7 @@ def test_old_cloud_preview_uses_verified_duration_node_and_rejects_workflow_drif
 @pytest.mark.parametrize(
     "case", ["fresh_local", "image", "other_node", "changed_class", "label_only", "no_metadata"]
 )
-def test_cloud_cache_cannot_exempt_local_or_unknown_video_from_vram_limit(case):
+def test_remote_identity_stays_strict_without_changing_configured_duration(case):
     profile, _ = cloud_profile()
     profile.pop("remote_video")
     profile["execution_info"] = {
@@ -99,5 +98,4 @@ def test_cloud_cache_cannot_exempt_local_or_unknown_video_from_vram_limit(case):
     else:
         invalid.pop("execution_info")
     assert not uses_remote_video(invalid)
-    with pytest.raises(AppError, match="无可用值"):
-        render_maximum(invalid, {"low_memory": True})
+    assert render_maximum(invalid, {"low_memory": True}) == 5

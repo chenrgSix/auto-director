@@ -173,22 +173,22 @@ async def test_repeated_invalid_timing_fails_instead_of_accepting_fragments():
     assert count == 2
 
 
-def test_low_memory_pipeline_uses_four_equal_shots_and_composes_ten_seconds(system):
+def test_low_memory_pipeline_uses_configured_five_second_shots_and_composes_ten_seconds(system):
     client, app, comfy = system
     created = client.post("/api/v1/episodes", json={**episode(10), "memory_mode": "low"}).json()
     id = created["id"]
     assert client.post(f"/api/v1/episodes/{id}/generate").status_code == 202
     finished = wait_episode(client, id)
     assert finished["status"] == "COMPLETED", finished.get("error")
-    assert [s["duration"] for s in finished["shots"]] == [2.5] * 4
+    assert [s["duration"] for s in finished["shots"]] == [5] * 2
     assert finished["final_duration"] == pytest.approx(10, abs=0.1)
     jobs = [j for j in app.state.store.list("job", id) if j["type"] == "SHOT_VIDEO"]
-    assert len(jobs) == 4
-    assert all(j["input_values"]["timeline_duration"] == 2.5 for j in jobs)
+    assert len(jobs) == 2
+    assert all(j["input_values"]["timeline_duration"] == 5 for j in jobs)
     for job in jobs:
         graph = comfy.prompts[job["comfy_prompt_id"]]["prompt"]
         binding = job["profile_snapshot"]["bindings"]["duration"]
-        assert graph[binding["node_id"]]["inputs"][binding["input"]] == 41
+        assert graph[binding["node_id"]]["inputs"][binding["input"]] == 81
 
 
 def test_existing_short_plan_is_resumed_without_replanning(system, monkeypatch):

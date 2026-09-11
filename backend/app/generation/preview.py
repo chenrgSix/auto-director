@@ -17,7 +17,7 @@ from app.generation.parameters import (
 )
 from app.generation.workflow_state import scope_ai_parameters
 from app.workflows.analyzer import check_value
-from app.workflows.duration import render_maximum, uses_remote_video
+from app.workflows.duration import duration_limits, render_maximum, uses_remote_video
 
 PROMPT_FIELDS = ("start_frame_prompt", "end_frame_prompt", "video_prompt")
 PROMPT_LABELS = dict(zip(PROMPT_FIELDS, ("首帧提示词", "尾帧提示词", "视频提示词"), strict=True))
@@ -89,7 +89,20 @@ def validate_review_prompts(episode, image, video):
                 )
 
 
+def refresh_timing_limits(episode, video):
+    """Refresh legacy duration ceilings without changing prepared content or image sizes."""
+    budget = episode["budget"]
+    budget.update(duration_limits(episode, video["capabilities"]))
+    budget["render_max_duration"] = render_maximum(video, budget)
+    budget["max_duration"] = min(budget["max_duration"], budget["render_max_duration"])
+    if episode.get("preview"):
+        episode["preview"].update(
+            {key: budget[key] for key in ("max_duration", "render_max_duration")}
+        )
+
+
 def validate_timing(episode, video):
+    refresh_timing_limits(episode, video)
     snapshot = episode.get("preview") or {}
     if (
         "remote_video" not in video

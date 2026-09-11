@@ -1,5 +1,7 @@
 # API 与工作流契约
 
+C20：每镜时间线按 workflow.max_duration、用户显式 max_shot_duration 和模型实际合法时长校验；显存/质量模式不再额外施加 3/4 秒硬上限。旧预算在读取待确认预览、保存/批准和继续生成时刷新时长字段，保留故事、图片尺寸和素材。OOM 降级仍受工作流/模型与共享重试预算约束，不改变目标时间线。
+
 C19：`PATCH /episodes/{id}/workflows` 始终保留计划、镜头、视觉设定、已保存提示词和已有素材绑定。未渲染故事继续按 C18 校验并等待确认；已开始生成的故事保留原批准，不返回文字预览，不自动生成。已有结果沿用，缺失结果及显式重试使用新工作流；继续生成时重新读取节点与显存预算，不兼容时保留故事和素材并报错。换走的专属覆盖和 AI 映射不迁移到新 ID，原值、作业 JSON 与素材文件保留在历史中。
 
 `POST /episodes/{id}/workflows/restore` 接受 `{expected_version, history_revision}`，仅恢复空短片中的历史故事、进度及素材，不改变当前绑定。已有计划/镜头/素材、运行中/未结算作业、版本冲突、缺失或越权资产均拒绝且不写入。详情中 `recoverable_workflow_revision` 提供可恢复的最近历史版本；恢复记录保存来源，不启动 LLM 或 ComfyUI。
@@ -74,7 +76,7 @@ Binding 为 `{node_id, input, transform}`；`transform` 默认 `identity`，可�
 
 视频秒数输入按 type/min/max/step/enum 自动向上对齐，严格限制在 workflow 与适用显存预算内。Shot 的 `duration` 是时间线时长；视频作业 `input_values.timeline_duration` 记录原值，`input_values.duration` 是实际渲染秒数。例如 MiniMax H3 的 2.86 秒片段请求整数 4 秒，导出裁切回 2.86 秒；不把非法高级覆盖静默取整。无合法交集返回 `WORKFLOW_INVALID`，在生成参考图前拦截。
 
-Episode 预算新增 `render_max_duration`；由绑定 duration 节点的 `api_node=true` 判断云端视频，云端不采用本地 3 秒显存上限，图片仍按本地资源策略。旧 Episode/Job JSON 缺少新增字段时自动兼容，无数据库迁移或重新导入要求。
+Episode 预算新增 `render_max_duration`；时长由显式工作流和用户配置决定，模型类型/min/max/step/enum 继续严格校验；`api_node=true` 用于执行方式展示，C20 起本地与远端视频均不按显存猜测时长上限，图片仍按本地资源策略。旧 Episode/Job JSON 缺少新增字段时自动兼容，无数据库迁移或重新导入要求。
 
 ## 工作流配置检查信息（C12）
 

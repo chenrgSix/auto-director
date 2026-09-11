@@ -139,7 +139,7 @@ def test_timeline_rounds_up_to_legal_render_seconds_and_patches_integer(timeline
     assert profile["workflow"]["clip"]["inputs"]["model.duration"] == 5
 
 
-def test_cloud_video_ignores_vram_clip_ceiling_but_keeps_local_image_budget():
+def test_video_duration_uses_configured_cap_and_keeps_local_image_budget():
     profile, _ = cloud_profile()
     episode = {"quality": "fast", "aspect_ratio": "9:16", "max_shot_duration": 3}
     system = {"devices": [{"vram_free": 6 * 1024**3}]}
@@ -149,8 +149,7 @@ def test_cloud_video_ignores_vram_clip_ceiling_but_keeps_local_image_budget():
     values, *_ = resolve_parameters(profile, {"duration": 2.86}, {}, {}, False, budget)
     assert values["duration"] == 4
     local = {**profile, "remote_video": False}
-    with pytest.raises(AppError, match="无可用值"):
-        render_maximum(local, budget)
+    assert render_maximum(local, budget) == 5
 
 
 def test_no_rounding_beyond_cap_and_overrides_remain_strict():
@@ -284,6 +283,7 @@ def test_cloud_resume_retains_images_and_exact_timeline_with_real_ffmpeg(system)
         {},
     )
     old_budget.pop("render_max_duration")
+    old_budget["max_duration"] = 3
     app.state.store.update("episode", eid, {"plan": planned, "shots": shots, "budget": old_budget})
     original = comfy.handle
     reject_video = True
@@ -339,6 +339,14 @@ def test_cloud_resume_retains_images_and_exact_timeline_with_real_ffmpeg(system)
 def test_incompatible_local_duration_fails_before_spending_on_images(system):
     client, _, comfy = system
     wid = install_cloud(client, comfy, remote=False)
+    profile = client.get(f"/api/v1/workflows/{wid}").json()
+    assert (
+        client.patch(
+            f"/api/v1/workflows/{wid}",
+            json={"capabilities": {**profile["capabilities"], "max_duration": 3}},
+        ).status_code
+        == 200
+    )
     eid = client.post(
         "/api/v1/episodes",
         json={

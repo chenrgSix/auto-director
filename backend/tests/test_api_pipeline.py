@@ -306,6 +306,7 @@ def test_oom_fallback_obeys_budget_and_preserves_timeline(
         "/api/v1/episodes",
         json={
             "idea": "OOM fixture",
+            "memory_mode": "low",
             "target_duration": 5,
             "width": 256,
             "height": 256,
