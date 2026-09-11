@@ -33,10 +33,10 @@ export default function CreatePage({ notify }: { notify: Notify }) {
     if (!idea.trim() || busy || !validDuration || missingAsset) return;
     setBusy(true);
     try {
-      const episode = await api<Episode>('/episodes', 'POST', { idea, target_duration: duration, aspect_ratio: ratio, style, advanced_mode: advancedMode, ...(advancedMode ? { quality, ...advanced, image_workflow_id: advanced.image_workflow_id || null, video_workflow_id: advanced.video_workflow_id || null, reference_workflow_id: advanced.reference_workflow_id || null, workflow_overrides: activeOverrides } : {}) });
+      const episode = await api<Episode>('/episodes', 'POST', { idea, target_duration: duration, aspect_ratio: ratio, style, preview_required: true, advanced_mode: advancedMode, ...(advancedMode ? { quality, ...advanced, image_workflow_id: advanced.image_workflow_id || null, video_workflow_id: advanced.video_workflow_id || null, reference_workflow_id: advanced.reference_workflow_id || null, workflow_overrides: activeOverrides } : {}) });
       navigate(`episode/${episode.id}`);
-      await api(`/episodes/${episode.id}/generate`, 'POST');
-      notify('创作任务已加入队列');
+      await api(`/episodes/${episode.id}/preview`, 'POST');
+      notify('正在规划分镜，完成后请预览并确认');
     } catch (error) { notify((error as Error).message, true); }
     finally { setBusy(false); }
   }
@@ -62,9 +62,9 @@ export default function CreatePage({ notify }: { notify: Notify }) {
             {([{ name: 'fps', label: 'FPS', min: config.data?.limits.fps.min, max: config.data?.limits.fps.max }, { name: 'seed', label: '随机种子', min: 0, max: 2147483647 }, { name: 'max_retries', label: '最大重试次数', min: 0, max: 5 }] as const).map(item => <div className="field" key={item.name}><label htmlFor={item.name}>{item.label}</label><input id={item.name} type="number" min={item.min} max={item.max} value={advanced[item.name]} onChange={event => setAdvanced({ ...advanced, [item.name]: Number(event.target.value) })} /></div>)}
           </div><label className="checkbox"><input type="checkbox" checked={advanced.qa_enabled} onChange={event => setAdvanced({ ...advanced, qa_enabled: event.target.checked })} />启用视觉质量检查{!config.data?.vlm_configured && <small>配置 VLM 后生效</small>}</label>{selectedWorkflows.map(workflow => <ParameterOverrides key={workflow.id} workflow={workflow} values={overrides[workflow.id] ?? {}} notify={notify} onChange={values => setOverrides(current => ({ ...current, [workflow.id]: values }))} />)}</details>}
         </div>
-        <div className="generate-row"><p><span className="dot" />自动规划 · 顺序渲染 · 本地保存</p><button className="primary" disabled={busy || !idea.trim() || !workflows.data || !validDuration || missingAsset} type="submit"><Sparkles size={17} />{busy ? '正在创建…' : '开始生成短片'}<ArrowRight size={17} /></button></div>
+        <div className="generate-row"><p><span className="dot" />先预览分镜 · 确认后生成</p><button className="primary" disabled={busy || !idea.trim() || !workflows.data || !validDuration || missingAsset} type="submit"><Sparkles size={17} />{busy ? '正在创建…' : '生成分镜预览'}<ArrowRight size={17} /></button></div>
       </form>
-      <aside className="creation-aside"><div className="director-note"><div className="note-top"><Clapperboard size={19} /><span>DIRECTOR'S NOTE</span></div><h2>你负责想象。<br />剩下的，交给导演。</h2><p>每一部短片，都从一个统一的视觉世界开始。</p><ol>{['规划一个完整故事', '建立角色与视觉设定', '生成首尾帧与视频镜头', '检查、拼接，导出成片'].map((text, index) => <li key={text}><span>0{index + 1}</span>{text}</li>)}</ol><div className="frame-sketch" aria-hidden="true"><div className="sketch-sun" /><div className="sketch-hill a" /><div className="sketch-hill b" /><span>YOUR NEXT SCENE</span></div></div><div className="inspiration"><span className="small-label">没有灵感？从一个假设开始</span>{examples.map((example, index) => <button key={example} onClick={() => setIdea(example)}><span>0{index + 1}</span><p>{example}</p><ArrowUpRightSmall /></button>)}</div></aside>
+      <aside className="creation-aside"><div className="director-note"><div className="note-top"><Clapperboard size={19} /><span>DIRECTOR'S NOTE</span></div><h2>你负责想象。<br />剩下的，交给导演。</h2><p>每一部短片，都从一个统一的视觉世界开始。</p><ol>{['规划一个完整故事', '预览并调整镜头与提示词', '确认后生成画面与视频', '检查、拼接，导出成片'].map((text, index) => <li key={text}><span>0{index + 1}</span>{text}</li>)}</ol><div className="frame-sketch" aria-hidden="true"><div className="sketch-sun" /><div className="sketch-hill a" /><div className="sketch-hill b" /><span>YOUR NEXT SCENE</span></div></div><div className="inspiration"><span className="small-label">没有灵感？从一个假设开始</span>{examples.map((example, index) => <button key={example} onClick={() => setIdea(example)}><span>0{index + 1}</span><p>{example}</p><ArrowUpRightSmall /></button>)}</div></aside>
     </div>
   </>;
 }

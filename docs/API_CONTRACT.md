@@ -4,6 +4,16 @@
 
 Base `/api/v1`，JSON；ID 由服务端生成；UTC ISO 时间。验证失败 422，不存在 404，状态冲突 409，外部执行失败提供可读 `error.code/message/details`。仅本地单用户使用，默认绑定 loopback；跨域与公网 ComfyUI 需要显式配置。
 
+### 分镜预览与确认（C14）
+
+网页创建时携带 `preview_required: true`，然后 `POST /episodes/{id}/preview`（202）。队列完成导演规划、Visual Bible 与逐镜 ShotPrompts，停在 `AWAITING_REVIEW`，不创建渲染 Job 或生成 Asset；仅向 ComfyUI 读取设备及节点约束。`PREPARING_PROMPTS` 为活动状态，可取消；未完成时重试 preview 复用已有计划和提示词。
+
+`PATCH /episodes/{id}/preview` 接收 `{expected_version, shots:[{id,title,duration,start_frame_prompt,end_frame_prompt,video_prompt}]}`。必须包含当前全部镜头及原顺序；只允许待确认时修改，检查标题/文本长度、总时长、单镜 workflow/显存约束及固定时长覆盖。失败原子回滚。只编辑创作提示词，不接受任意 `ai_parameters` 注入。高级固定 prompt、锁定参数、连续镜头复用首帧以及 I2V 不使用的尾帧不能编辑，详情 `shots[].preview_prompt_view` 返回实际输入与锁定原因。
+
+`POST /episodes/{id}/approve` 接收 `{expected_version}`（202），原子记录 `preview_approved_at` 并入队渲染。保存和确认都使用最新版本；配置变动返回 `PREVIEW_STALE`（409），更新 preview 后再确认。未经确认调用 generate/compose/镜头 retry/timeline 返回 `PREVIEW_REQUIRED`（409）。确认后的失败重试沿用原 generate 行为，已有提示词不会重新请求模型。
+
+Episode 的 `preview` 保存工作流版本、capability、时间线单镜 min/max、合法渲染上限和固定时长；Shot 保存 `preview_prompt_view` 与 `preview_edited_fields`。这些是现有 JSON 聚合的增量字段，旧记录缺省 `preview_required=false`，无需数据库表迁移或重算已有短片；旧客户端省略该字段仍可直接 generate。更换工作流清空预览及确认状态，保留历史作业和素材。
+
 ### 模型测试（C09）
 
 `POST /models/test` 接收 `{ "kind": "director" | "vision" }`，只使用已保存的端点、模型和密钥，调用与生成相同的 JSON Provider。导演测试最小 JSON；视觉测试附带临时色块图片并校验识别结果，文件随后删除。模型诊断结果返回 200 / `{kind, model, success, elapsed_seconds, timeout_seconds, checks, error}`；未配置、鉴权/限流、请求错误和无效 JSON 记录在 error 中，非法请求字段仍返回 422。
@@ -16,7 +26,7 @@ Base `/api/v1`，JSON；ID 由服务端生成；UTC ISO 时间。验证失败 42
 
 `PATCH /episodes/{id}/workflows` 接收 `expected_version`（详情响应的 version）及显式 `image_workflow_id`、`reference_workflow_id`、`video_workflow_id`。参考项必须为 TEXT_TO_IMAGE，其余按媒体类型校验；全部要求本地绑定完整，不请求 AI/ComfyUI。版本过期、Episode 运行或仍有 QUEUED/RUNNING/UNKNOWN 作业返回 409，失败不修改数据。
 
-实际更换时增加 `workflow_binding_revision`，旧绑定、计划/Bible、镜头/参考/成片与相关覆盖归档到 `workflow_binding_history[].previous_state`。当前生成状态重置为 DRAFT，需另行调用 generate 重新规划；保留 Idea/时长/比例/风格与历史作业/素材文件。仅保留仍选中工作流的覆盖；已换走媒体的旧式参数覆盖清空。相同 ID 提交不重置进度。渲染缓存按绑定版本隔离，旧数据缺失版本按 0 处理，无数据库迁移。
+实际更换时增加 `workflow_binding_revision`，旧绑定、计划/Bible、镜头/参考/成片与相关覆盖归档到 `workflow_binding_history[].previous_state`。当前生成状态重置为 DRAFT；启用预览的短片需再次 preview/approve，旧式短片可 generate 重新规划；保留 Idea/时长/比例/风格与历史作业/素材文件。仅保留仍选中工作流的覆盖；已换走媒体的旧式参数覆盖清空。相同 ID 提交不重置进度。渲染缓存按绑定版本隔离，旧数据缺失版本按 0 处理，无数据库迁移。
 
 ## 已实现 API
 
@@ -36,6 +46,7 @@ Base `/api/v1`，JSON；ID 由服务端生成；UTC ISO 时间。验证失败 42
 | `POST /jobs/{id}/resolve` | 操作员核对后填写至少 10 字结论，解除 UNKNOWN；不能自动调用 |
 | `POST/GET /episodes`, `GET/DELETE /episodes/{id}` | 单集创建/列表/详情/可选资产清理 |
 | `POST /episodes/{id}/generate`, `POST /episodes/{id}/cancel` | 入队/取消 |
+| `POST/PATCH /episodes/{id}/preview`, `POST /episodes/{id}/approve` | 准备/编辑分镜预览、确认并入队渲染 |
 | `GET /episodes/{id}/progress`, `GET /episodes/{id}/events` | 快照/SSE 进度 |
 | `GET /episodes/{id}/shots`, `PATCH /episodes/{id}/timeline` | 镜头与排序/启用状态 |
 | `GET /episodes/{id}/qa` | 不可变质检历史，包含阶段、镜头、资产与原始得分；重试保留旧记录 |
@@ -85,7 +96,7 @@ Content-Type: application/json
 {"idea":"三只狮子进入侏罗纪","target_duration":5,"quality":"standard","aspect_ratio":"9:16"}
 ```
 
-创建成功返回 201 与 Episode（含 `id`）。随后 `POST /episodes/{id}/generate` 返回 202，轮询 `GET /episodes/{id}` 或读取 `GET /episodes/{id}/events` 的 `progress` 事件；当前 Web UI 采用轮询。完成后读取 `final_video_asset_id`，通过 `GET /assets/{asset_id}/file?download=true` 下载 MP4。
+上述旧式请求创建成功返回 201 与 Episode（含 `id`），随后可直接 `POST /episodes/{id}/generate`（202）。网页默认额外携带 `preview_required:true`，按 C14 的 preview → approve 流程运行。轮询 `GET /episodes/{id}` 或读取 events 的 progress 事件；SSE 在待确认、完成、失败或取消时结束，网页继续采用轮询。完成后读取 `final_video_asset_id`，通过 `GET /assets/{asset_id}/file?download=true` 下载 MP4。
 
 上传为 multipart 字段 `file`，返回 Asset；工作流试跑请求通过 `asset_bindings` 将角色关联到资产 ID，例如 `{"values":{"prompt":"A lion walking","duration":2,"fps":16},"asset_bindings":{"start_frame":"<asset_id>","end_frame":"<asset_id>"}}`。视频试跑要求相应首尾帧已上传。
 
@@ -93,7 +104,7 @@ Content-Type: application/json
 
 ## 状态与错误
 
-Episode 状态遵循原文 §36；增加 `QUEUED` 表示已入队。Shot 状态遵循 §37，增加 `STALE` 表示依赖已变。RenderJob 区分 `QUEUED/RUNNING/COMPLETED/FAILED/CANCELLED/UNKNOWN`，UNKNOWN 不等于失败或可以重发。
+Episode 状态遵循原文 §36；增加 `QUEUED` 表示已入队，`PREPARING_PROMPTS` 表示准备文字提示词，`AWAITING_REVIEW` 表示暂停等待用户确认。Shot 状态遵循 §37，增加 `STALE` 表示依赖已变。RenderJob 区分 `QUEUED/RUNNING/COMPLETED/FAILED/CANCELLED/UNKNOWN`，UNKNOWN 不等于失败或可以重发。
 
 错误码保留 §52：COMFYUI_OFFLINE、WORKFLOW_INVALID、MISSING_NODE、MISSING_MODEL、OUT_OF_MEMORY、PROMPT_REJECTED、EXECUTION_ERROR、OUTPUT_NOT_FOUND、QA_FAILED、COMPOSE_FAILED；扩展 CONFIGURATION_REQUIRED、LLM_INVALID_OUTPUT、SUBMISSION_UNKNOWN、JOB_TIMEOUT、CONFLICT、INVALID_MEDIA。
 

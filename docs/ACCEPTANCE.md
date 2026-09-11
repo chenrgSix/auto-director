@@ -1,5 +1,18 @@
 # 验收记录
 
+## C14 分镜预览与确认生成（2026-09-11）
+
+工程门禁：完整 `make check` 成功，Ruff/格式（62 个 Python 文件）、ESLint、TypeScript 与 Vite 构建通过；pytest **268 passed**，58.76 秒，无跳过。新增 `test_episode_preview.py` 16 项回归覆盖：
+
+- 预览完成前后均无 ComfyUI POST /prompt、Job 或生成 Asset；60/90 秒每镜提示词齐全，SSE 在待确认时结束。
+- 编辑标题/时长同步 plan，首帧/尾帧/视频提示词进入最终 patched JSON；原 AI 自定义 denoise 参数保留，固定用户 prompt 优先；I2V 无尾帧渲染。
+- 总时长/单镜范围/固定时长、重复或缺少 ID、空白提示词、任意 AI 映射注入与锁定输入原子拒绝；过期版本不能保存/确认，其他渲染入口不能绕过确认。
+- 取消并继续准备、待确认状态重启、工作流版本变化、重绑定后历史 Job 兼容；原全量流水线、QA、OOM、媒体与旧 API 回归继续通过。
+
+隔离浏览器 `127.0.0.1:8011`：10 秒/2 镜预览，修改标题和视频提示词；时长改成合计 9 秒时禁止开始，恢复合法后保存并刷新保留。第二页面更新时，第一页未保存文本保持且明确提示版本冲突；重新载入后恢复编辑。未经独立保存直接开始，会保存新提示词、确认并最终导出 10.00 秒 MP4。390px 视口的 `clientWidth=scrollWidth=390`；桌面与手机截图见 [桌面](evidence/storyboard-preview-desktop.png)、[手机](evidence/storyboard-preview-mobile.png)。上述模型/ComfyUI 使用夹具，FFmpeg 为真实执行。
+
+正式 `127.0.0.1:8000`：确认无活动 Episode/未完成 Job 后重启，health=200，OpenAPI 含 POST/PATCH preview 与 POST approve，网页入口已更新。原 `43a9ba95-46cb-4d97-b836-051c42de9c17` 完整记录 SHA-256 前后均为 `94b4a22b48bfe05d39b65de32c342d07aadc2d77cbce336a3705d26819d42731`，仍为 COMPLETED/10 秒。未执行本轮真实 LLM/ComfyUI 生成、视觉质量评审或远端 CI。
+
 ## 当前结论（2026-09-10）
 
 P0 + Phase 1/2 MVP 的本地工程闭环已完成。ComfyUI/LLM/VLM 依赖使用隔离夹具验证协议和编排，媒体处理执行真实 FFmpeg；尚未进行真实 AI 生成或视觉效果验收。按用户要求，没有部署 ComfyUI、安装节点或下载权重。

@@ -7,6 +7,7 @@ from app.core.limits import (
     LEGACY_MAX_SHOTS,
     MAX_DIMENSION,
     MAX_EPISODE_SECONDS,
+    MAX_EPISODE_SHOTS,
     MAX_FPS,
     MAX_SHOT_SECONDS,
     MIN_DIMENSION,
@@ -20,6 +21,7 @@ class EpisodeCreate(StrictModel):
     aspect_ratio: Literal["9:16", "16:9", "1:1"] = "9:16"
     style: str = Field(default="自然纪录片", max_length=200)
     quality: Literal["fast", "standard", "high"] = "standard"
+    preview_required: bool = False  # Legacy API clients keep direct generation.
     image_workflow_id: str | None = None
     video_workflow_id: str | None = None
     reference_workflow_id: str | None = None
@@ -66,6 +68,24 @@ class EpisodeWorkflowsUpdate(StrictModel):
     reference_workflow_id: str = Field(min_length=1)
 
 
+class PreviewShotUpdate(StrictModel):
+    id: str = Field(min_length=1)
+    title: str = Field(min_length=1, max_length=200)
+    duration: float = Field(ge=1, le=MAX_SHOT_SECONDS)
+    start_frame_prompt: str = Field(min_length=1, max_length=6000)
+    end_frame_prompt: str = Field(min_length=1, max_length=6000)
+    video_prompt: str = Field(min_length=1, max_length=6000)
+
+
+class PreviewUpdate(StrictModel):
+    expected_version: int = Field(ge=1)
+    shots: list[PreviewShotUpdate] = Field(min_length=1, max_length=MAX_EPISODE_SHOTS)
+
+
+class PreviewApproval(StrictModel):
+    expected_version: int = Field(ge=1)
+
+
 class TimelineItem(StrictModel):
     id: str
     enabled: bool = True
@@ -86,6 +106,7 @@ ACTIVE = {
     "QUEUED",
     "PLANNING",
     "BUILDING_BIBLE",
+    "PREPARING_PROMPTS",
     "GENERATING_REFERENCES",
     "GENERATING_KEYFRAMES",
     "RENDERING_VIDEO",

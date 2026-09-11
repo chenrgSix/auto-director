@@ -31,9 +31,12 @@ export type QA = { stage: string; character_consistency: number; scene_consisten
 export type Shot = {
   id: string; title: string; index: number; duration: number; enabled: boolean; status: string; action: string; camera: string;
   transition_from_previous: string; start_frame_asset_id: string | null; end_frame_asset_id: string | null; video_asset_id: string | null;
-  prompts: { start_frame_prompt: string; end_frame_prompt: string; video_prompt: string; negative_prompt: string } | null;
+  prompts: { start_frame_prompt: string; end_frame_prompt: string; video_prompt: string; negative_prompt: string; camera_motion?: string; motion_strength?: number; ai_parameters?: Record<string, Record<string, Value>> } | null;
+  preview_prompt_view?: { values: Record<PreviewPromptField, string>; locked: Partial<Record<PreviewPromptField, string>> };
   error: Problem | null; qa: QA[];
 };
+export type PreviewPromptField = 'start_frame_prompt' | 'end_frame_prompt' | 'video_prompt';
+export type PreviewShotEdit = Pick<Shot, 'id' | 'title' | 'duration'> & Record<PreviewPromptField, string>;
 export type Episode = {
   version: number; image_workflow_id: string; video_workflow_id: string; reference_workflow_id: string;
   workflow_binding_history?: unknown[];
@@ -41,12 +44,15 @@ export type Episode = {
   status: string; shots: Shot[]; references: Record<string, string>; warnings: string[]; error: Problem | null;
   final_video_asset_id: string | null; final_duration?: number; created_at: string; metrics: Record<string, number>;
   bible: unknown; plan: unknown;
+  preview_required?: boolean; preview_approved_at?: string | null;
+  preview?: { capability: WorkflowCapability; min_duration: number; max_duration: number; render_max_duration: number; fixed_duration: number | null } | null;
 };
 export type Asset = { id: string; type: string; episode_id: string; path: string; metadata: { kind: string }; size: number };
 export type Job = { id: string; type: string; status: string; comfy_prompt_id: string | null; error: Problem | null; output_asset_ids: string[]; progress: { value?: number; max?: number; node?: string } | null; input_values: Record<string, unknown> };
-export const ACTIVE = new Set(['QUEUED', 'PLANNING', 'BUILDING_BIBLE', 'GENERATING_REFERENCES', 'GENERATING_KEYFRAMES', 'RENDERING_VIDEO', 'QA', 'COMPOSING']);
+export const ACTIVE = new Set(['QUEUED', 'PLANNING', 'BUILDING_BIBLE', 'PREPARING_PROMPTS', 'GENERATING_REFERENCES', 'GENERATING_KEYFRAMES', 'RENDERING_VIDEO', 'QA', 'COMPOSING']);
 export const STATUS: Record<string, string> = {
   DRAFT: '草稿', QUEUED: '等待开始', PLANNING: '规划故事', BUILDING_BIBLE: '建立视觉设定', GENERATING_REFERENCES: '生成参考图',
+  PREPARING_PROMPTS: '编写镜头提示词', AWAITING_REVIEW: '待确认分镜',
   GENERATING_KEYFRAMES: '生成关键帧', RENDERING_VIDEO: '渲染视频', QA: '质量检查', COMPOSING: '合成短片', COMPLETED: '已完成', FAILED: '待处理', CANCELLED: '已取消',
   PENDING: '待生成', GENERATING_START_FRAME: '生成首帧', START_FRAME_READY: '首帧就绪', GENERATING_END_FRAME: '生成尾帧', KEYFRAMES_READY: '关键帧就绪',
   VIDEO_READY: '视频就绪', PASSED: '已通过', STALE: '需要重新生成', RUNNING: '执行中', UNKNOWN: '需要核对',

@@ -17,6 +17,8 @@ from app.generation.schemas import (
     ACTIVE,
     EpisodeCreate,
     EpisodeWorkflowsUpdate,
+    PreviewApproval,
+    PreviewUpdate,
     TestRun,
     TimelineUpdate,
 )
@@ -322,6 +324,21 @@ async def generate(request: Request, id: str):
     return resources(request).generation.enqueue(id)
 
 
+@router.post("/episodes/{id}/preview", status_code=202)
+async def prepare_preview(request: Request, id: str):
+    return resources(request).generation.enqueue(id, "preview")
+
+
+@router.patch("/episodes/{id}/preview")
+async def edit_preview(request: Request, id: str, body: PreviewUpdate):
+    return resources(request).generation.edit_preview(id, body)
+
+
+@router.post("/episodes/{id}/approve", status_code=202)
+async def approve_preview(request: Request, id: str, body: PreviewApproval):
+    return resources(request).generation.enqueue(id, "approve", body.expected_version)
+
+
 @router.patch("/episodes/{id}/workflows")
 async def update_episode_workflows(request: Request, id: str, body: EpisodeWorkflowsUpdate):
     return resources(request).generation.change_workflows(id, body)
@@ -390,7 +407,7 @@ async def events(request: Request, id: str):
         while not await request.is_disconnected():
             data = progress(request, id)
             yield "event: progress\ndata: " + json.dumps(data, ensure_ascii=False) + "\n\n"
-            if data["status"] in {"COMPLETED", "FAILED", "CANCELLED"}:
+            if data["status"] in {"COMPLETED", "FAILED", "CANCELLED", "AWAITING_REVIEW"}:
                 break
             await asyncio.sleep(1)
 

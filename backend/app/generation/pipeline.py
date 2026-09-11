@@ -21,8 +21,21 @@ from app.generation.parameters import (
     validate_overrides,
     validate_strategy,
 )
+from app.generation.preview import (
+    apply_edits,
+    prepare_review,
+    require_current_preview,
+    validate_timing,
+    workflow_versions,
+)
 from app.generation.resolvers import AssetResolver, ContinuityManager
-from app.generation.schemas import ACTIVE, EpisodeCreate, EpisodeWorkflowsUpdate, TimelineUpdate
+from app.generation.schemas import (
+    ACTIVE,
+    EpisodeCreate,
+    EpisodeWorkflowsUpdate,
+    PreviewUpdate,
+    TimelineUpdate,
+)
 from app.media.service import Assets, compose, extract_frame
 from app.workflows.analyzer import refresh_profile, validate_bindings
 from app.workflows.duration import render_maximum
@@ -102,7 +115,7 @@ class GenerationService:
                     if kind == "compose":
                         await self.compose_episode(id)
                     else:
-                        await self.generate(id)
+                        await self.generate(id, preview_only=kind == "preview")
             except AppError as exc:
                 if kind == "job":
                     job = self.store.get("job", id)
@@ -245,6 +258,8 @@ class GenerationService:
                 "started_at": None,
                 "completed_at": None,
                 "queued_operation": None,
+                "preview": None,
+                "preview_approved_at": None,
             }
             configuration = {
                 **selection,
@@ -272,11 +287,77 @@ class GenerationService:
 
         return self.store.update("episode", id, change)
 
-    def enqueue(self, id: str, operation="episode") -> dict:
+    def preview_profiles(self, episode):
+        return [
+            self.router.select("image", episode.get("image_workflow_id")),
+            self.router.select("video", episode.get("video_workflow_id")),
+            self.router.resolve(
+                WorkflowCapability.TEXT_TO_IMAGE, episode.get("reference_workflow_id")
+            ),
+        ]
+
+    def has_current_jobs(self, episode):
+        revision = episode.get("workflow_binding_revision", 0)
+        for job in self.store.list("job", episode["id"]):
+            if job["status"] in {"QUEUED", "RUNNING", "UNKNOWN"}:
+                return True
+            step = job.get("step_key", "")
+            if (
+                step.startswith(f"binding:{revision}:")
+                if revision
+                else not step.startswith("binding:")
+            ):
+                return True
+        return False
+
+    def check_review_state(self, episode, expected_version):
+        if episode["version"] != expected_version:
+            raise AppError("CONFLICT", "分镜已变更，请重新载入后再确认", status=409)
+        if (
+            episode["id"] in self.busy
+            or episode["status"] != "AWAITING_REVIEW"
+            or episode.get("preview_approved_at")
+        ):
+            raise AppError("CONFLICT", "当前状态不能编辑或确认分镜", status=409)
+
+    def edit_preview(self, id: str, request: PreviewUpdate) -> dict:
+        def change(episode):
+            self.check_review_state(episode, request.expected_version)
+            profiles = self.preview_profiles(episode)
+            require_current_preview(episode, profiles)
+            apply_edits(episode, request, *profiles[:2])
+
+        return self.store.update("episode", id, change)
+
+    def enqueue(self, id: str, operation="episode", expected_version=None) -> dict:
         if id in self.busy:
             raise AppError("CONFLICT", "上一任务尚未结束，请等待取消完成后重试", status=409)
 
         def change(episode):
+            if operation == "approve":
+                self.check_review_state(episode, expected_version)
+                profiles = self.preview_profiles(episode)
+                require_current_preview(episode, profiles)
+                validate_timing(episode, profiles[1])
+                episode["preview_approved_at"] = now()
+            elif operation == "preview":
+                if (
+                    episode["status"] in ACTIVE
+                    or episode.get("preview_approved_at")
+                    or self.has_current_jobs(episode)
+                    or episode["references"]
+                ):
+                    raise AppError("CONFLICT", "已开始渲染或任务尚未结束，不能重新预览", status=409)
+                profiles = self.preview_profiles(episode)
+                previous = episode.get("preview") or {}
+                if previous.get("workflow_versions") != workflow_versions(profiles):
+                    episode.update(plan=None, bible=None, shots=[], budget=None)
+                episode.update(
+                    preview_required=True,
+                    preview={"workflow_versions": workflow_versions(profiles)},
+                )
+            elif episode.get("preview_required") and not episode.get("preview_approved_at"):
+                raise AppError("PREVIEW_REQUIRED", "请先查看分镜并确认开始视频生成", status=409)
             if episode["status"] in ACTIVE:
                 raise AppError("CONFLICT", "此单集已在队列或运行中", status=409)
             if episode["status"] == "COMPLETED" and operation != "compose":
@@ -367,6 +448,8 @@ class GenerationService:
 
     def retry(self, shot_id: str, scope: str) -> dict:
         episode, _ = self.find_shot(shot_id)
+        if episode.get("preview_required") and not episode.get("preview_approved_at"):
+            raise AppError("PREVIEW_REQUIRED", "请先确认分镜", status=409)
         if episode["status"] in ACTIVE or episode["id"] in self.busy:
             raise AppError("CONFLICT", "请先等待或取消当前生成", status=409)
 
@@ -389,6 +472,8 @@ class GenerationService:
         def change(episode):
             if episode["status"] in ACTIVE:
                 raise AppError("CONFLICT", "运行时不能编辑时间线", status=409)
+            if episode.get("preview_required") and not episode.get("preview_approved_at"):
+                raise AppError("PREVIEW_REQUIRED", "请使用分镜预览编辑时长与提示词", status=409)
             if (
                 len(request.shots) > MAX_EPISODE_SHOTS
                 and len(episode["shots"]) <= MAX_EPISODE_SHOTS
@@ -447,6 +532,20 @@ class GenerationService:
             self.shot(episode["id"], shot_id).get("prompts") if shot_id else episode.get("bible")
         ) or {}
         generated = output.get("ai_parameters", {}).get(profile["id"], {})
+        if shot_id:
+            shot = self.shot(episode["id"], shot_id)
+            field = {
+                "SHOT_START_FRAME": "start_frame_prompt",
+                "SHOT_END_FRAME": "end_frame_prompt",
+                "SHOT_VIDEO": "video_prompt",
+                "VIDEO_SEGMENT": "video_prompt",
+            }.get(type)
+            if field in shot.get("preview_edited_fields", []):
+                # A reviewed prompt must not be replaced by a duplicate AI-owned role.
+                prompt_keys = {p["key"] for p in profile["parameters"] if p.get("role") == "prompt"}
+                generated = {
+                    key: value for key, value in generated.items() if key not in prompt_keys
+                }
         job = self.engine.create_job(
             profile,
             values,
@@ -467,7 +566,7 @@ class GenerationService:
         self.check_cancel(episode["id"])
         return results[0]
 
-    async def generate(self, id: str) -> None:
+    async def generate(self, id: str, *, preview_only=False) -> None:
         episode = self.store.get("episode", id)
         image = self.router.select("image", episode.get("image_workflow_id"))
         video = self.router.select("video", episode.get("video_workflow_id"))
@@ -476,7 +575,17 @@ class GenerationService:
         )
         provider = self.provider_factory()
         agents = Directors(provider)
+        preview_complete = False
         try:
+            if episode.get("preview_required") and not preview_only:
+                if not episode.get("preview_approved_at"):
+                    raise AppError("PREVIEW_REQUIRED", "请先确认分镜", status=409)
+                if not self.has_current_jobs(episode):
+                    try:
+                        require_current_preview(episode, (image, video, reference_profile))
+                    except AppError:
+                        self.store.update("episode", id, {"preview_approved_at": None})
+                        raise
             async with self.engine.client() as client:
                 system = await client.system()
                 object_info = await client.object_info()
@@ -565,9 +674,28 @@ class GenerationService:
                 bible = await agents.bible(
                     episode, episode["plan"], ai_parameters(reference_profile)
                 )
-                episode = self.stage(
-                    id, "GENERATING_REFERENCES", bible=bible.model_dump(mode="json")
+                episode = self.stage(id, "BUILDING_BIBLE", bible=bible.model_dump(mode="json"))
+            if preview_only:
+                self.stage(id, "PREPARING_PROMPTS")
+                continuity = {}
+                for shot in episode["shots"]:
+                    self.check_cancel(id)
+                    if not shot["prompts"]:
+                        prompts = await agents.shot(
+                            episode["bible"], shot, continuity, ai_parameters(image, video)
+                        )
+                        shot = self.update_shot(
+                            id, shot["id"], prompts=prompts.model_dump(mode="json")
+                        )
+                    continuity = shot["prompts"].get("continuity_state", {})
+                self.check_cancel(id)
+                self.store.update(
+                    "episode",
+                    id,
+                    lambda current: prepare_review(current, image, video, reference_profile),
                 )
+                preview_complete = True
+                return
             visual_qa = episode["qa_enabled"] and bool(self.settings.vlm_model)
             if episode["qa_enabled"] and not visual_qa:
                 self.warn(id, "未配置 VLM，视觉 QA 已跳过；仅执行媒体技术校验。")
@@ -677,6 +805,8 @@ class GenerationService:
                     }
                 },
             )
+            if preview_complete:
+                self.stage(id, "AWAITING_REVIEW", preview_approved_at=None)
 
     async def generate_shot(
         self, episode, shot, previous, continuity, image, video, budget, agents, visual_qa
