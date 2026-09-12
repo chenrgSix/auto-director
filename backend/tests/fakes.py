@@ -68,6 +68,17 @@ class FakeProvider:
                 "motion_strength": 0.6,
                 "continuity_state": {"direction": "right"},
             }
+            if "action_beats" in schema.model_fields and context["shot"]["duration"] >= 4:
+                duration = context["shot"]["duration"]
+                split = round(duration * 0.6, 2)
+                data["action_beats"] = [
+                    {"start": 0, "end": split, "action": "Lion walks forward; camera tracks."},
+                    {
+                        "start": split,
+                        "end": duration,
+                        "action": "Lion reaches the target position.",
+                    },
+                ]
         elif issubclass(schema, PromptOptimization):
             assert images and len(images) <= 8 and all(path.is_file() for path in images)
             data = {

@@ -6,6 +6,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.agents.schemas import EpisodePlan, QAResult
+from app.agents.timing import TIMING_HEADER, segment_prompt
 from app.core.config import Settings
 from app.db.store import Store
 from app.main import create_app
@@ -337,6 +338,13 @@ def test_oom_fallback_obeys_budget_and_preserves_timeline(
             [job for job in jobs if job["type"] == "VIDEO_SEGMENT"],
             key=lambda job: job["step_key"],
         )
+        # Each OOM retry segment receives only its local phases, including I2V/alternate graphs.
+        original = episode["shots"][0]["prompts"]["video_prompt"]
+        assert TIMING_HEADER in original
+        for index, job in enumerate(segments):
+            local_prompt = segment_prompt(original, 5, index * 5 / 3, (index + 1) * 5 / 3)
+            submitted = comfy.prompts[job["comfy_prompt_id"]]["prompt"]
+            assert local_prompt in submitted["positive"]["inputs"]["text"]
         tail_id = segments[1]["asset_bindings"]["start_frame"]
         asset = client.get(f"/api/v1/assets?episode_id={id}").json()
         assert next(item for item in asset if item["id"] == tail_id)["type"] == "SEGMENT_END_FRAME"

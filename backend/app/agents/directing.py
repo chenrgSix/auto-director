@@ -16,6 +16,7 @@ from app.agents.schemas import (
     Transition,
     VisualBible,
 )
+from app.agents.timing import TIMING_REQUIRED_SECONDS, compile_timing, timed_output
 from app.core.cancellation import run_cancellable
 from app.core.errors import AppError
 from app.core.limits import (
@@ -345,7 +346,8 @@ class Directors:
     async def shot(
         self, bible: dict, shot: dict, continuity: dict, workflow_parameters=None, *, idea=""
     ) -> ShotPrompts:
-        return await self.generate_json(
+        duration = shot["duration"]
+        result = await self.generate_json(
             "Act as Shot Agent. Build actionable image/start/end/video/negative prompts. "
             "Use the Bible for stable identity and style. Follow this shot's start_state and end_state; "
             "previous continuity is historical context, not a requirement to repeat the previous scene. "
@@ -362,6 +364,17 @@ class Directors:
             "shot with multiple sequential actions, viewpoint changes and an additional ending effect. "
             "Preserve required start/end story beats, clarify their temporal order and remove redundant "
             "or contradictory embellishments rather than adding more instructions. "
+            "For shots of 4 seconds or longer, give 2-4 action_beats with explicit local start/end "
+            "seconds, continuously covering the entire fixed duration. Shorter shots may omit beats "
+            "for one clear action. Allocate time by action needs, not equal divisions. For example "
+            "a 5s reach could use 0-3s extending the hand towards a cup, then 3-5s grasping and "
+            "lifting it. This is a timing example, never add a cup to an unrelated story. "
+            "Break down the planned primary action, not new plot events. Each phase describes "
+            "visible subject movement and compatible camera motion; the last reaches end_state. "
+            "Even an intentional hold can describe sustained stillness in phases without inventing "
+            "motion. No mandatory pause, cut or camera reset at phase boundaries. "
+            "Keep video_prompt a concise visual overview without timestamps; action_beats will be "
+            "appended automatically. Never put timing sections in the single-image endpoint prompts. "
             "Respect the AI-owned workflow parameter types, ranges, enum options and steps, "
             "including every downstream constraint. Each step sequence starts at that constraint's "
             "min (or zero when absent); the same value must satisfy all constraints. "
@@ -380,9 +393,19 @@ class Directors:
                 "shot": shot,
                 "continuity": continuity,
                 "workflow_parameters": workflow_parameters or [],
+                "timing": {
+                    "duration_seconds": duration,
+                    "required": duration >= TIMING_REQUIRED_SECONDS,
+                },
             },
-            constrained_output(ShotPrompts, workflow_parameters or []),
+            timed_output(constrained_output(ShotPrompts, workflow_parameters or []), duration),
         )
+        try:
+            # Check timing even when a custom provider returns a plain ShotPrompts instance.
+            checked = timed_output(ShotPrompts, duration).model_validate(result.model_dump())
+            return compile_timing(checked)
+        except ValueError as exc:
+            raise AppError("LLM_INVALID_OUTPUT", "分镜动作时间线格式不正确", status=502) from exc
 
     async def qa(self, bible: dict, shot: dict, paths: list, stage: str) -> QAResult:
         video_order = (

@@ -674,7 +674,14 @@ async def test_real_provider_serializes_constrained_optimization_request(tmp_pat
         Settings(_env_file=None, vlm_model="fixture-vision"), httpx.MockTransport(handle)
     )
     result = await optimize_prompts(
-        Directors(provider), {"frame_order": ["video_0_percent"]}, [path], editable
+        Directors(provider),
+        {
+            "frame_order": ["video_0_percent"],
+            "fixed_duration_seconds": 1,
+            "effective_prompts": {"video_prompt": "Original action"},
+        },
+        [path],
+        editable,
     )
     assert result.model_dump() == data and len(calls) == 1
     schema = optimization_schema(editable).model_json_schema()

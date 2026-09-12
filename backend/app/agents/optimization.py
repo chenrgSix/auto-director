@@ -12,6 +12,7 @@ from pydantic import (
 )
 
 from app.agents.schemas import StrictModel
+from app.agents.timing import TIMING_HEADER, read_timing
 from app.core.errors import AppError
 
 PromptField = Literal["start_frame_prompt", "end_frame_prompt", "video_prompt"]
@@ -40,12 +41,14 @@ class PromptOptimization(StrictModel):
         return self
 
 
-def optimization_schema(editable: list[str]):
+def optimization_schema(editable: list[str], *, duration=None, timed_video=False):
     @field_validator("changes")
     @classmethod
     def validate(cls, changes):
         if not set(changes).issubset(editable):
             raise ValueError("不能改写已锁定或当前工作流不使用的提示词")
+        if "video_prompt" in changes and duration is not None:
+            validate_optimized_timing(changes["video_prompt"].prompt, duration, timed_video)
         return changes
 
     return create_model(
@@ -66,8 +69,18 @@ def optimization_schema(editable: list[str]):
     )
 
 
+def validate_optimized_timing(prompt, duration, required):
+    if required and TIMING_HEADER not in prompt:
+        raise ValueError("优化已有动作时间线时必须保留时间块")
+    read_timing(prompt, duration)
+
+
 async def optimize_prompts(agents, context: dict, paths: list, editable: list[str]):
-    schema = optimization_schema(editable)
+    schema = optimization_schema(
+        editable,
+        duration=context["fixed_duration_seconds"],
+        timed_video=TIMING_HEADER in context["effective_prompts"]["video_prompt"],
+    )
     result = await agents.generate_json(
         "Act as a visual prompt repair specialist. Observe the supplied actual images first. "
         "frame_order distinguishes timeline samples from generation input keyframes and the prior "
@@ -82,6 +95,10 @@ async def optimize_prompts(agents, context: dict, paths: list, editable: list[st
         "Keep correct identity, lifecycle, setting, style, framing and unaffected actions. "
         "Respect the fixed duration and workflow capability; one readable primary action per shot. "
         "Clarify action direction and temporal order, remove contradictory or redundant wording. "
+        "If the original video prompt contains 'Shot timing (seconds):', keep that section last "
+        "using one start-ends: English action line per phase (for example 0-3s: Reach forward.). "
+        "Refine the phase actions as needed while covering 0 to fixed_duration_seconds continuously "
+        "without gaps or overlaps, max two decimal places. Never silently remove the timeline. "
         "Never remove a required story beat to obtain a better QA score. If the story needs a "
         "different duration, changed action, different workflow or locked input, use manual and "
         "explain the limitation. Do not change narration, story, settings or dynamic AI parameters. "

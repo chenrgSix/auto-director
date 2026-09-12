@@ -71,7 +71,9 @@ class PromptProvider(CreativeProvider):
             for item in context["workflow_parameters"]:
                 if item["role"] == "prompt":
                     mapping.setdefault(item["workflow_id"], {})[item["key"]] = "AI role prompt"
-            result = ShotPrompts.model_validate({**result.model_dump(), "ai_parameters": mapping})
+            result = ShotPrompts.model_validate(
+                {**result.model_dump(exclude={"action_beats"}), "ai_parameters": mapping}
+            )
         return result
 
 

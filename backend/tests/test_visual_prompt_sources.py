@@ -78,7 +78,7 @@ async def test_shot_agent_receives_idea_and_explicit_visual_narration_contract()
             assert "silent shot" in system and "never spoken narration" in system
             return await super().generate_json(system, context, schema, images=images)
 
-    await Directors(InspectProvider()).shot({}, {}, {}, idea="三只老虎穿越，要有旁白")
+    await Directors(InspectProvider()).shot({}, {"duration": 3}, {}, idea="三只老虎穿越，要有旁白")
 
 
 @pytest.mark.parametrize("legacy", ["", "只有旁白，没有画面描述"])
@@ -100,6 +100,9 @@ def test_each_render_uses_its_stage_prompt_and_retains_custom_ai_and_user_priori
                             legacy
                         )
                 if issubclass(schema, ShotPrompts):
+                    data.pop(
+                        "action_beats", None
+                    )  # Simulate legacy output without timing metadata.
                     data["narration_text"] = "旁白脚本独立存储，不进入画面输入"
                     return ShotPrompts.model_validate(data)
                 return VisualBible.model_validate(data)

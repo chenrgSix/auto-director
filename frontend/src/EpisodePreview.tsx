@@ -4,6 +4,7 @@ import { api } from './api';
 import type { Notify } from './App';
 import type { Episode, PreviewPromptField, PreviewShotEdit } from './types';
 import { ErrorNotice } from './ui';
+import { readShotTiming, retimeShotPrompt, timingIssue } from './shotTiming';
 
 const promptLabels: Record<PreviewPromptField, string> = { start_frame_prompt: '首帧提示词', end_frame_prompt: '尾帧提示词', video_prompt: '视频提示词' };
 type PreviewIssue = { message: string; index?: number; field?: keyof PreviewShotEdit };
@@ -24,6 +25,10 @@ function previewIssues(episode: Episode, edits: PreviewShotEdit[], total: number
       if (episode.shots[index].preview_prompt_view?.locked[field] || (field === 'end_frame_prompt' && preview.capability === 'IMAGE_TO_VIDEO')) continue;
       if (!shot[field].trim()) add(field, `${promptLabels[field]}不能为空。`);
       else if (shot[field].length > 6000) add(field, `${promptLabels[field]}不能超过 6000 字符。`);
+      if (field === 'video_prompt' && Number.isFinite(shot.duration)) {
+        const issue = timingIssue(shot[field], shot.duration);
+        if (issue) add(field, issue);
+      }
     }
   });
   return issues;
@@ -65,13 +70,19 @@ export function EpisodePreview({ episode, busy, setBusy, refresh, notify }: {
   const invalidField = (field: keyof PreviewShotEdit) => issues.some(issue => issue.index === selected && issue.field === field);
   const edit = edits[selected];
   const shot = base.shots[selected];
+  const timing = readShotTiming(edit.video_prompt);
   const fields: { field: PreviewPromptField; label: string }[] = [
     { field: 'start_frame_prompt', label: '首帧提示词' },
     ...(preview.capability === 'FIRST_LAST_TO_VIDEO' ? [{ field: 'end_frame_prompt' as const, label: '尾帧提示词' }] : []),
     { field: 'video_prompt', label: '视频提示词' },
   ];
   function change(values: Partial<PreviewShotEdit>) {
-    setEdits(current => current.map((item, index) => index === selected ? { ...item, ...values } : item));
+    setEdits(current => current.map((item, index) => {
+      if (index !== selected) return item;
+      const adjusted = values.duration !== undefined && !shot.preview_prompt_view?.locked.video_prompt
+        ? { video_prompt: retimeShotPrompt(item.video_prompt, values.duration) } : {};
+      return { ...item, ...adjusted, ...values };
+    }));
     setDirty(true); setError(undefined);
   }
   function reload() { setBase(episode); setEdits(editableShots(episode)); setDirty(false); setError(undefined); }
@@ -99,6 +110,7 @@ export function EpisodePreview({ episode, busy, setBusy, refresh, notify }: {
         <div className="panel preview-editor"><div className="panel-title">镜头 {selected + 1} <span>{shot.transition_from_previous}</span></div>
           <div className="fields two"><div className="field"><label htmlFor="preview-title">镜头标题</label><input id="preview-title" value={edit.title} required maxLength={200} aria-invalid={invalidField('title')} disabled={busy} onChange={event => change({ title: event.target.value })} /></div><div className="field"><label htmlFor="preview-duration">镜头时长（秒）</label><input id="preview-duration" type="number" min={preview.min_duration} max={preview.max_duration} step="0.01" required value={Number.isFinite(edit.duration) ? edit.duration : ''} aria-invalid={invalidField('duration')} disabled={busy || preview.fixed_duration != null} onChange={event => change({ duration: event.target.value === '' ? NaN : Number(event.target.value) })} /></div></div>
           <div className="preview-direction"><p><strong>画面动作</strong>{shot.action}</p><p><strong>镜头语言</strong>{shot.camera}</p><small>这是导演的原始构思。调整画面或运镜，请修改下方提示词。</small></div>
+          <div className="preview-direction"><strong>镜内动作节奏</strong>{timing ? <ol aria-label="镜内动作时间线">{timing.beats.map((beat, index) => <li key={index}><strong>{beat.start}–{beat.end} 秒</strong> {beat.action}</li>)}</ol> : <p>当前未单独分段。短镜头可只写一个清晰动作；已有提示词保持原样。</p>}<small>4 秒以上的新分镜按动作需要分段。可在下方视频提示词末尾修改时间和动作；调整时长会同步缩放已有时间段。时间是生成指引，实际动作节奏取决于视频模型。</small></div>
           {fields.map(({ field, label }) => <div className="field" key={field}><label htmlFor={`preview-${field}`}>{label}</label><textarea id={`preview-${field}`} value={edit[field]} required maxLength={6000} rows={5} aria-invalid={invalidField(field)} disabled={busy || !!shot.preview_prompt_view?.locked[field]} onChange={event => change({ [field]: event.target.value })} />{shot.preview_prompt_view?.locked[field] && <small>{shot.preview_prompt_view.locked[field]}</small>}{shot.preview_prompt_view?.hints?.[field] && <small>{shot.preview_prompt_view.hints[field]}</small>}</div>)}
           {preview.capability === 'FIRST_LAST_TO_VIDEO' && <label className="check"><input type="checkbox" checked={edit.allow_static_end_frame} disabled={busy} onChange={event => change({ allow_static_end_frame: event.target.checked })} />允许静止首尾帧（仅用于有意定格的镜头）</label>}
           {shot.prompts?.narration_text && <div className="preview-extra"><strong>旁白脚本（尚未合成音频）</strong><p>{shot.prompts.narration_text}</p></div>}

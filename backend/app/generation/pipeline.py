@@ -7,6 +7,7 @@ from copy import deepcopy
 
 from app.agents.directing import Directors, anchored_prompt, generation_budget
 from app.agents.provider import LLMProvider
+from app.agents.timing import segment_prompt
 from app.core.cancellation import run_cancellable
 from app.core.config import Settings
 from app.core.errors import AppError
@@ -1720,7 +1721,22 @@ class GenerationService:
                 episode,
                 video,
                 "VIDEO_SEGMENT",
-                {**smaller, "duration": length, "seed": base["seed"] + index},
+                {
+                    **smaller,
+                    "duration": length,
+                    "seed": base["seed"] + index,
+                    "prompt": anchored_prompt(
+                        episode["bible"],
+                        segment_prompt(
+                            shot["prompts"]["video_prompt"],
+                            duration,
+                            index * length,
+                            min(duration, (index + 1) * length),
+                        ),
+                        shot["prompts"]["continuity_state"],
+                        stage="video",
+                    ),
+                },
                 {**inputs, "start_frame": start, **({"end_frame": end} if needs_end else {})},
                 stamp + f":segment:{index}",
                 sid,

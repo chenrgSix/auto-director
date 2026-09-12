@@ -5,6 +5,7 @@ from decimal import Decimal
 
 from app.agents.directing import generation_budget
 from app.agents.schemas import ShotPlan
+from app.agents.timing import read_timing, retime_prompt
 from app.core.errors import AppError
 from app.core.limits import MIN_SHOT_SECONDS
 from app.generation.parameters import (
@@ -95,12 +96,17 @@ def validate_review_prompts(episode, image, video):
             if field in view["locked"]:
                 continue
             value = view["values"][field]
-            if not isinstance(value, str) or not value.strip():
+            if not isinstance(value, str) or not value.strip() or len(value) > 6000:
                 raise AppError(
                     "PREVIEW_INVALID",
-                    f"第 {shot['index'] + 1} 镜「{shot['title']}」的{PROMPT_LABELS[field]}不能为空",
+                    f"第 {shot['index'] + 1} 镜「{shot['title']}」的{PROMPT_LABELS[field]}须为 1–6000 字符的非空文字",
                     {"shot_id": shot["id"], "field": field},
                 )
+            if field == "video_prompt":
+                try:
+                    read_timing(value, shot["duration"])
+                except ValueError as exc:
+                    raise AppError("PREVIEW_INVALID", f"第 {shot['index'] + 1} 镜：{exc}") from exc
 
 
 def refresh_timing_limits(episode, video):
@@ -169,6 +175,16 @@ def apply_edits(episode, request, image, video):
         edited = set(shot.get("preview_edited_fields", []))
         for field in PROMPT_FIELDS:
             value = getattr(item, field)
+            if (
+                field == "video_prompt"
+                and field not in view["locked"]
+                and value == view["values"][field]
+                and item.duration != shot["duration"]
+            ):
+                try:
+                    value = retime_prompt(value, shot["duration"], item.duration)
+                except ValueError as exc:
+                    raise AppError("PREVIEW_INVALID", f"第 {shot['index'] + 1} 镜：{exc}") from exc
             if value == view["values"][field]:
                 continue
             if not value.strip():

@@ -5,7 +5,12 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 
 from app.agents.directing import Directors, qa_shot_context
-from app.agents.optimization import optimization_schema, optimize_prompts
+from app.agents.optimization import (
+    optimization_schema,
+    optimize_prompts,
+    validate_optimized_timing,
+)
+from app.agents.timing import TIMING_HEADER
 from app.core.errors import AppError
 from app.generation.preview import PROMPT_FIELDS, prompt_view, workflow_versions
 from app.generation.qa_review import VIDEO_SAMPLE_FRACTIONS, current_review_notes
@@ -67,6 +72,15 @@ def validate_changes(episode, shot, profiles, changes):
             raise AppError("OPTIMIZATION_INVALID", "优化不能修改锁定或未使用的提示词")
         if change["prompt"] == shot["prompts"][field]:
             raise AppError("OPTIMIZATION_INVALID", "优化返回了未改变的提示词，请重新分析")
+        if field == "video_prompt":
+            try:
+                validate_optimized_timing(
+                    change["prompt"],
+                    shot["duration"],
+                    TIMING_HEADER in shot["prompts"][field],
+                )
+            except ValueError as exc:
+                raise AppError("OPTIMIZATION_INVALID", str(exc)) from exc
         profile = video if field == "video_prompt" else image
         value = change["prompt"]
         if "negative" not in profile["bindings"] and shot["prompts"].get("negative_prompt"):
