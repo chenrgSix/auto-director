@@ -1,5 +1,26 @@
 # 验收记录
 
+
+## 2026-09-12 · C47 codex 8GB 工作流实机验收
+
+环境：用户 ComfyUI 0.35.1 / Windows / RTX 5060（8GB），AutoDirector 正式 8000。复用已安装的 Z-Image INT8、H3 FL2VA INT8、Qwen FP8/NVFP4、H3 VAE 与 FL2V Turbo LoRA，没有安装或下载模型。四套以 `codex` 开头的工作流已通过 API 导入，绑定校验及实时 `/object_info` 依赖检查全部通过，未标记云端 API 节点。
+
+| 工作流 | 真实作业 ID | 结果 | 端到端耗时 |
+| --- | --- | --- | --- |
+| codex-ZImage-快速文生图-8GB | `7469e98b-1c9f-4744-9b3b-a1adcca937e0` | 640×384 PNG | 8.59 秒 |
+| codex-H3-图生图-8GB | `75fd5720-5fbe-419d-9b07-15bc00ad3dea` | 640×384 PNG | 32.43 秒 |
+| codex-H3-首帧视频-Turbo8-8GB | `fe1424a5-8e9c-49f4-84ac-80889e735f28` | 640×384 H.264 / 124 帧 / 24 FPS | 89.17 秒 |
+| codex-H3-首尾帧视频-Turbo8-8GB | `d305a218-859e-4053-92c3-c5710a15ab05` | 640×384 H.264 / 124 帧 / 24 FPS | 94.48 秒 |
+
+- 四项串行经 AutoDirector `test-run → ParameterResolver → 上传 → patched JSON → ComfyUI → 资产回收` 完成，无重复提交和 OOM。耗时从本机作业创建到完成，包含排队、上传与回收，不是 GPU 纯采样耗时；首轮加载/缓存及其他进程负载会影响速度。
+- 文生图生成红帆船；图生图保留船体/构图并改变为日落光照，输出与参考图不同。H3 图生图使用实际 FL2VA 权重对应的 `H3ImageToImagePrepare`，取生成组最后一帧，避免选回源图；未扩大到复杂换姿态/换景一致性验收。
+- 实际 patched JSON：T2I 无 `LoadImage`；I2I 与 I2V 各一个实际上传路径；FLF 有两个不同上传路径。两段视频经 ffprobe 逐帧计数均 124 帧、5.166667 秒，符合 5 秒时间线所需的向上对齐原始素材。视频默认无音轨。检查五点缩略图，I2V 船体缓慢移动，FLF 呈现白天至日落过渡；未运行整片生成或建立全面视觉质量基准。
+- 真实节点元数据下，四种能力 × 横/竖/方形比例与视频 1/2/3/5 秒共 30 组 `generation_budget → resolve_parameters → patch` 检查通过。H3 横屏低显存预算 672×384，帧数依次 39/56/73/124，固定 24 FPS。该组合检查不提交额外 GPU 任务；真实渲染测试仅覆盖上述 640×384 设置。
+- Ruff 检查/格式通过。`pytest -q tests/test_codex_workflow_pack.py tests/test_workflow_configuration.py tests/test_workflow_duration.py tests/test_workflow_dimensions.py tests/test_workflow_deletion_restart.py`：**59 passed**（含新增 5 项，2 条已有依赖弃用警告）。本轮没有应用实现或前端改动，未重跑全量 786 项基线或远端 CI。
+- 浏览器确认四套工作流出现在列表、依赖检查通过，I2V 页展示帧数转换 17/5/24 和每镜上限 5 秒。原 1 条短片、63 条作业、3 套工作流完整 API JSON 均未改变；默认项一致，新增 4 套工作流/4 项试跑/4 个素材，ComfyUI 队列已清空。未重启服务。
+
+可复用文件：`workflow_examples/codex_8gb/*.api.json` / `*.profile.json`；说明见同目录 README。忽略的本机证据：`data/repairs/c47-workflows/trial-results.json`、`budget-matrix.json`、`preservation-result.json`、实际模型/节点清单、导入响应及视频缩略图。此工作流包不进入启动 bootstrap，删除后不会由应用重建。
+
 ## C46 生成前 AI 剧本审查（2026-09-12）
 
 - 新增 28 项剧本审查回归，另将模型取消/清理测试扩展至 ScriptReview。覆盖：完整 schema/非法镜号/重复或空修正/时长与素材越权/首次连续帧/真实 Provider 序列化和有界格式纠正；审查先于 Bible 和素材、修正进入实际 patch；未解决问题强制预览与显式确认、无确认零渲染；失败/重启只恢复 pending 审查、Bible 后续失败复用成功报告；旧计划和工作流切换保持、用户修改标注、60/90 秒批次规划完成后统一审查。

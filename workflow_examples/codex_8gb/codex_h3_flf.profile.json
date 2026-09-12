@@ -1,0 +1,309 @@
+{
+  "name": "codex-H3-首尾帧视频-Turbo8-8GB",
+  "capability": "FIRST_LAST_TO_VIDEO",
+  "workflow": {
+    "1": {
+      "class_type": "UNETLoader",
+      "_meta": {
+        "title": "H3 FL2VA INT8"
+      },
+      "inputs": {
+        "unet_name": "minimax_h3_fl2va_pruned_int8_convrot.safetensors",
+        "weight_dtype": "default"
+      }
+    },
+    "2": {
+      "class_type": "CLIPLoader",
+      "_meta": {
+        "title": "H3 Qwen NVFP4"
+      },
+      "inputs": {
+        "clip_name": "qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors",
+        "type": "minimax",
+        "device": "default"
+      }
+    },
+    "3": {
+      "class_type": "VAELoader",
+      "_meta": {
+        "title": "H3 视频 VAE"
+      },
+      "inputs": {
+        "vae_name": "minimax_h3_video_vae_fp16.safetensors"
+      }
+    },
+    "4": {
+      "class_type": "LoadImage",
+      "_meta": {
+        "title": "首帧 · 素材自动绑定"
+      },
+      "inputs": {
+        "image": "codex_start.png"
+      }
+    },
+    "5": {
+      "class_type": "MiniMaxH3ImageToVideo",
+      "_meta": {
+        "title": "视频提示词 · AI / 尺寸 · 系统 / 帧数 · 导演"
+      },
+      "inputs": {
+        "clip": [
+          "2",
+          0
+        ],
+        "vae": [
+          "3",
+          0
+        ],
+        "prompt": "The red sailboat gently moves across calm water, subtle ripples spread behind it, steady camera, quiet water ambience, no speech. Preserve the supplied keyframe appearance.",
+        "width": 640,
+        "height": 384,
+        "length": 124,
+        "first_frame": [
+          "4",
+          0
+        ],
+        "last_frame": [
+          "15",
+          0
+        ]
+      }
+    },
+    "6": {
+      "class_type": "LoraLoaderModelOnly",
+      "_meta": {
+        "title": "匹配 FL2V Turbo 8 步 LoRA"
+      },
+      "inputs": {
+        "model": [
+          "1",
+          0
+        ],
+        "lora_name": "minimax_h3_fl2v_turbo_8step_v1.0_comfyui_bf16.safetensors",
+        "strength_model": 1.0
+      }
+    },
+    "7": {
+      "class_type": "KSamplerSelect",
+      "_meta": {
+        "title": "Turbo Euler"
+      },
+      "inputs": {
+        "sampler_name": "euler"
+      }
+    },
+    "8": {
+      "class_type": "BasicScheduler",
+      "_meta": {
+        "title": "Turbo simple 8 步"
+      },
+      "inputs": {
+        "model": [
+          "6",
+          0
+        ],
+        "scheduler": "simple",
+        "steps": 8,
+        "denoise": 1.0
+      }
+    },
+    "9": {
+      "class_type": "RandomNoise",
+      "_meta": {
+        "title": "随机种子 · 系统"
+      },
+      "inputs": {
+        "noise_seed": 47004
+      }
+    },
+    "10": {
+      "class_type": "BasicGuider",
+      "_meta": {
+        "title": "单条件引导"
+      },
+      "inputs": {
+        "model": [
+          "6",
+          0
+        ],
+        "conditioning": [
+          "5",
+          0
+        ]
+      }
+    },
+    "11": {
+      "class_type": "SamplerCustomAdvanced",
+      "_meta": {
+        "title": "视频采样"
+      },
+      "inputs": {
+        "noise": [
+          "9",
+          0
+        ],
+        "guider": [
+          "10",
+          0
+        ],
+        "sampler": [
+          "7",
+          0
+        ],
+        "sigmas": [
+          "8",
+          0
+        ],
+        "latent_image": [
+          "5",
+          1
+        ]
+      }
+    },
+    "12": {
+      "class_type": "VAEDecodeTiled",
+      "_meta": {
+        "title": "视频分块解码"
+      },
+      "inputs": {
+        "samples": [
+          "11",
+          0
+        ],
+        "vae": [
+          "3",
+          0
+        ],
+        "tile_size": 256,
+        "overlap": 64,
+        "temporal_size": 32,
+        "temporal_overlap": 8
+      }
+    },
+    "13": {
+      "class_type": "CreateVideo",
+      "_meta": {
+        "title": "24 FPS · 与 H3 原生时钟一致"
+      },
+      "inputs": {
+        "images": [
+          "12",
+          0
+        ],
+        "fps": 24.0,
+        "bit_depth": 8,
+        "color_space": "sRGB"
+      }
+    },
+    "14": {
+      "class_type": "SaveVideo",
+      "_meta": {
+        "title": "MP4 视频输出"
+      },
+      "inputs": {
+        "video": [
+          "13",
+          0
+        ],
+        "filename_prefix": "codex/codex_h3_flf",
+        "format": "mp4",
+        "format.codec": "h264"
+      }
+    },
+    "15": {
+      "class_type": "LoadImage",
+      "_meta": {
+        "title": "尾帧 · 素材自动绑定"
+      },
+      "inputs": {
+        "image": "codex_end.png"
+      }
+    }
+  },
+  "bindings": {
+    "prompt": {
+      "node_id": "5",
+      "input": "prompt"
+    },
+    "start_frame": {
+      "node_id": "4",
+      "input": "image"
+    },
+    "width": {
+      "node_id": "5",
+      "input": "width"
+    },
+    "height": {
+      "node_id": "5",
+      "input": "height"
+    },
+    "duration": {
+      "node_id": "5",
+      "input": "length",
+      "transform": "duration_to_frames",
+      "frame_multiple": 17,
+      "frame_offset": 5,
+      "frame_fps": 24
+    },
+    "fps": {
+      "node_id": "13",
+      "input": "fps"
+    },
+    "seed": {
+      "node_id": "9",
+      "input": "noise_seed"
+    },
+    "end_frame": {
+      "node_id": "15",
+      "input": "image"
+    }
+  },
+  "outputs": {
+    "video": "14"
+  },
+  "capabilities": {
+    "max_duration": 5
+  },
+  "parameter_rules": {
+    "5.prompt": {
+      "owner": "ai",
+      "editable": true,
+      "override_policy": "advanced"
+    },
+    "4.image": {
+      "owner": "asset_resolver",
+      "editable": true,
+      "override_policy": "advanced"
+    },
+    "5.width": {
+      "owner": "system",
+      "editable": true,
+      "override_policy": "advanced"
+    },
+    "5.height": {
+      "owner": "system",
+      "editable": true,
+      "override_policy": "advanced"
+    },
+    "5.length": {
+      "owner": "director",
+      "editable": true,
+      "override_policy": "advanced"
+    },
+    "13.fps": {
+      "owner": "system",
+      "editable": true,
+      "override_policy": "advanced"
+    },
+    "9.noise_seed": {
+      "owner": "system",
+      "editable": true,
+      "override_policy": "advanced"
+    },
+    "15.image": {
+      "owner": "asset_resolver",
+      "editable": true,
+      "override_policy": "advanced"
+    }
+  }
+}

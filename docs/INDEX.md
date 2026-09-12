@@ -8,6 +8,7 @@
 | [模块设计](MODULE_DESIGN.md) | 模块边界、数据、运行时与失败恢复 |
 | [工作流能力与参数归属](WORKFLOW_CAPABILITIES.md) | C03–C06 能力分支、AI 参数、快速导入、实际字段配置与验收门禁 |
 | [工作流配置指南](WORKFLOW_CONFIGURATION.md) | 在页面绑定实际字段、修改模型参数、检查与试跑 |
+| [codex 8GB 工作流包](../workflow_examples/codex_8gb/README.md) | 四类能力、已安装模型适配、显式导入请求与试跑边界 |
 | [接口契约](API_CONTRACT.md) | API、角色绑定、错误和状态约定 |
 | [开发与运行](DEVELOPMENT.md) | 环境、启动、配置、测试与工作流准备 |
 | [验收记录](ACCEPTANCE.md) | 已执行证据、未执行门禁及复现步骤 |

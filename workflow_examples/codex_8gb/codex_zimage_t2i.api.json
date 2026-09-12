@@ -1,0 +1,144 @@
+{
+  "1": {
+    "class_type": "UNETLoader",
+    "_meta": {
+      "title": "Z-Image INT8"
+    },
+    "inputs": {
+      "unet_name": "z_image_turbo_int8_convrot.safetensors",
+      "weight_dtype": "default"
+    }
+  },
+  "2": {
+    "class_type": "CLIPLoader",
+    "_meta": {
+      "title": "Qwen 4B FP8"
+    },
+    "inputs": {
+      "clip_name": "qwen_3_4b_fp8_mixed.safetensors",
+      "type": "lumina2",
+      "device": "default"
+    }
+  },
+  "3": {
+    "class_type": "VAELoader",
+    "_meta": {
+      "title": "Z-Image VAE"
+    },
+    "inputs": {
+      "vae_name": "ae.safetensors"
+    }
+  },
+  "4": {
+    "class_type": "CLIPTextEncode",
+    "_meta": {
+      "title": "画面提示词 · AI"
+    },
+    "inputs": {
+      "text": "A small red wooden sailboat on calm blue water, soft morning light, clean cinematic illustration, no text.",
+      "clip": [
+        "2",
+        0
+      ]
+    }
+  },
+  "5": {
+    "class_type": "ConditioningZeroOut",
+    "_meta": {
+      "title": "Turbo 零负面条件"
+    },
+    "inputs": {
+      "conditioning": [
+        "4",
+        0
+      ]
+    }
+  },
+  "6": {
+    "class_type": "EmptySD3LatentImage",
+    "_meta": {
+      "title": "画布 · 系统尺寸与批量"
+    },
+    "inputs": {
+      "width": 640,
+      "height": 384,
+      "batch_size": 1
+    }
+  },
+  "7": {
+    "class_type": "ModelSamplingAuraFlow",
+    "_meta": {
+      "title": "Z-Image shift"
+    },
+    "inputs": {
+      "model": [
+        "1",
+        0
+      ],
+      "shift": 3.0
+    }
+  },
+  "8": {
+    "class_type": "KSampler",
+    "_meta": {
+      "title": "Turbo 8 步 · 种子自动"
+    },
+    "inputs": {
+      "seed": 47001,
+      "steps": 8,
+      "cfg": 1.0,
+      "sampler_name": "res_multistep",
+      "scheduler": "simple",
+      "denoise": 1.0,
+      "model": [
+        "7",
+        0
+      ],
+      "positive": [
+        "4",
+        0
+      ],
+      "negative": [
+        "5",
+        0
+      ],
+      "latent_image": [
+        "6",
+        0
+      ]
+    }
+  },
+  "9": {
+    "class_type": "VAEDecodeTiled",
+    "_meta": {
+      "title": "分块解码"
+    },
+    "inputs": {
+      "samples": [
+        "8",
+        0
+      ],
+      "vae": [
+        "3",
+        0
+      ],
+      "tile_size": 256,
+      "overlap": 64,
+      "temporal_size": 16,
+      "temporal_overlap": 4
+    }
+  },
+  "10": {
+    "class_type": "SaveImage",
+    "_meta": {
+      "title": "图片输出"
+    },
+    "inputs": {
+      "images": [
+        "9",
+        0
+      ],
+      "filename_prefix": "codex/ZImage_T2I"
+    }
+  }
+}

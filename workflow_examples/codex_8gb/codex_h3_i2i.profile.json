@@ -1,0 +1,250 @@
+{
+  "name": "codex-H3-图生图-8GB",
+  "capability": "IMAGE_TO_IMAGE",
+  "workflow": {
+    "1": {
+      "class_type": "UNETLoader",
+      "_meta": {
+        "title": "H3 FL2VA INT8"
+      },
+      "inputs": {
+        "unet_name": "minimax_h3_fl2va_pruned_int8_convrot.safetensors",
+        "weight_dtype": "default"
+      }
+    },
+    "2": {
+      "class_type": "CLIPLoader",
+      "_meta": {
+        "title": "H3 Qwen NVFP4"
+      },
+      "inputs": {
+        "clip_name": "qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors",
+        "type": "minimax",
+        "device": "default"
+      }
+    },
+    "3": {
+      "class_type": "VAELoader",
+      "_meta": {
+        "title": "H3 视频 VAE"
+      },
+      "inputs": {
+        "vae_name": "minimax_h3_video_vae_fp16.safetensors"
+      }
+    },
+    "4": {
+      "class_type": "LoadImage",
+      "_meta": {
+        "title": "参考图 · 素材自动绑定"
+      },
+      "inputs": {
+        "image": "codex_reference.png"
+      }
+    },
+    "5": {
+      "class_type": "H3ImageToImagePrepare",
+      "_meta": {
+        "title": "图生图 · FL2VA 匹配已安装权重"
+      },
+      "inputs": {
+        "clip": [
+          "2",
+          0
+        ],
+        "vae": [
+          "3",
+          0
+        ],
+        "source_image": [
+          "4",
+          0
+        ],
+        "edit_instruction": "Preserve the same red wooden sailboat and blue water. Change the light to warm sunset, with a golden reflection on the water. Clean cinematic illustration, no text.",
+        "width": 640,
+        "height": 384,
+        "quality_profile": "recommended | 5 frames",
+        "source_fidelity": 0.6,
+        "source_fit": "crop_center",
+        "optimize_for_still": true
+      }
+    },
+    "6": {
+      "class_type": "RandomNoise",
+      "_meta": {
+        "title": "随机种子 · 系统"
+      },
+      "inputs": {
+        "noise_seed": 47002
+      }
+    },
+    "7": {
+      "class_type": "H3ImageSamplingPreset",
+      "_meta": {
+        "title": "基础模型 12 步图生图"
+      },
+      "inputs": {
+        "model": [
+          "1",
+          0
+        ],
+        "sampling_profile": "base speed | RES 12 steps"
+      }
+    },
+    "8": {
+      "class_type": "BasicGuider",
+      "_meta": {
+        "title": "单条件引导"
+      },
+      "inputs": {
+        "model": [
+          "7",
+          0
+        ],
+        "conditioning": [
+          "5",
+          0
+        ]
+      }
+    },
+    "9": {
+      "class_type": "SamplerCustomAdvanced",
+      "_meta": {
+        "title": "图生图采样"
+      },
+      "inputs": {
+        "noise": [
+          "6",
+          0
+        ],
+        "guider": [
+          "8",
+          0
+        ],
+        "sampler": [
+          "7",
+          1
+        ],
+        "sigmas": [
+          "7",
+          2
+        ],
+        "latent_image": [
+          "5",
+          1
+        ]
+      }
+    },
+    "10": {
+      "class_type": "H3ImageDecode",
+      "_meta": {
+        "title": "短帧组解码"
+      },
+      "inputs": {
+        "samples": [
+          "9",
+          0
+        ],
+        "vae": [
+          "3",
+          0
+        ]
+      }
+    },
+    "11": {
+      "class_type": "H3ImageFrameSelector",
+      "_meta": {
+        "title": "输出生成帧 · 排除原始第 0 帧"
+      },
+      "inputs": {
+        "frames": [
+          "10",
+          0
+        ],
+        "strategy": "last",
+        "manual_index": 0,
+        "skip_first_frames": 1,
+        "candidate_start": 0.0,
+        "candidate_end": 1.0,
+        "similarity_weight": 0.35,
+        "top_k": 1,
+        "source_image": [
+          "5",
+          2
+        ],
+        "emit_candidate_batch": false,
+        "recommended_index": [
+          "10",
+          3
+        ]
+      }
+    },
+    "12": {
+      "class_type": "SaveImage",
+      "_meta": {
+        "title": "图片输出"
+      },
+      "inputs": {
+        "images": [
+          "11",
+          0
+        ],
+        "filename_prefix": "codex/H3_I2I"
+      }
+    }
+  },
+  "bindings": {
+    "prompt": {
+      "node_id": "5",
+      "input": "edit_instruction"
+    },
+    "reference_image": {
+      "node_id": "4",
+      "input": "image"
+    },
+    "width": {
+      "node_id": "5",
+      "input": "width"
+    },
+    "height": {
+      "node_id": "5",
+      "input": "height"
+    },
+    "seed": {
+      "node_id": "6",
+      "input": "noise_seed"
+    }
+  },
+  "outputs": {
+    "image": "12"
+  },
+  "capabilities": {
+    "max_duration": 5
+  },
+  "parameter_rules": {
+    "5.edit_instruction": {
+      "owner": "ai",
+      "editable": true,
+      "override_policy": "advanced"
+    },
+    "4.image": {
+      "owner": "asset_resolver",
+      "editable": true,
+      "override_policy": "advanced"
+    },
+    "5.width": {
+      "owner": "system",
+      "editable": true,
+      "override_policy": "advanced"
+    },
+    "5.height": {
+      "owner": "system",
+      "editable": true,
+      "override_policy": "advanced"
+    },
+    "6.noise_seed": {
+      "owner": "system",
+      "editable": true,
+      "override_policy": "advanced"
+    }
+  }
+}
