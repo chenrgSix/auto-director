@@ -367,3 +367,11 @@ summary { cursor: pointer; font-size: 12px; color: #c0c8ac; line-height: 1.8; }
 .optimization-comparison > div { min-width: 0; }
 .optimization-comparison pre { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 280px; overflow-y: auto; }
 @media (max-width: 640px) { .optimization-comparison { grid-template-columns: minmax(0, 1fr); } }
+
+.script-review { margin-bottom: 20px; padding: 20px; font-size: 13px; line-height: 1.8; overflow-wrap: anywhere; }
+.script-review details { margin-top: 12px; }
+.script-review li { margin-bottom: 12px; }
+.script-review li p { margin: 4px 0; }
+.script-fix { margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--border); }
+.script-fix p { white-space: pre-wrap; }
+.script-review-ack { margin: 20px 0; line-height: 1.8; }

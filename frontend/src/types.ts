@@ -29,6 +29,12 @@ export type Settings = {
 };
 export type QAPolicy = 'advisory' | 'strict';
 export type ReviewNote = { stage: string; code: string; message: string };
+export type ScriptReview = {
+  status: 'pending' | 'passed' | 'corrected' | 'needs_attention'; summary?: string;
+  reviewed_at?: string; edited_after_review?: boolean; acknowledged_at?: string;
+  fixes?: { shot_index: number; reason: string; before: Record<string, string>; after: Record<string, string> }[];
+  issues?: { shot_index: number | null; message: string; suggestion: string }[];
+};
 export type QA = { stage: string; character_consistency: number; scene_consistency: number; style_consistency: number; action_accuracy: number; transition_quality: number; artifact_score: number; explanation: string; retry_scope: string | null; disposition?: 'warning' | 'passed' | 'retry' };
 export type Shot = {
   id: string; title: string; index: number; duration: number; enabled: boolean; status: string; action: string; camera: string;
@@ -55,15 +61,17 @@ export type Episode = {
   status: string; shots: Shot[]; references: Record<string, string>; warnings: string[]; error: Problem | null;
   final_video_asset_id: string | null; final_duration?: number; created_at: string; metrics: Record<string, number>;
   bible: unknown; plan: unknown;
+  script_review?: ScriptReview | null;
   preview_required?: boolean; preview_approved_at?: string | null;
   preview?: { capability: WorkflowCapability; min_duration: number; max_duration: number; render_max_duration: number; fixed_duration: number | null } | null;
 };
 export type Asset = { id: string; type: string; episode_id: string; path: string; metadata: { kind: string }; size: number };
 export type Job = { id: string; type: string; status: string; comfy_prompt_id: string | null; error: Problem | null; output_asset_ids: string[]; progress: { value?: number; max?: number; node?: string; connection?: 'connected' | 'reconnecting'; reconnect_attempt?: number; retry_in?: number; message?: string } | null; input_values: Record<string, unknown> };
-export const ACTIVE = new Set(['QUEUED', 'PLANNING', 'BUILDING_BIBLE', 'PREPARING_PROMPTS', 'GENERATING_REFERENCES', 'GENERATING_KEYFRAMES', 'RENDERING_VIDEO', 'QA', 'COMPOSING']);
+export const ACTIVE = new Set(['QUEUED', 'PLANNING', 'REVIEWING_SCRIPT', 'BUILDING_BIBLE', 'PREPARING_PROMPTS', 'GENERATING_REFERENCES', 'GENERATING_KEYFRAMES', 'RENDERING_VIDEO', 'QA', 'COMPOSING']);
 export const STATUS: Record<string, string> = {
   DRAFT: '草稿', QUEUED: '等待开始', PLANNING: '规划故事', BUILDING_BIBLE: '建立视觉设定', GENERATING_REFERENCES: '生成参考图',
   PREPARING_PROMPTS: '编写镜头提示词', AWAITING_REVIEW: '待确认分镜',
+  REVIEWING_SCRIPT: 'AI 审查剧本',
   GENERATING_KEYFRAMES: '生成关键帧', RENDERING_VIDEO: '渲染视频', QA: '质量检查', COMPOSING: '合成短片', COMPLETED: '已完成', FAILED: '待处理', CANCELLED: '已取消',
   PENDING: '待生成', GENERATING_START_FRAME: '生成首帧', START_FRAME_READY: '首帧就绪', GENERATING_END_FRAME: '生成尾帧', KEYFRAMES_READY: '关键帧就绪',
   VIDEO_READY: '视频就绪', PASSED: '已完成', NEEDS_REVIEW: '待复核', STALE: '需要重新生成', RUNNING: '执行中', UNKNOWN: '需要核对',

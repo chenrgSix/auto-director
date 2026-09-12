@@ -118,6 +118,10 @@ class PreviewApproval(StrictModel):
     expected_version: int = Field(ge=1)
 
 
+class ReviewedPreviewApproval(PreviewApproval):
+    accept_script_review: bool = Field(default=False, strict=True)
+
+
 class TimelineItem(StrictModel):
     id: str
     enabled: bool = True
@@ -137,6 +141,7 @@ class TestRun(StrictModel):
 ACTIVE = {
     "QUEUED",
     "PLANNING",
+    "REVIEWING_SCRIPT",
     "BUILDING_BIBLE",
     "PREPARING_PROMPTS",
     "GENERATING_REFERENCES",

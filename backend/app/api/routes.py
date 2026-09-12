@@ -27,6 +27,7 @@ from app.generation.schemas import (
     PreviewApproval,
     PreviewUpdate,
     PromptOptimizationRequest,
+    ReviewedPreviewApproval,
     TestRun,
     TimelineUpdate,
 )
@@ -422,8 +423,10 @@ async def edit_preview(request: Request, id: str, body: PreviewUpdate):
 
 
 @router.post("/episodes/{id}/approve", status_code=202)
-async def approve_preview(request: Request, id: str, body: PreviewApproval):
-    return resources(request).generation.enqueue(id, "approve", body.expected_version)
+async def approve_preview(request: Request, id: str, body: ReviewedPreviewApproval):
+    return resources(request).generation.enqueue(
+        id, "approve", body.expected_version, accept_script_review=body.accept_script_review
+    )
 
 
 @router.patch("/episodes/{id}/quality")

@@ -20,6 +20,7 @@ STORY_FIELDS = (
     "title",
     "status",
     "plan",
+    "script_review",
     "bible",
     "shots",
     "references",

@@ -10,6 +10,7 @@ from PIL import Image
 
 from app.agents.optimization import PromptOptimization
 from app.agents.schemas import EpisodePlan, QAResult, ShotPrompts, VisualBible
+from app.agents.script_review import ScriptReview
 from app.comfyui.client import ComfyUIClient
 from app.core.config import ROOT
 
@@ -40,6 +41,12 @@ class FakeProvider:
                     }
                     for i in range(count)
                 ],
+            }
+        elif issubclass(schema, ScriptReview):
+            data = {
+                "summary": "Synthetic script review: no unresolved issues.",
+                "fixes": [],
+                "issues": [],
             }
         elif issubclass(schema, VisualBible):
             data = {

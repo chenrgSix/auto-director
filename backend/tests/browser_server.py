@@ -13,6 +13,7 @@ from pathlib import Path
 import uvicorn
 
 from app.agents.diagnostics import DirectorProbe, VisionProbe
+from app.agents.script_review import ScriptReview
 from app.core.config import Settings
 from app.core.errors import AppError
 from app.main import create_app
@@ -27,6 +28,28 @@ class BrowserProvider(FakeProvider):
         self.config = config
 
     async def generate_json(self, system, context, schema, *, images=None):
+        if issubclass(schema, ScriptReview) and context["idea"].startswith("C46_REVIEW_FIXTURE"):
+            return schema.model_validate(
+                {
+                    "summary": "合成测试：修正首镜起点，另有一项动作负担问题供用户检查。",
+                    "fixes": [
+                        {
+                            "shot_index": 0,
+                            "reason": "合成测试：起点与行走动作衔接。",
+                            "changes": {
+                                "start_state": "Lion stands at the left edge before walking."
+                            },
+                        }
+                    ],
+                    "issues": [
+                        {
+                            "shot_index": 0,
+                            "message": "合成测试：请核对短镜中的动作是否过多。",
+                            "suggestion": "查看此镜的视频提示词，简化无关动作后再确认。",
+                        }
+                    ],
+                }
+            )
         if schema in (DirectorProbe, VisionProbe):
             # Explicit diagnostic fixtures, selected through the settings editor.
             model = self.config.vlm_model if images else self.config.llm_model

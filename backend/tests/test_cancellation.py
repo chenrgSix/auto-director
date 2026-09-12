@@ -5,6 +5,7 @@ import time
 import pytest
 
 from app.agents.schemas import EpisodePlan, QAResult, ShotPrompts, VisualBible
+from app.agents.script_review import ScriptReview
 from tests.fakes import FakeProvider
 from tests.test_api_pipeline import wait_episode
 
@@ -23,7 +24,9 @@ def wait_idle(generation, id):
     assert id not in generation.busy
 
 
-@pytest.mark.parametrize("blocked_schema", [EpisodePlan, VisualBible, ShotPrompts, QAResult])
+@pytest.mark.parametrize(
+    "blocked_schema", [EpisodePlan, ScriptReview, VisualBible, ShotPrompts, QAResult]
+)
 def test_cancel_model_wait_drains_cleanup_before_allowing_delete(system, blocked_schema):
     client, app, comfy = system
     entered, cleaning, release = (threading.Event() for _ in range(3))

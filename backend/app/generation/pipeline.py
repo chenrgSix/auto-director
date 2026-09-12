@@ -58,6 +58,7 @@ from app.generation.schemas import (
     PreviewUpdate,
     TimelineUpdate,
 )
+from app.generation.script_review import audit_new_script, require_review_acknowledgement
 from app.generation.workflow_state import (
     REFERENCE_INPUT_WARNING,
     media_ids,
@@ -436,11 +437,23 @@ class GenerationService:
             self.check_review_state(episode, request.expected_version)
             profiles = self.preview_profiles(episode)
             require_current_preview(episode, profiles)
+            before = (
+                deepcopy(episode["plan"]),
+                [deepcopy(s.get("prompts")) for s in episode["shots"]],
+            )
             apply_edits(episode, request, *profiles[:2])
+            if episode.get("script_review") and before != (
+                episode["plan"],
+                [s.get("prompts") for s in episode["shots"]],
+            ):
+                episode["script_review"]["edited_after_review"] = True
+                episode["script_review"].pop("acknowledged_at", None)
 
         return self.store.update("episode", id, change)
 
-    def enqueue(self, id: str, operation="episode", expected_version=None) -> dict:
+    def enqueue(
+        self, id: str, operation="episode", expected_version=None, *, accept_script_review=False
+    ) -> dict:
         if id in self.busy:
             raise AppError("CONFLICT", "上一任务尚未结束，请等待取消完成后重试", status=409)
 
@@ -451,6 +464,7 @@ class GenerationService:
                 require_current_preview(episode, profiles)
                 validate_timing(episode, profiles[1])
                 validate_review_prompts(episode, *profiles[:2])
+                require_review_acknowledgement(episode, accept_script_review)
                 episode["preview_approved_at"] = now()
             elif operation == "preview":
                 if (
@@ -1044,11 +1058,18 @@ class GenerationService:
                 ]
                 episode = self.stage(
                     id,
-                    "BUILDING_BIBLE",
+                    "REVIEWING_SCRIPT",
                     plan=plan.model_dump(mode="json"),
                     title=plan.title,
                     shots=shots,
+                    script_review={"status": "pending"},
                 )
+            episode = await audit_new_script(self, episode, agents, image, video, budget)
+            if (episode.get("script_review") or {}).get(
+                "status"
+            ) == "needs_attention" and not episode.get("preview_approved_at"):
+                # Legacy direct-generation clients must also inspect unresolved script problems.
+                preview_only = True
             # Check every remaining clip before spending on references or keyframes.
             for shot in episode["shots"]:
                 if shot["enabled"] and not shot["video_asset_id"]:

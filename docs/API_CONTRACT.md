@@ -1,5 +1,11 @@
 # API 与工作流契约
 
+## C46 剧本 AI 审查
+
+新增活动阶段 `REVIEWING_SCRIPT`。Episode 可含 `script_review`：`status=pending/passed/corrected/needs_attention`、摘要、逐镜修正/遗留问题、原稿、审后剧本摘要散列与审查时间。旧记录字段缺省，不自动改写。编辑预览后的审查记录仍指向原审稿，`edited_after_review` 表示之后有过用户改动。
+
+`POST /episodes/{id}/approve` 额外接受 `accept_script_review: boolean=false`。对 `needs_attention`，须显式 true，否则返回 `SCRIPT_REVIEW_REQUIRED`，不排队渲染；已有版本/工作流校验保持。未要求预览的客户端遇到无法自动修正的问题，也会得到 AWAITING_REVIEW 并保留纯文字预览，必须批准后继续。
+
 ## C45 视频提示词内的动作节奏
 
 Episode/预览编辑 API 字段保持兼容；`prompts.video_prompt` 可含末尾 `Shot timing (seconds):` 时间块，格式为每行 `起点-终点s: English action`。新生成长镜由受约束 Agent 生成并编译；旧字符串继续有效，无数据库迁移。
