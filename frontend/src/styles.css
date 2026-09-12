@@ -151,6 +151,53 @@ summary { cursor: pointer; font-size: 12px; color: #c0c8ac; line-height: 1.8; }
 .setup-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 23px; }.setup-grid .panel-title { justify-content: start; }.setup-grid .muted { margin-bottom: 20px; }.full-span { grid-column: 1 / -1; }.connection-result { margin-top: 25px; border-top: 1px solid #415a2f; padding-top: 20px; }.device { display: flex; align-items: center; gap: 13px; margin: 20px 0; color: #abc38c; }.device strong { font-size: 12px; }.device small { display: block; font-size: 10px; color: #8faa6e; margin-top: 6px; }.dependency { padding: 14px 0; border-top: 1px solid #395128; }.dependency strong { font-size: 12px; display: block; margin-bottom: 8px; }.dependency p { font-size: 10px; color: #c0ab7b; margin-top: 8px; line-height: 1.9; }.model-status { display: grid; gap: 8px; border-bottom: 1px solid #3b512b; padding: 10px 0 20px; margin-bottom: 20px; }.model-status > span:first-child { font-size: 10px; color: #98af79; }.model-status strong { font-size: 15px; color: #d1d9bb; font-weight: 450; }.model-status .success-text { font-size: 9px; }.config-example { font-size: 10px; }.setup-steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 25px; padding: 10px 0 27px; }.setup-steps span { display: block; font: 24px monospace; color: #7f965c; margin-bottom: 14px; }.setup-steps strong { font-size: 13px; color: #cdd8b8; font-weight: 450; }.setup-steps p { color: #91aa73; font-size: 11px; line-height: 2; margin-top: 10px; }
 .toast { position: fixed; bottom: 25px; right: 25px; max-width: min(500px, calc(100vw - 30px)); padding: 13px 18px; display: flex; align-items: center; gap: 20px; border: 1px solid #839059; border-radius: 8px; background: #333f27; color: #d7e1c0; font-size: 12px; z-index: 100; box-shadow: 0 15px 40px #0006; line-height: 1.8; }.toast.error { border-color: #936943; background: #463323; color: #edc6a0; }.toast .icon-button { color: inherit; }
 .spin { animation: spin 1s linear infinite; }@keyframes spin { to { transform: rotate(360deg); } }
+/* Episode: media comes before configuration and diagnostic detail at every width. */
+.episode-progress { padding: 12px 16px; margin-bottom: 16px; }
+.episode-progress p { font-size: 11px; line-height: 1.7; margin-top: 6px; }
+.episode-progress .progress-track { margin: 9px 0; }
+.episode-progress-actions, .shot-player-meta { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+.episode-alert { display: flex; gap: 12px; align-items: center; margin-bottom: 16px; }
+.episode-alert .notice { flex: 1; min-width: 0; margin: 0; }
+.episode-alert-message { overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.episode-record-link { margin: 0 0 14px; }
+.final-panel.episode-film { display: grid; grid-template-columns: minmax(0, 2fr) minmax(180px, 1fr); align-items: center; gap: 24px; margin: 0 0 24px; }
+.episode-film video { width: 100%; height: min(55vh, 480px); max-height: none; object-fit: contain; }
+.film-summary { min-width: 0; }
+.film-review { margin-top: 20px; font-size: 12px; color: #dbc28d; }
+.film-review .actions { display: grid; margin-top: 12px; }
+.film-review button { white-space: normal; text-align: left; }
+.episode-editor.editing-grid { grid-template-columns: minmax(0, 1fr) 244px; align-items: start; margin-top: 16px; margin-bottom: 24px; }
+.episode-editor .shot-detail { min-width: 0; display: grid; gap: 12px; scroll-margin-top: 20px; }
+.episode-editor .shot-detail > .panel { margin-bottom: 0; }
+.episode-editor .shot-list .episode-progress { width: 100%; margin-bottom: 14px; padding: 10px; }
+.episode-editor .episode-progress > div:first-child { flex-direction: column; gap: 5px; }
+.episode-editor .shot-list { max-height: min(75vh, 750px); overflow-y: auto; min-width: 0; }
+.episode-editor .shot-select > div { min-width: 0; overflow-wrap: anywhere; }
+.shot-player .panel-title { align-items: center; gap: 10px; flex-wrap: wrap; }
+.shot-player .media { margin-top: 0; }
+.shot-player .panel-title > strong { font-size: 13px; font-weight: 500; }
+.shot-player .media-content { aspect-ratio: auto; height: min(48vh, 420px); min-height: 240px; }
+.shot-player-meta { margin-top: 12px; font-size: 11px; color: var(--muted); }
+.shot-player-meta a { color: #dcc18f; }
+.episode-settings > .panel { margin-top: 18px; }
+.episode-settings > .panel:last-child { margin-bottom: 0; }
+.episode-diagnostics { scroll-margin-top: 20px; }
+@media (max-width: 1000px) { .episode-editor.editing-grid { grid-template-columns: minmax(0, 1fr) 190px; gap: 14px; } }
+@media (max-width: 720px) {
+  .episode-editor.editing-grid, .final-panel.episode-film { grid-template-columns: minmax(0, 1fr); }
+  .episode-heading { gap: 12px; margin-bottom: 16px; }
+  .episode-heading .episode-title { font-size: 22px; }
+  .episode-heading p { margin-top: 6px; }
+  .episode-back { margin-bottom: 12px; }
+  .episode-editor .shot-player .media-content { height: min(42vh, 360px); }
+  .episode-editor .shot-list { max-height: 260px; }
+  .episode-editor .shot-row { min-width: 0; }
+  .episode-film video { height: min(50vh, 360px); }
+  .episode-alert { align-items: stretch; flex-direction: column; }
+  .episode-alert > button { align-self: flex-start; }
+  .episode-settings { padding: 14px; }
+  .episode-settings > .panel { padding: 14px; }
+}
 @media (min-width: 1600px) { .page { padding-top: 60px; }.create-grid { grid-template-columns: minmax(0, 1fr) 310px; gap: 34px; }.director-note { padding: 30px 25px 0; }.director-note h2 { font-size: 28px; }.frame-sketch { margin: 0 -25px; height: 150px; }.inspiration button p { font-size: 11px; } }
 @media (max-width: 1200px) { .sidebar { width: 205px; padding: 28px 15px 18px; }.main { margin-left: 205px; width: calc(100% - 205px); }.page { padding: 34px 28px 60px; }.topbar { padding: 0 28px; }.create-grid { grid-template-columns: minmax(0, 1fr) 238px; gap: 19px; }.panel { padding: 19px; }.director-note { padding: 22px 18px 0; }.director-note h2 { font-size: 21px; }.frame-sketch { margin: 0 -18px; }.workflow-grid { grid-template-columns: 200px minmax(0, 1fr); gap: 18px; }.workflow-card { gap: 8px; padding: 14px 10px; }.workflow-icon { padding: 6px; }.quality-options { gap: 5px; }.quality-options button { padding: 12px 8px; }.quality-options small { font-size: 8px; }.generate-row { flex-wrap: wrap; }.generate-row p { width: 100%; }.generate-row .primary { margin-left: auto; }.episode-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 1000px) { .creation-aside { display: none; }.create-grid { grid-template-columns: 1fr; }.sidebar { width: 190px; }.main { margin-left: 190px; width: calc(100% - 190px); }.brand strong { font-size: 15px; }.brand-mark { width: 32px; }.editing-grid { grid-template-columns: 190px minmax(0, 1fr); gap: 16px; }.shot-list { padding: 13px 7px; }.workflow-grid { grid-template-columns: 1fr; }.workflow-list { grid-template-columns: repeat(2, minmax(0, 1fr)); }.workflow-help { display: none; }.setup-grid { grid-template-columns: 1fr; }.section-heading { flex-wrap: wrap; }.reference-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }.topbar .local-pill { display: none; } }
