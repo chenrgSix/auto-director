@@ -7,6 +7,7 @@ import { Badge, Empty, ErrorNotice, Loading, Media } from './ui';
 import { EpisodeWorkflows } from './EpisodeWorkflows';
 import { EpisodePreview } from './EpisodePreview';
 import { EpisodeRerun, RerunHistory } from './EpisodeRerun';
+import { EpisodeQuality } from './EpisodeQuality';
 
 export function EpisodesPage({ notify }: { notify: Notify }) {
   const resource = useResource<Episode[]>('/episodes', 4000);
@@ -58,6 +59,7 @@ export function EpisodePage({ id, notify }: { id: string; notify: Notify }) {
     {reconnecting && <div className="notice" role="status">ComfyUI 连接中断，正在自动重连原任务（第 {reconnecting.progress?.reconnect_attempt} 次）。已有进度已保存，不会重复提交。</div>}
     {recovering && !active && <div className="notice" role="status">原任务状态尚未确认，远端可能仍在生成。{uncertain.every(job => job.comfy_prompt_id) ? '点击「重新连接并恢复」读取原任务进度或取回结果。' : '请在作业记录中先核对 ComfyUI 历史，取得任务 ID。'} 恢复不会重做已完成的镜头。</div>}
     {episode.error && !recovering && <ErrorNotice><strong>{episode.error.message}</strong><small>{episode.error.code}</small>{episode.error.details != null && <details><summary>查看错误详情</summary><pre>{JSON.stringify(episode.error.details, null, 2)}</pre></details>}</ErrorNotice>}
+    <EpisodeQuality key={id} episode={episode} busy={busy} setBusy={setBusy} locked={active || disconnected || !jobs.data || jobs.data.some(job => ['QUEUED', 'RUNNING', 'UNKNOWN'].includes(job.status))} onSaved={() => { resource.refresh(); jobs.refresh(); }} notify={notify} />
     <EpisodeWorkflows episode={episode} busy={busy} setBusy={setBusy} locked={active || !jobs.data || jobs.data.some(job => ['QUEUED', 'RUNNING', 'UNKNOWN'].includes(job.status))} onSaved={() => { resource.refresh(); jobs.refresh(); }} notify={notify} />
     {episode.warnings.map(message => <div className="notice" key={message}>{message}</div>)}
     {active && <div className="progress-panel"><div><span>{reviewing ? '正在准备分镜预览' : '正在推进创作'}</span><strong>{reviewing ? episode.shots.filter(item => item.prompts).length : passed} / {total || '—'} 镜头</strong></div><div className="progress-track"><i style={{ width: `${total ? (reviewing ? episode.shots.filter(item => item.prompts).length : passed) / total * 90 : 3}%` }} /></div><small>进度会自动更新，可以离开页面，稍后回来查看。</small></div>}

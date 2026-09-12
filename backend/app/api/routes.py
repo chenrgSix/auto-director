@@ -13,9 +13,11 @@ from app.core.errors import AppError
 from app.core.limits import DURATION_POLICY, LIMITS
 from app.core.runtime_settings import SettingsPatch
 from app.db.store import uid
+from app.generation.quality import change_quality
 from app.generation.schemas import (
     ACTIVE,
     EpisodeCreate,
+    EpisodeQualityUpdate,
     EpisodeRerun,
     EpisodeWorkflowRestore,
     EpisodeWorkflowsUpdate,
@@ -369,6 +371,12 @@ async def edit_preview(request: Request, id: str, body: PreviewUpdate):
 @router.post("/episodes/{id}/approve", status_code=202)
 async def approve_preview(request: Request, id: str, body: PreviewApproval):
     return resources(request).generation.enqueue(id, "approve", body.expected_version)
+
+
+@router.patch("/episodes/{id}/quality")
+async def update_episode_quality(request: Request, id: str, body: EpisodeQualityUpdate):
+    state = resources(request)
+    return change_quality(state.store, state.generation.busy, id, body)
 
 
 @router.patch("/episodes/{id}/workflows")

@@ -1,5 +1,13 @@
 # API 与工作流契约
 
+## C37 已有短片的质量模式
+
+`PATCH /episodes/{id}/quality` 接受 `expected_version` 与 `quality`（fast/standard/high），返回更新后的 Episode。仅空闲且本片没有 QUEUED/RUNNING/UNKNOWN 作业时允许，取消后仍在退出的 busy 任务也拒绝；版本冲突返回 409，非法模式或额外字段返回 422。相同模式无副作用。
+
+模式实际改变时，`max_retries` 恢复 null，按模式默认 1/2/3 次，已有 budget 的 candidates 更新为 1/1/2。现有分辨率、FPS、时长预算和 qa_enabled 保留，后续质检门槛从 quality 读取。API 不入队、不调用模型或 ComfyUI，不撤销分镜确认，不重写计划/提示词或移除素材绑定。
+
+`generation_settings_history` 保留旧质量、重试配置、预算与执行游标；未完成且已有作业/游标的镜头递增 retry_version，清理旧 render_cursor/render_recovery，避免新模式重放旧预算或耗尽的尝试。已通过镜头、所有 Job 快照与资产文件保持。字段沿用 JSON 记录，旧数据缺少历史时按空列表处理，不需要表结构迁移。
+
 ## C35 提示词与素材一起重跑
 
 POST /episodes/{id}/rerun 的 scope 增加 "prompts"：先归档旧成片和受影响镜头（含完整 prompts），清除所选镜头的提示词及关键帧/视频绑定，再入队调用 Shot Agent，重写画面/视频/负面提示词、旁白脚本和 AI-owned 参数。计划、顺序、时长、Bible、参考图及旧文件保留；不重新请求 Director/Bible。原 video/keyframes 语义不变。

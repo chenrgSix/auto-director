@@ -61,6 +61,11 @@ class EpisodeCreate(StrictModel):
         return self
 
 
+class EpisodeQualityUpdate(StrictModel):
+    expected_version: int = Field(ge=1)
+    quality: Literal["fast", "standard", "high"]
+
+
 class EpisodeWorkflowsUpdate(StrictModel):
     expected_version: int = Field(ge=1)
     image_workflow_id: str = Field(min_length=1)

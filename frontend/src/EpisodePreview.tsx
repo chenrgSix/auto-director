@@ -47,8 +47,15 @@ export function EpisodePreview({ episode, busy, setBusy, refresh, notify }: {
   const [dirty, setDirty] = useState(false);
   const [selected, setSelected] = useState(0);
   const [error, setError] = useState<string>();
-  if (!dirty && episode.version > base.version) {
-    setBase(episode); setEdits(editableShots(episode));
+  const qualityOnly = episode.quality !== base.quality && ([
+    'id', 'idea', 'title', 'plan', 'bible', 'shots', 'references', 'preview', 'status',
+    'preview_approved_at', 'target_duration', 'aspect_ratio', 'style',
+    'image_workflow_id', 'video_workflow_id', 'reference_workflow_id',
+  ] as const).every(key => JSON.stringify(episode[key]) === JSON.stringify(base[key]));
+  if (episode.version > base.version && (!dirty || qualityOnly)) {
+    // A quality-only save must not strand unsaved prompt edits behind a stale version.
+    setBase(episode);
+    if (!dirty) setEdits(editableShots(episode));
   }
   const stale = episode.version > base.version;
   const preview = base.preview!;

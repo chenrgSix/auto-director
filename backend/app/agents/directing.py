@@ -126,6 +126,16 @@ def planning_schema(base: type[EpisodePlan], timing: dict) -> type[EpisodePlan]:
     )
 
 
+def quality_budget(episode: dict) -> dict:
+    quality = episode["quality"]
+    return {
+        "max_retries": episode.get("max_retries")
+        if episode.get("max_retries") is not None
+        else {"fast": 1, "standard": 2, "high": 3}[quality],
+        "candidates": 2 if quality == "high" else 1,
+    }
+
+
 def generation_budget(
     episode: dict, capabilities: dict, system_stats: dict, *, remote_video=False
 ) -> dict:
@@ -158,10 +168,7 @@ def generation_budget(
         "fps": episode.get("fps", 16),
         **duration_limits(episode, capabilities),
         "batch": 1,
-        "max_retries": episode.get("max_retries")
-        if episode.get("max_retries") is not None
-        else {"fast": 1, "standard": 2, "high": 3}[quality],
-        "candidates": 2 if quality == "high" else 1,
+        **quality_budget(episode),
         "low_memory": low,
         "vram_free": available,
     }
