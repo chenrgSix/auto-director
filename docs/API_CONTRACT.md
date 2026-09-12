@@ -1,5 +1,11 @@
 # API 与工作流契约
 
+## C42 质检策略
+
+`EpisodeCreate.qa_policy` 接受 `advisory|strict`，API 与旧数据缺省 strict；页面显式提交默认 advisory。`PATCH /episodes/{id}/qa-policy` 接受 `{expected_version, qa_policy}`，忙碌、版本冲突或 QUEUED/RUNNING/UNKNOWN 作业返回 409。保存不入队、不重写剧本或删除素材；归档旧策略/失败执行状态，仅清理已结算语义失败的重试状态，技术故障和提交恢复身份保留。
+
+advisory 跳过候选比较与视频前语义质检，视频后检查一次。`Shot.status=PASSED` 仍表示可参与合成的执行结果；`needs_review=true` 与 `review_notes[{stage,code,message,asset_ids}]` 单独表达画面待复核。QA 原始分数保留，`qa[].disposition=warning` 表示继续而非质量合格。模型服务错误仅在视觉检查边界转为复核提示；媒体、时长和执行错误仍失败。缓存绑定实际视频、前镜尾帧、目标、质量策略和模型端点；更换素材或主动重跑后重新检查。无表结构迁移，字段按 JSON 可选项兼容。
+
 ## C41 质检与编辑输入一致
 
 模型请求不再含历史判决或内部运行数据；真实图片与当前审核视觉目标为评价依据。模型 schema 用 artifact_severity 表示瑕疵严重度（0 无瑕疵、1 严重损坏），兼容旧 artifact_score 输入，内部字段及 API/历史输出继续 artifact_score；不反转数值或改变阈值。现有 qa_retry.rejected_assets 在图生图局部纠错时用于 reference_image，最终仍受用户覆盖、资产归属和类型校验。无新增接口、表结构或自动重写剧本行为。

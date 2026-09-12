@@ -44,6 +44,7 @@ from app.generation.qa_retry import (
     failed_frames,
     retry_state,
 )
+from app.generation.qa_review import current_review_notes, video_review_key
 from app.generation.recovery import prepare_recovery, recovery_profiles, replay_job
 from app.generation.resolvers import AssetResolver, ContinuityManager
 from app.generation.schemas import (
@@ -530,6 +531,94 @@ class GenerationService:
             parent=episode_id,
         )
 
+    def note_review(self, id, sid, stage, code, message, asset_ids):
+        shot = self.shot(id, sid)
+        notes = current_review_notes(shot)
+        note = {"stage": stage, "code": code, "message": message, "asset_ids": asset_ids}
+        if note not in notes:
+            notes.append(note)
+        self.update_shot(id, sid, needs_review=True, review_notes=notes)
+
+    async def review_video(self, episode, shot, previous, agents, *, advisory):
+        id, sid = episode["id"], shot["id"]
+        key = video_review_key(episode, shot, previous, self.settings)
+        cached = shot.get("qa_video_check") or {}
+        if advisory and cached.get("key") == key:
+            return
+
+        def replace_previous_review():
+            current = self.shot(id, sid)
+            notes = current_review_notes(current)
+            previous_notes = [
+                note
+                for note in notes
+                if note["stage"] == "video" and shot["video_asset_id"] in note.get("asset_ids", [])
+            ]
+            if previous_notes:
+                notes = [note for note in notes if note not in previous_notes]
+                self.update_shot(
+                    id,
+                    sid,
+                    review_notes=notes,
+                    needs_review=bool(notes),
+                    review_history=current.get("review_history", [])
+                    + [{"replaced_at": now(), "notes": previous_notes}],
+                )
+
+        self.stage(id, "QA")
+        self.update_shot(id, sid, status="QA")
+        samples = []
+        # Decoding errors remain hard failures. Only model review errors are advisory.
+        for fraction in (0, 0.5, 1):
+            frame = self.assets.allocate(id, ".png")
+            await extract_frame(
+                self.assets.path(shot["video_asset_id"]),
+                frame,
+                fraction,
+                duration_limit=shot["duration"],
+            )
+            sample = await self.assets.register(frame, id, "QA_SAMPLE_FRAME", sid)
+            samples.append(self.assets.path(sample["id"]))
+        if previous:
+            samples.append(self.assets.path(previous["actual_end_frame_asset_id"]))
+        try:
+            qa = await agents.qa(episode["bible"], shot, samples, "video")
+        except AppError as exc:
+            if not advisory or not (
+                exc.code.startswith("LLM_") or exc.code == "CONFIGURATION_REQUIRED"
+            ):
+                raise
+            replace_previous_review()
+            self.note_review(
+                id,
+                sid,
+                "video",
+                exc.code,
+                f"视觉检查未完成：{exc.message}；视频已保留，请人工复核。",
+                [shot["video_asset_id"]],
+            )
+            self.update_shot(id, sid, qa_video_check={"key": key, "error_code": exc.code})
+            return
+        scope = qa.retry_scope(high=episode["quality"] == "high")
+        self.record_qa(id, sid, "video", qa, [shot["video_asset_id"]])
+        entry = {"stage": "video", **qa.model_dump(), "retry_scope": scope}
+        if advisory:
+            entry["disposition"] = "warning" if scope else "passed"
+        self.update_shot(id, sid, qa=self.shot(id, sid)["qa"] + [entry])
+        replace_previous_review()
+        if scope:
+            if not advisory:
+                raise AppError(
+                    "QA_FAILED",
+                    "镜头未通过视觉质检",
+                    {"scope": scope, "explanation": qa.explanation},
+                )
+            self.note_review(
+                id, sid, "video", "QA_FAILED", qa.explanation, [shot["video_asset_id"]]
+            )
+        if advisory:
+            self.update_shot(id, sid, qa_video_check={"key": key})
+
     async def cancel(self, id: str) -> dict:
         episode = self.store.get("episode", id)
         if episode["status"] not in ACTIVE:
@@ -558,12 +647,15 @@ class GenerationService:
         shot.pop("keyframe_comparison", None)
         shot.pop("qa_retry", None)
         shot.pop("qa_frame_corrections", None)
+        shot.pop("qa_video_check", None)
         shot.update(
             video_asset_id=None,
             actual_end_frame_asset_id=None,
             status="STALE",
             error=None,
             qa=[],
+            needs_review=False,
+            review_notes=[],
             retry_version=shot.get("retry_version", 0) + 1,
         )
         if scope != "video":
@@ -1090,6 +1182,8 @@ class GenerationService:
         self, episode, shot, previous, continuity, image, video, budget, agents, visual_qa
     ):
         id, sid = episode["id"], shot["id"]
+        advisory = episode.get("qa_policy", "strict") == "advisory"
+        strict_qa = visual_qa and not advisory
         needs_end = video["capability"] == WorkflowCapability.FIRST_LAST_TO_VIDEO
         frame_roles = ("start_frame", "end_frame") if needs_end else ("start_frame",)
         user_inputs = role_overrides(video, parameter_overrides(episode, video))
@@ -1217,7 +1311,7 @@ class GenerationService:
                             else ref_inputs
                         )
                         candidate_results = []
-                        for candidate in range(budget["candidates"] if visual_qa else 1):
+                        for candidate in range(budget["candidates"] if strict_qa else 1):
                             result = await self.render(
                                 episode,
                                 image,
@@ -1242,7 +1336,7 @@ class GenerationService:
                                 sid,
                             )
                             score = 0
-                            if visual_qa and budget["candidates"] > 1:
+                            if strict_qa and budget["candidates"] > 1:
                                 candidate_qa = await agents.qa(
                                     episode["bible"],
                                     shot,
@@ -1311,7 +1405,16 @@ class GenerationService:
                             "end_frame_asset_id": shot["end_frame_asset_id"],
                         },
                     )
-                    if comparison["near_duplicate"]:
+                    if comparison["near_duplicate"] and advisory:
+                        self.note_review(
+                            id,
+                            sid,
+                            "keyframes",
+                            "KEYFRAMES_TOO_SIMILAR",
+                            "首尾帧几乎相同，视频可能缺少预期变化，请复核镜头动作。",
+                            [shot["start_frame_asset_id"], shot["end_frame_asset_id"]],
+                        )
+                    elif comparison["near_duplicate"]:
                         retry_scope = "transition"
                         raise AppError(
                             "KEYFRAMES_TOO_SIMILAR",
@@ -1329,7 +1432,7 @@ class GenerationService:
                                 },
                             },
                         )
-                if visual_qa and not shot["video_asset_id"] and retry_scope != "video":
+                if strict_qa and not shot["video_asset_id"] and retry_scope != "video":
                     keyframes = [shot[f"{role}_asset_id"] for role in frame_roles]
                     qa = await agents.qa(
                         episode["bible"],
@@ -1376,45 +1479,28 @@ class GenerationService:
                         id, sid, video_asset_id=result["id"], status="VIDEO_READY"
                     )
                 if visual_qa:
-                    self.stage(id, "QA")
-                    self.update_shot(id, sid, status="QA")
-                    samples = []
-                    for fraction in (0, 0.5, 1):
-                        frame = self.assets.allocate(id, ".png")
-                        await extract_frame(
-                            self.assets.path(shot["video_asset_id"]),
-                            frame,
-                            fraction,
-                            duration_limit=shot["duration"],
-                        )
-                        sample = await self.assets.register(frame, id, "QA_SAMPLE_FRAME", sid)
-                        samples.append(self.assets.path(sample["id"]))
-                    if previous:
-                        samples.append(self.assets.path(previous["actual_end_frame_asset_id"]))
-                    qa = await agents.qa(episode["bible"], shot, samples, "video")
-                    retry_scope = qa.retry_scope(high=episode["quality"] == "high")
-                    self.record_qa(id, sid, "video", qa, [shot["video_asset_id"]])
-                    self.update_shot(
+                    await self.review_video(episode, shot, previous, agents, advisory=advisory)
+                elif advisory and episode["qa_enabled"]:
+                    self.note_review(
                         id,
                         sid,
-                        qa=self.shot(id, sid)["qa"]
-                        + [{"stage": "video", **qa.model_dump(), "retry_scope": retry_scope}],
+                        "video",
+                        "CONFIGURATION_REQUIRED",
+                        "未配置视觉模型，视频仅通过媒体技术检查，请人工复核画面。",
+                        [shot["video_asset_id"]],
                     )
-                    if retry_scope:
-                        raise AppError(
-                            "QA_FAILED",
-                            "镜头未通过视觉质检",
-                            {"scope": retry_scope, "explanation": qa.explanation},
-                        )
                 last = self.assets.allocate(id, ".png")
                 await extract_frame(
                     self.assets.path(shot["video_asset_id"]), last, duration_limit=shot["duration"]
                 )
                 end = await self.assets.register(last, id, "ACTUAL_END_FRAME", sid)
+                notes = current_review_notes(self.shot(id, sid))
                 self.update_shot(
                     id,
                     sid,
                     status="PASSED",
+                    needs_review=bool(notes),
+                    review_notes=notes,
                     actual_end_frame_asset_id=end["id"],
                     continuity_after={**continuity, **prompts["continuity_state"]},
                     error=None,
@@ -1435,6 +1521,7 @@ class GenerationService:
                     if exc.code == "VIDEO_TOO_SHORT":
                         retry_scope = "video"
                     details = exc.details or {}
+                    retry_scope = details.get("scope", retry_scope)
                     repair_frames = details.get("failed_frames") or failed_frames(
                         retry_scope, needs_end
                     )

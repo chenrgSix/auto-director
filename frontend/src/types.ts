@@ -27,13 +27,15 @@ export type Settings = {
   vlm_configured: boolean; vlm_model: string; max_asset_mb: number;
   render_timeout: number; request_timeout: number; llm_timeout: number; poll_interval: number;
 };
-export type QA = { stage: string; character_consistency: number; scene_consistency: number; style_consistency: number; action_accuracy: number; transition_quality: number; artifact_score: number; explanation: string; retry_scope: string | null };
+export type QAPolicy = 'advisory' | 'strict';
+export type ReviewNote = { stage: string; code: string; message: string };
+export type QA = { stage: string; character_consistency: number; scene_consistency: number; style_consistency: number; action_accuracy: number; transition_quality: number; artifact_score: number; explanation: string; retry_scope: string | null; disposition?: 'warning' | 'passed' | 'retry' };
 export type Shot = {
   id: string; title: string; index: number; duration: number; enabled: boolean; status: string; action: string; camera: string;
   transition_from_previous: string; start_frame_asset_id: string | null; end_frame_asset_id: string | null; video_asset_id: string | null;
   prompts: { allow_static_end_frame?: boolean; start_frame_prompt: string; end_frame_prompt: string; video_prompt: string; negative_prompt: string; narration_text?: string; camera_motion?: string; motion_strength?: number; ai_parameters?: Record<string, Record<string, Value>> } | null;
   preview_prompt_view?: { values: Record<PreviewPromptField, string>; locked: Partial<Record<PreviewPromptField, string>>; hints?: Partial<Record<PreviewPromptField, string>> };
-  error: Problem | null; qa: QA[];
+  error: Problem | null; qa: QA[]; needs_review?: boolean; review_notes?: ReviewNote[];
 };
 export type PreviewPromptField = 'start_frame_prompt' | 'end_frame_prompt' | 'video_prompt';
 export type PreviewShotEdit = Pick<Shot, 'id' | 'title' | 'duration'> & Record<PreviewPromptField, string> & { allow_static_end_frame: boolean };
@@ -43,7 +45,7 @@ export type Episode = {
   rerun_history?: { id: string; created_at: string; scope: string; shot_ids: string[]; affected_shot_ids: string[]; new_seed: boolean; final_video_asset_id: string | null; final_duration?: number | null; shots: Shot[] }[];
   recoverable_workflow_revision?: number;
   refresh_workflow_budget?: boolean;
-  id: string; idea: string; title: string | null; target_duration: number; aspect_ratio: string; style: string; quality: string;
+  id: string; idea: string; title: string | null; target_duration: number; aspect_ratio: string; style: string; quality: string; qa_policy?: QAPolicy;
   status: string; shots: Shot[]; references: Record<string, string>; warnings: string[]; error: Problem | null;
   final_video_asset_id: string | null; final_duration?: number; created_at: string; metrics: Record<string, number>;
   bible: unknown; plan: unknown;
@@ -58,5 +60,5 @@ export const STATUS: Record<string, string> = {
   PREPARING_PROMPTS: '编写镜头提示词', AWAITING_REVIEW: '待确认分镜',
   GENERATING_KEYFRAMES: '生成关键帧', RENDERING_VIDEO: '渲染视频', QA: '质量检查', COMPOSING: '合成短片', COMPLETED: '已完成', FAILED: '待处理', CANCELLED: '已取消',
   PENDING: '待生成', GENERATING_START_FRAME: '生成首帧', START_FRAME_READY: '首帧就绪', GENERATING_END_FRAME: '生成尾帧', KEYFRAMES_READY: '关键帧就绪',
-  VIDEO_READY: '视频就绪', PASSED: '已通过', STALE: '需要重新生成', RUNNING: '执行中', UNKNOWN: '需要核对',
+  VIDEO_READY: '视频就绪', PASSED: '已完成', NEEDS_REVIEW: '待复核', STALE: '需要重新生成', RUNNING: '执行中', UNKNOWN: '需要核对',
 };

@@ -35,6 +35,7 @@ class EpisodeCreate(StrictModel):
     max_shot_duration: float | None = Field(default=None, ge=1, le=MAX_SHOT_SECONDS)
     max_retries: int | None = Field(default=None, ge=0, le=5)
     qa_enabled: bool = True
+    qa_policy: Literal["advisory", "strict"] = "strict"
     image_parameters: dict[str, Any] = Field(default_factory=dict)
     video_parameters: dict[str, Any] = Field(default_factory=dict)
 
@@ -64,6 +65,11 @@ class EpisodeCreate(StrictModel):
 class EpisodeQualityUpdate(StrictModel):
     expected_version: int = Field(ge=1)
     quality: Literal["fast", "standard", "high"]
+
+
+class EpisodeQAPolicyUpdate(StrictModel):
+    expected_version: int = Field(ge=1)
+    qa_policy: Literal["advisory", "strict"]
 
 
 class EpisodeWorkflowsUpdate(StrictModel):

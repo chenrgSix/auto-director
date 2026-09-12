@@ -130,6 +130,12 @@ summary { cursor: pointer; font-size: 12px; color: #c0c8ac; line-height: 1.8; }
 .muted { color: var(--muted); font-size: 11px; line-height: 1.9; }.success-text { color: #adca83; font-size: 11px; display: inline-flex; gap: 7px; align-items: center; }.error-text { color: #e6a38d; font-size: 11px; }
 .notice { background: #302d1f; border: 1px solid #605334; color: #c6b489; border-radius: 7px; padding: 13px 15px; margin: 14px 0; display: flex; align-items: flex-start; gap: 10px; font-size: 11px; line-height: 1.9; }
 .notice.error { background: #34271f; border-color: #684331; color: #e3b191; }.notice small { display: block; color: #b78c73; margin-top: 3px; }.notice > div { min-width: 0; }
+.notice.shot-review, .notice.final-review { display: block; }
+.shot-review > strong, .shot-review > span, .final-review > strong, .final-review > span { display: block; }
+.shot-review p { margin: 8px 0 0; overflow-wrap: anywhere; }
+.final-review .actions { margin-top: 10px; flex-wrap: wrap; }
+.final-review button { white-space: normal; text-align: left; }
+.badge.needs_review { color: #e4c784; border-color: #88703b; background: #3b3520; }
 .actions { display: flex; gap: 9px; align-items: center; flex-wrap: wrap; }.icon-button { padding: 6px; border: none; background: transparent; }
 .text-button { border: none; background: transparent; padding: 0; font-size: 11px; color: #d0b687; display: inline-flex; gap: 7px; align-items: center; }.back { margin-bottom: 20px; }
 .empty { display: flex; min-height: 230px; align-items: center; justify-content: center; flex-direction: column; gap: 15px; color: #829071; border: 1px dashed #3c4a30; border-radius: 9px; margin: 22px 0; font-size: 12px; }.empty h3 { font-size: 16px; color: #bcc8a8; font-weight: 400; }.empty p { max-width: 450px; font-size: 11px; text-align: center; line-height: 1.9; }

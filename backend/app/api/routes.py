@@ -13,10 +13,12 @@ from app.core.errors import AppError
 from app.core.limits import DURATION_POLICY, LIMITS
 from app.core.runtime_settings import SettingsPatch
 from app.db.store import uid
+from app.generation.qa_policy import change_qa_policy
 from app.generation.quality import change_quality
 from app.generation.schemas import (
     ACTIVE,
     EpisodeCreate,
+    EpisodeQAPolicyUpdate,
     EpisodeQualityUpdate,
     EpisodeRerun,
     EpisodeWorkflowRestore,
@@ -377,6 +379,12 @@ async def approve_preview(request: Request, id: str, body: PreviewApproval):
 async def update_episode_quality(request: Request, id: str, body: EpisodeQualityUpdate):
     state = resources(request)
     return change_quality(state.store, state.generation.busy, id, body)
+
+
+@router.patch("/episodes/{id}/qa-policy")
+async def update_episode_qa_policy(request: Request, id: str, body: EpisodeQAPolicyUpdate):
+    state = resources(request)
+    return change_qa_policy(state.store, state.generation.busy, id, body)
 
 
 @router.patch("/episodes/{id}/workflows")

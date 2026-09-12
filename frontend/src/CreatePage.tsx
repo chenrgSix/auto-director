@@ -2,7 +2,8 @@ import { useState, type FormEvent } from 'react';
 import { ArrowRight, ChevronDown, Clapperboard, Sparkles, Wand2 } from 'lucide-react';
 import { api, useResource } from './api';
 import { navigate, type Notify } from './App';
-import type { Episode, Settings, Value, Workflow } from './types';
+import type { Episode, QAPolicy, Settings, Value, Workflow } from './types';
+import { QA_POLICIES } from './EpisodeQAPolicy';
 import { ParameterOverrides } from './DynamicParameters';
 import { ErrorNotice } from './ui';
 
@@ -15,6 +16,7 @@ export default function CreatePage({ notify }: { notify: Notify }) {
   const [ratio, setRatio] = useState('9:16');
   const [style, setStyle] = useState('自然纪录片');
   const [quality, setQuality] = useState('standard');
+  const [qaPolicy, setQAPolicy] = useState<QAPolicy>('advisory');
   const [advancedMode, setAdvancedMode] = useState(false);
   const [overrides, setOverrides] = useState<Record<string, Record<string, Value>>>({});
   const [busy, setBusy] = useState(false);
@@ -33,7 +35,7 @@ export default function CreatePage({ notify }: { notify: Notify }) {
     if (!idea.trim() || busy || !validDuration || missingAsset) return;
     setBusy(true);
     try {
-      const episode = await api<Episode>('/episodes', 'POST', { idea, target_duration: duration, aspect_ratio: ratio, style, preview_required: true, advanced_mode: advancedMode, ...(advancedMode ? { quality, ...advanced, image_workflow_id: advanced.image_workflow_id || null, video_workflow_id: advanced.video_workflow_id || null, reference_workflow_id: advanced.reference_workflow_id || null, workflow_overrides: activeOverrides } : {}) });
+      const episode = await api<Episode>('/episodes', 'POST', { idea, target_duration: duration, aspect_ratio: ratio, style, quality, qa_policy: qaPolicy, preview_required: true, advanced_mode: advancedMode, ...(advancedMode ? { ...advanced, image_workflow_id: advanced.image_workflow_id || null, video_workflow_id: advanced.video_workflow_id || null, reference_workflow_id: advanced.reference_workflow_id || null, workflow_overrides: activeOverrides } : {}) });
       navigate(`episode/${episode.id}`);
       await api(`/episodes/${episode.id}/preview`, 'POST');
       notify('正在规划分镜，完成后请预览并确认');
@@ -54,8 +56,10 @@ export default function CreatePage({ notify }: { notify: Notify }) {
             {preset === null && customDuration && !validDuration && durationPolicy && <small className="error-text" role="alert">请输入 {durationPolicy.min}～{durationPolicy.max} 秒的时长。</small>}
           </div>
           <div className="fields two"><div className="field"><label htmlFor="ratio">画幅比例</label><select id="ratio" value={ratio} onChange={event => setRatio(event.target.value)}><option value="9:16">9:16 · 竖屏</option><option value="16:9">16:9 · 宽银幕</option><option value="1:1">1:1 · 方形</option></select></div><div className="field"><label htmlFor="style">视觉风格</label><select id="style" value={style} onChange={event => setStyle(event.target.value)}>{['自然纪录片', '写实电影', '动画', '科幻', '手绘', '自动'].map(item => <option key={item}>{item}</option>)}</select></div></div>
+          <div className="field"><label>质量模式</label><div className="quality-options">{[{ id: 'fast', title: '快速探索', text: '低分辨率 · 快速验证' }, { id: 'standard', title: '标准创作', text: '质量与生成成本平衡' }, { id: 'high', title: '精细打磨', text: qaPolicy === 'strict' ? '视觉候选 · 更高画面标准' : '更高画面标准 · 成片后复核' }].map(item => <button type="button" key={item.id} className={quality === item.id ? 'selected' : ''} aria-pressed={quality === item.id} onClick={() => { setQuality(item.id); setAdvanced({ ...advanced, max_retries: item.id === 'fast' ? 1 : item.id === 'high' ? 3 : 2 }); }}><span>{item.title}{item.id === 'standard' && <i>推荐</i>}</span><small>{item.text}</small></button>)}</div></div>
+          <div className="field"><label htmlFor="qa-policy">质检策略</label><select id="qa-policy" value={qaPolicy} onChange={event => setQAPolicy(event.target.value as QAPolicy)}>{QA_POLICIES.map(item => <option key={item.id} value={item.id}>{item.label}</option>)}</select><small>{QA_POLICIES.find(item => item.id === qaPolicy)?.detail}连接中断、生成失败等技术问题仍会暂停并保留进度。</small></div>
           <label className="checkbox advanced-toggle"><input type="checkbox" checked={advancedMode} onChange={event => setAdvancedMode(event.target.checked)} />高级模式 <small>工作流选择与逐项参数覆盖</small></label>
-          {advancedMode && <details className="advanced" open><summary><span><ChevronDown size={16} />高级设置</span><span>自动填充 / 参数覆盖</span></summary>          <div className="field"><label>质量模式</label><div className="quality-options">{[{ id: 'fast', title: '快速探索', text: '低分辨率 · 快速验证' }, { id: 'standard', title: '标准创作', text: '质量与生成成本平衡' }, { id: 'high', title: '精细打磨', text: '视觉候选 · 严格质检' }].map(item => <button type="button" key={item.id} className={quality === item.id ? 'selected' : ''} aria-pressed={quality === item.id} onClick={() => { setQuality(item.id); setAdvanced({ ...advanced, max_retries: item.id === 'fast' ? 1 : item.id === 'high' ? 3 : 2 }); }}><span>{item.title}{item.id === 'standard' && <i>推荐</i>}</span><small>{item.text}</small></button>)}</div></div>
+          {advancedMode && <details className="advanced" open><summary><span><ChevronDown size={16} />高级设置</span><span>自动填充 / 参数覆盖</span></summary>
 <div className="fields two">
             {(['image', 'video', 'reference'] as const).map(type => <div className="field" key={type}><label htmlFor={`workflow-${type}`}>{type === 'image' ? '关键帧图像工作流' : type === 'video' ? '视频工作流' : '初始参考图工作流'}</label><select id={`workflow-${type}`} value={advanced[`${type}_workflow_id`]} onChange={event => setAdvanced({ ...advanced, [`${type}_workflow_id`]: event.target.value })}><option value="">使用默认工作流</option>{workflows.data?.filter(item => type === 'reference' ? item.capability === 'TEXT_TO_IMAGE' : item.media_type === type).map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select></div>)}
             <div className="field"><label htmlFor="memory">显存模式</label><select id="memory" value={advanced.memory_mode} onChange={event => setAdvanced({ ...advanced, memory_mode: event.target.value })}><option value="auto">自动检测</option><option value="low">低显存</option><option value="manual">手动 / 标准预算</option></select></div>
