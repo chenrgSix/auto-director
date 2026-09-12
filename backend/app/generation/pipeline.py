@@ -55,6 +55,7 @@ from app.generation.workflow_state import (
     resume_story,
     story_snapshot,
 )
+from app.media.keyframes import inspect_keyframes
 from app.media.service import Assets, compose, extract_frame, require_video_duration
 from app.workflows.analyzer import refresh_profile, validate_bindings
 from app.workflows.duration import render_maximum
@@ -546,6 +547,7 @@ class GenerationService:
     @staticmethod
     def invalidate(shot: dict, scope="keyframes") -> None:
         shot.pop("render_cursor", None)
+        shot.pop("keyframe_comparison", None)
         shot.update(
             video_asset_id=None,
             actual_end_frame_asset_id=None,
@@ -612,6 +614,13 @@ class GenerationService:
             current.pop("render_recovery", None)
             for shot in current["shots"]:
                 if shot["id"] in scopes:
+                    if shot["id"] in selected and request.allow_static_end_frame is not None:
+                        if shot.get("prompts"):
+                            shot["prompts"]["allow_static_end_frame"] = (
+                                request.allow_static_end_frame
+                            )
+                        else:
+                            shot["pending_static_end_frame"] = request.allow_static_end_frame
                     self.invalidate(shot, scopes[shot["id"]])
                     if request.new_seed:
                         shot["seed_offset"] = (shot.get("seed_offset", 0) + 10000) % 2147483648
@@ -1071,6 +1080,8 @@ class GenerationService:
                 ai_parameters(image, video),
                 idea=episode["idea"],
             )
+            if "pending_static_end_frame" in shot:
+                prompts.allow_static_end_frame = shot["pending_static_end_frame"]
             shot = self.update_shot(id, sid, prompts=prompts.model_dump(mode="json"))
         prompts = shot["prompts"]
         ref_inputs = ContinuityManager.references(episode)
@@ -1132,7 +1143,10 @@ class GenerationService:
                                     **base,
                                     "seed": base["seed"] + attempt * 7 + candidate,
                                     "prompt": anchored_prompt(
-                                        episode["bible"], prompts["start_frame_prompt"], continuity
+                                        episode["bible"],
+                                        prompts["start_frame_prompt"],
+                                        continuity,
+                                        stage="start_frame",
                                     ),
                                 },
                                 ref_inputs,
@@ -1167,9 +1181,9 @@ class GenerationService:
                             "seed": base["seed"] + 1 + attempt * 7,
                             "prompt": anchored_prompt(
                                 episode["bible"],
-                                prompts["end_frame_prompt"]
-                                + f". Same characters, location and lighting, {shot['duration']} seconds later.",
-                                continuity,
+                                prompts["end_frame_prompt"],
+                                {},
+                                stage="end_frame",
                             ),
                         },
                         {**ref_inputs, "reference_image": shot["start_frame_asset_id"]},
@@ -1181,6 +1195,34 @@ class GenerationService:
                     )
                 else:
                     shot = self.update_shot(id, sid, status="KEYFRAMES_READY")
+                if (
+                    needs_end
+                    and not shot["video_asset_id"]
+                    and not (recovery.get("shot_id") == sid and recovery.get("skip_keyframe_qa"))
+                    and not prompts.get("allow_static_end_frame", False)
+                ):
+                    comparison = await inspect_keyframes(
+                        self.assets.path(shot["start_frame_asset_id"]),
+                        self.assets.path(shot["end_frame_asset_id"]),
+                    )
+                    self.update_shot(
+                        id,
+                        sid,
+                        keyframe_comparison={
+                            **comparison,
+                            "start_frame_asset_id": shot["start_frame_asset_id"],
+                            "end_frame_asset_id": shot["end_frame_asset_id"],
+                        },
+                    )
+                    if comparison["near_duplicate"]:
+                        retry_scope = "transition"
+                        raise AppError(
+                            "KEYFRAMES_TOO_SIMILAR",
+                            f"第 {shot['index'] + 1} 镜首尾帧几乎相同，已暂停视频生成。"
+                            "请检查尾帧变化描述、参考图设置及 seed 绑定；"
+                            "有意定格的镜头可在分镜预览或重跑选项中允许静止首尾帧。",
+                            {"shot_id": sid, **comparison},
+                        )
                 if visual_qa and not shot["video_asset_id"] and retry_scope != "video":
                     keyframes = [shot[f"{role}_asset_id"] for role in frame_roles]
                     qa = await agents.qa(
@@ -1267,8 +1309,15 @@ class GenerationService:
                 return
             except AppError as exc:
                 if (
-                    exc.code not in {"QA_FAILED", "OUT_OF_MEMORY", "VIDEO_TOO_SHORT"}
+                    exc.code
+                    not in {
+                        "QA_FAILED",
+                        "OUT_OF_MEMORY",
+                        "VIDEO_TOO_SHORT",
+                        "KEYFRAMES_TOO_SIMILAR",
+                    }
                     or retries["remaining"] == 0
+                    or (exc.code == "KEYFRAMES_TOO_SIMILAR" and "end_frame" in user_inputs)
                 ):
                     raise
                 retries["remaining"] -= 1
@@ -1323,6 +1372,7 @@ class GenerationService:
                 episode["bible"],
                 shot["prompts"]["video_prompt"],
                 shot["prompts"]["continuity_state"],
+                stage="video",
             ),
         }
         inputs = {

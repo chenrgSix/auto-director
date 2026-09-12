@@ -35,6 +35,7 @@ function editableShots(episode: Episode): PreviewShotEdit[] {
     start_frame_prompt: shot.preview_prompt_view?.values.start_frame_prompt ?? shot.prompts?.start_frame_prompt ?? '',
     end_frame_prompt: shot.preview_prompt_view?.values.end_frame_prompt ?? shot.prompts?.end_frame_prompt ?? '',
     video_prompt: shot.preview_prompt_view?.values.video_prompt ?? shot.prompts?.video_prompt ?? '',
+    allow_static_end_frame: shot.prompts?.allow_static_end_frame ?? false,
   }));
 }
 
@@ -92,6 +93,7 @@ export function EpisodePreview({ episode, busy, setBusy, refresh, notify }: {
           <div className="fields two"><div className="field"><label htmlFor="preview-title">镜头标题</label><input id="preview-title" value={edit.title} required maxLength={200} aria-invalid={invalidField('title')} disabled={busy} onChange={event => change({ title: event.target.value })} /></div><div className="field"><label htmlFor="preview-duration">镜头时长（秒）</label><input id="preview-duration" type="number" min={preview.min_duration} max={preview.max_duration} step="0.01" required value={Number.isFinite(edit.duration) ? edit.duration : ''} aria-invalid={invalidField('duration')} disabled={busy || preview.fixed_duration != null} onChange={event => change({ duration: event.target.value === '' ? NaN : Number(event.target.value) })} /></div></div>
           <div className="preview-direction"><p><strong>画面动作</strong>{shot.action}</p><p><strong>镜头语言</strong>{shot.camera}</p><small>这是导演的原始构思。调整画面或运镜，请修改下方提示词。</small></div>
           {fields.map(({ field, label }) => <div className="field" key={field}><label htmlFor={`preview-${field}`}>{label}</label><textarea id={`preview-${field}`} value={edit[field]} required maxLength={6000} rows={5} aria-invalid={invalidField(field)} disabled={busy || !!shot.preview_prompt_view?.locked[field]} onChange={event => change({ [field]: event.target.value })} />{shot.preview_prompt_view?.locked[field] && <small>{shot.preview_prompt_view.locked[field]}</small>}{shot.preview_prompt_view?.hints?.[field] && <small>{shot.preview_prompt_view.hints[field]}</small>}</div>)}
+          {preview.capability === 'FIRST_LAST_TO_VIDEO' && <label className="check"><input type="checkbox" checked={edit.allow_static_end_frame} disabled={busy} onChange={event => change({ allow_static_end_frame: event.target.checked })} />允许静止首尾帧（仅用于有意定格的镜头）</label>}
           {shot.prompts?.narration_text && <div className="preview-extra"><strong>旁白脚本（尚未合成音频）</strong><p>{shot.prompts.narration_text}</p></div>}
           <details className="preview-extra"><summary>其他生成约束与 AI 参数（只读）</summary><p>负面提示词：{shot.prompts?.negative_prompt}</p><p>运镜参数：{shot.prompts?.camera_motion} · 运动强度：{shot.prompts?.motion_strength}</p><pre>{JSON.stringify(shot.prompts?.ai_parameters ?? {}, null, 2)}</pre></details>
         </div>

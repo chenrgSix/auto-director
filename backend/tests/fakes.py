@@ -1,5 +1,6 @@
 """Deterministic dependency doubles. This module is never imported by application code."""
 
+import hashlib
 import io
 import json
 from fractions import Fraction
@@ -88,6 +89,7 @@ class FakeComfy:
         buffer = io.BytesIO()
         Image.new("RGB", (256, 256), (80, 140, 100)).save(buffer, "PNG")
         self.image_bytes = buffer.getvalue()
+        self.fixed_images = False
         self.prompts = {}
         self.calls = []
         self.info = {}
@@ -155,7 +157,7 @@ class FakeComfy:
                             "save": {
                                 "images": [
                                     {
-                                        "filename": "fixture.mp4" if video else "fixture.png",
+                                        "filename": "fixture.mp4" if video else f"{id}.png",
                                         "subfolder": "",
                                         "type": "output",
                                     }
@@ -168,9 +170,19 @@ class FakeComfy:
             )
         if path == "/view":
             video = request.url.params["filename"].endswith("mp4")
+            content = self.image_bytes
+            if not video and not self.fixed_images:
+                # Distinct deterministic outputs model separate successful image renders.
+                # Duplicate-render regressions opt into fixed_images explicitly.
+                filename = request.url.params["filename"]
+                pixels = hashlib.shake_256(filename.encode()).digest(16 * 16 * 3)
+                frame = Image.frombytes("RGB", (16, 16), pixels).resize((256, 256))
+                buffer = io.BytesIO()
+                frame.save(buffer, "PNG")
+                content = buffer.getvalue()
             return httpx.Response(
                 200,
-                content=self.video_bytes if video else self.image_bytes,
+                content=self.video_bytes if video else content,
                 headers={"Content-Type": "video/mp4" if video else "image/png"},
             )
         if path in {"/queue", "/interrupt", "/history"}:

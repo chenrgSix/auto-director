@@ -79,6 +79,7 @@ class EpisodeRerun(StrictModel):
     # Omitted means all enabled shots. Never interpret an empty selection as all.
     shot_ids: list[str] | None = Field(default=None, min_length=1, max_length=LEGACY_MAX_SHOTS)
     new_seed: bool = True
+    allow_static_end_frame: bool | None = Field(default=None, strict=True)
 
 
 class PreviewShotUpdate(StrictModel):
@@ -89,6 +90,7 @@ class PreviewShotUpdate(StrictModel):
     start_frame_prompt: str = Field(max_length=6000)
     end_frame_prompt: str = Field(max_length=6000)
     video_prompt: str = Field(max_length=6000)
+    allow_static_end_frame: bool | None = Field(default=None, strict=True)
 
 
 class PreviewUpdate(StrictModel):

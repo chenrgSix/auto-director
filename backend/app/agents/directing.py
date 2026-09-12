@@ -311,7 +311,12 @@ class Directors:
     ) -> ShotPrompts:
         return await self.generate_json(
             "Act as Shot Agent. Build actionable image/start/end/video/negative prompts. "
-            "Inherit the Bible and continuity. End frame is the same subjects, location and lighting seconds later. "
+            "Use the Bible for stable identity and style. Follow this shot's start_state and end_state; "
+            "previous continuity is historical context, not a requirement to repeat the previous scene. "
+            "Describe the visible endpoint changes explicitly, including departures, pose, location and time. "
+            "Do not force every character to appear in every frame. "
+            "Set allow_static_end_frame=true only for an intentional freeze or unchanged hold in the shot plan, "
+            "never merely because the camera is static or motion is small. Otherwise keep it false. "
             "Describe one action, camera, light, identity and negative constraints. Prompts should be in English. "
             "Respect the AI-owned workflow parameter types, ranges and enum options. "
             "Fill ai_parameters[workflow_id][parameter_key] for the listed parameters only. "
@@ -337,7 +342,10 @@ class Directors:
         return await self.generate_json(
             "Act as visual QA. Inspect the supplied actual frames; do not infer success from prompts. "
             "Rate identity/count, scene, style, action, transition and artifacts from 0 to 1. "
-            "artifact_score is BAD when high. Explain failures. For keyframes assess the intended endpoints; "
+            "artifact_score is BAD when high. Explain failures. For keyframes assess the intended endpoints "
+            "in shot.prompts: near-identical frames fail action/transition when endpoint change is requested. "
+            "An empty final scene or departing character can be intentional; follow the current target "
+            "over global cast-count or previous-scene constraints. "
             "for video compare sampled start/middle/end and the prior clip's last frame when supplied.",
             {
                 "bible": bible,
@@ -350,14 +358,31 @@ class Directors:
         )
 
 
-def anchored_prompt(bible: dict, prompt: str, continuity: dict) -> str:
+def anchored_prompt(bible: dict, prompt: str, continuity: dict, *, stage: str = "image") -> str:
+    # Continuity is interpreted by the Shot Agent. Re-appending its previous state here
+    # would override reviewed endpoints, especially after a cut or a character's exit.
+    identities = [
+        {
+            "id": item["id"],
+            "features": item.get("distinguishing_features") or item.get("description", ""),
+        }
+        if isinstance(item, dict)
+        else item
+        for item in bible.get("characters", [])
+    ]
     return "\n\n".join(
         [
-            "Episode visual bible: "
-            + json.dumps(
-                {k: v for k, v in bible.items() if k != "ai_parameters"}, ensure_ascii=False
+            f"Requested {stage} target (highest priority):\n{prompt}",
+            (
+                "Render the requested END state. When <Picture 1> is supplied, edit it to reach this "
+                "target, preserving identity but changing pose, position, setting, lighting and visible "
+                "subject count as requested. Do not copy its starting action or composition."
+                if stage == "end_frame"
+                else "Render only the subjects and setting requested in the target."
             ),
-            prompt,
-            "Continuity constraints: " + json.dumps(continuity, ensure_ascii=False),
+            "Identity catalog for requested subjects only (not a required cast list): "
+            + json.dumps(identities, ensure_ascii=False),
+            "Visual style, subordinate to the requested target: "
+            + json.dumps(bible.get("style", {}), ensure_ascii=False),
         ]
     )[:20000]

@@ -70,6 +70,11 @@ class VisualBible(StrictModel):
 
 class ShotPrompts(StrictModel):
     ai_parameters: dict[str, dict[str, Any]] = Field(default_factory=dict)
+    allow_static_end_frame: bool = Field(
+        default=False,
+        strict=True,
+        description="True only for an intentional unchanged hold, not a static camera with moving subjects.",
+    )
     image_prompt: str = Field(
         min_length=1, max_length=6000, description="Visual image description, never narration."
     )

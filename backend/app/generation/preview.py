@@ -187,6 +187,10 @@ def apply_edits(episode, request, image, video):
             edited.add(field)
         if not item.title.strip():
             raise AppError("PREVIEW_INVALID", "镜头标题不能为空")
+        if item.allow_static_end_frame is not None:
+            if item.allow_static_end_frame != shot["prompts"].get("allow_static_end_frame", False):
+                edited.add("allow_static_end_frame")
+            shot["prompts"]["allow_static_end_frame"] = item.allow_static_end_frame
         shot.update(title=item.title, duration=item.duration, preview_edited_fields=sorted(edited))
         archive_duplicate_prompts(shot, image, video)
         shot["preview_prompt_view"] = prompt_view(episode, shot, image, video)

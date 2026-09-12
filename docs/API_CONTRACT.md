@@ -1,5 +1,13 @@
 # API 与工作流契约
 
+## C33 首尾帧变化意图与技术门禁
+
+- ShotPrompts 新增严格布尔 allow_static_end_frame，默认 false；仅有意定格可为 true，静止摄像机不等于静止主体。
+- PATCH /episodes/{id}/preview 的 shots 项可带 allow_static_end_frame；省略/null 保持原值，继续使用原 expected_version 和状态校验。
+- POST /episodes/{id}/rerun 可带同名字段；仅覆盖明确选择的镜头（未指定 shot_ids 则全部启用镜头），连续依赖镜头保持各自设定。原设定随 rerun_history 保存，省略保持兼容。
+- Shot.keyframe_comparison 可包含 near_duplicate、correlation、normalized_mae、start_frame_asset_id、end_frame_asset_id。重跑失效时清理派生比较结果。
+- FIRST_LAST_TO_VIDEO 检出近重复且重试耗尽时，Episode.error.code=KEYFRAMES_TOO_SIMILAR，details 含 shot_id 与数值指标。不会提交新视频；原资产可下载。用户固定尾帧直接报错，避免反复生成被固定覆盖的素材；I2V 不执行该门禁。
+
 C31：`DELETE /workflows/{id}` 成功后，内置工作流与用户工作流均保持删除状态，服务重启不重新导入。首次初始化仍提供两份内置模板；既有默认选择及 Episode 引用保护保持，409 明确显示“未删除”，引用冲突的 details.episodes 包含 ID/title。旧 settings 的默认能力映射只迁移现存工作流，不补建缺失记录；无 API 请求格式或表结构变更。
 
 C30：Shot 可选 render_cursor 保存当前尝试号、retry_version、起始重试余量、基础参数和重试范围；Episode 可选 render_recovery 保存恢复游标及 step_key→Job ID 映射。均为现有 JSON 聚合的扩展，无表迁移。继续生成按原作业快照恢复 UNKNOWN，包括 OOM 降分辨率、分段与中间帧；已确认的 OOM 决策重放但不重新提交，已完成步骤复用。恢复上下文跨重启和本地后处理失败保留，镜头通过后清理；显式重跑/换绑/时间线修改清除旧恢复上下文。无 prompt_id、跨短片未结算或步骤身份不符仍拒绝，不能通过恢复绕过未知提交保护。

@@ -12,9 +12,10 @@ export function EpisodeRerun({ episode, shot, locked, busy, setBusy, refresh, no
   const [target, setTarget] = useState('all');
   const [scope, setScope] = useState('video');
   const [newSeed, setNewSeed] = useState(true);
+  const [staticFrames, setStaticFrames] = useState('keep');
   const [version, setVersion] = useState(episode.version);
   function chooseTarget(value: string) {
-    setTarget(value); setScope('video'); setNewSeed(true); setVersion(episode.version); setOpen(true);
+    setTarget(value); setScope('video'); setNewSeed(true); setStaticFrames('keep'); setVersion(episode.version); setOpen(true);
   }
   const selected = target === 'all' ? episode.shots.filter(s => s.enabled) : episode.shots.filter(s => s.id === target && s.enabled);
   let previousChanged = false;
@@ -26,7 +27,7 @@ export function EpisodeRerun({ episode, shot, locked, busy, setBusy, refresh, no
   async function submit() {
     setBusy(true);
     try {
-      await api(`/episodes/${episode.id}/rerun`, 'POST', { expected_version: version, scope, new_seed: newSeed, ...(target === 'all' ? {} : { shot_ids: [target] }) });
+      await api(`/episodes/${episode.id}/rerun`, 'POST', { expected_version: version, scope, new_seed: newSeed, ...(staticFrames === 'keep' ? {} : { allow_static_end_frame: staticFrames === 'allow' }), ...(target === 'all' ? {} : { shot_ids: [target] }) });
       setOpen(false); refresh(); notify(target === 'all' ? '已安排整片重新生成，剧本与旧视频已保留' : '已安排重跑，剧本与旧版产物已保留');
     } catch (error) { notify((error as Error).message, true); }
     finally { setBusy(false); }
@@ -40,6 +41,7 @@ export function EpisodeRerun({ episode, shot, locked, busy, setBusy, refresh, no
       <label>生成内容<select value={scope} disabled={locked || busy} onChange={e => setScope(e.target.value)}><option value="video">仅重新生成视频（沿用已有关键帧）</option><option value="keyframes">重新生成关键帧及视频</option></select></label>
       <label><input type="checkbox" checked={newSeed} disabled={locked || busy} onChange={e => setNewSeed(e.target.checked)} />使用新随机种子，尝试不同结果</label>
       <small className="muted">高级参数中明确指定的种子仍优先；取消勾选可沿用种子复现。模型输出不保证一定不同。</small>
+      <label>首尾帧变化要求<select value={staticFrames} disabled={locked || busy} onChange={e => setStaticFrames(e.target.value)}><option value="keep">沿用各镜头设定</option><option value="change">要求首尾帧有变化</option><option value="allow">允许静止首尾帧（有意定格）</option></select><small className="muted">仅影响所选镜头的首尾帧视频检测；图生视频不检查尾帧。</small></label>
       <div className="notice">将重跑 {selected.length} 镜，连同连续性依赖共影响 {affected.length} 镜，并重新合成整片。剧本与提示词保持，旧视频不会覆盖或删除，新任务失败也能查看旧版。依赖前镜尾帧的后续镜头会重做关键帧，缺失素材会自动补齐。</div>
       <div className="actions"><button disabled={busy} onClick={() => setOpen(false)}>取消</button><button className="primary" disabled={locked || busy || !selected.length} onClick={() => void submit()}>{target === 'all' ? '确认整片重新生成' : '确认重跑'}</button></div>
     </div>}
