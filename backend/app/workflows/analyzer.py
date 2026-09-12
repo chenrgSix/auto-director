@@ -165,6 +165,34 @@ def parameter(id: str, node: dict, field: str, value: Any, object_info: dict) ->
     }
 
 
+def primitive_source(graph: dict, link: Any) -> tuple[str, Any] | None:
+    """Resolve only known numeric identity outputs, never computed node values."""
+    if not is_link(link) or link[1] != 0:
+        return None
+    node = graph.get(link[0], {})
+    if node.get("class_type") not in {"PrimitiveInt", "PrimitiveFloat"}:
+        return None
+    value = node.get("inputs", {}).get("value")
+    if type(value) not in {int, float}:
+        return None
+    return f"{link[0]}.value", value
+
+
+def attach_downstream_constraints(parameters: list[dict], graph: dict, info: dict) -> None:
+    by_key = {item["key"]: item for item in parameters}
+    for id, node in graph.items():
+        definitions = input_definitions(node, info)
+        for field, link in node["inputs"].items():
+            source = primitive_source(graph, link)
+            if source is None or field not in definitions:
+                continue
+            key, value = source
+            if key in by_key:
+                by_key[key].setdefault("downstream_constraints", []).append(
+                    parameter(id, node, field, value, info)
+                )
+
+
 def analyze(graph: dict, object_info: dict | None = None, *, capability: str | None = None) -> dict:
     validate_graph(graph)
     info = object_info or {}
@@ -216,6 +244,7 @@ def analyze(graph: dict, object_info: dict | None = None, *, capability: str | N
                 )
                 bindings[role] = Binding(node_id=id, input=field, transform=transform).model_dump()
         parameters.extend(node_params)
+    attach_downstream_constraints(parameters, graph, info)
     for role, binding in bindings.items():
         for item in parameters:
             if item["key"] == f"{binding['node_id']}.{binding['input']}":
@@ -370,6 +399,15 @@ def check_value(item: dict, value: Any) -> None:
             units = (value - (item.get("min") or 0)) / step
             if not math.isclose(units, round(units), abs_tol=1e-7, rel_tol=0):
                 raise AppError("WORKFLOW_INVALID", f"参数 {item['key']} 不满足 step 约束", item)
+    for consumer in item.get("downstream_constraints", []):
+        try:
+            check_value(consumer, value)
+        except AppError as exc:
+            raise AppError(
+                exc.code,
+                f"参数 {item['key']} 传入下游 {consumer['key']} 时校验失败：{exc.message}",
+                {"source": item["key"], "consumer": consumer["key"], "cause": exc.details},
+            ) from exc
 
 
 def validate_ai_parameters(profile: dict, values: dict) -> None:
@@ -506,6 +544,21 @@ def validate_dependencies(profile: dict, object_info: dict) -> dict:
                             "message": "链接输出索引越界",
                         }
                     )
+                primitive = primitive_source(graph, value)
+                if primitive is not None and field in input_definitions(node, object_info):
+                    source_key, literal = primitive
+                    try:
+                        check_value(parameter(id, node, field, literal, object_info), literal)
+                    except AppError as exc:
+                        issues.append(
+                            {
+                                **exc.as_dict(),
+                                "source": source_key,
+                                "node_id": id,
+                                "class_type": node["class_type"],
+                                "field": field,
+                            }
+                        )
             elif isinstance(value, (str, int, float, bool)):
                 item = parameter(id, node, field, value, object_info)
                 # Uploaded input media are filled at execution, not model dependencies.

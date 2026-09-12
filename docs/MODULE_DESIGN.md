@@ -1,5 +1,11 @@
 # 模块设计
 
+## C38 数值透传节点的下游约束
+
+Analyzer 为 PrimitiveInt/PrimitiveFloat.value 的输出 0 收集直连消费者的实际字段 schema，存入参数的 downstream_constraints。check_value 分别验证源参数和每个消费者，保留各自 min/step 起点，避免合并范围后改变合法网格；不穿过数学、开关或未知节点推算输出。依赖检查也验证可确定的直连数值。
+
+实时 refresh_profile 自动补齐旧 profile，已有 fit_dimensions/ParameterResolver/patch 统一使用这些约束。自动 688 高度可向下适配为 672，显式覆盖保留原值并报错；继续生成沿用旧剧本、提示词和首尾帧，已提交 Job 快照不回写。没有新增表或自动渲染操作。
+
 ## C37 保留故事切换质量模式
 
 详情页 EpisodeQuality 提供三档质量选择、默认候选数与每镜重试次数说明；保存独立于继续生成/重跑。后端 generation.quality 在版本及空闲状态保护内写入配置，沿用现有预算的尺寸、帧率和时长，仅更新 quality_budget 的候选数与重试次数。质检开启状态和高级 Workflow 参数保持；新规划无已有预算时仍使用正常的质量尺寸策略。

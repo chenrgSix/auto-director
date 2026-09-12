@@ -1,5 +1,9 @@
 # API 与工作流契约
 
+## C38 直连数值参数的约束
+
+Workflow 参数可选 downstream_constraints 列表记录 PrimitiveInt/PrimitiveFloat.value 输出 0 的直连消费者字段 schema；实时依赖检查和生成前刷新补齐旧记录，无需重导入或表迁移。源参数与各消费者的 type/min/max/step/enum 必须同时满足；非法值返回 WORKFLOW_INVALID 并指出源参数与消费者字段。自动尺寸向下适配，用户显式覆盖仍严格拒绝，失败续跑保持原计划及素材。
+
 ## C37 已有短片的质量模式
 
 `PATCH /episodes/{id}/quality` 接受 `expected_version` 与 `quality`（fast/standard/high），返回更新后的 Episode。仅空闲且本片没有 QUEUED/RUNNING/UNKNOWN 作业时允许，取消后仍在退出的 busy 任务也拒绝；版本冲突返回 409，非法模式或额外字段返回 422。相同模式无副作用。
