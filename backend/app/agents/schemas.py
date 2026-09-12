@@ -2,6 +2,7 @@ from enum import StrEnum
 from typing import Annotated, Any, Literal, Self
 
 from pydantic import (
+    AliasChoices,
     BaseModel,
     ConfigDict,
     Field,
@@ -125,7 +126,16 @@ class QAResult(StrictModel):
     style_consistency: float = Field(ge=0, le=1)
     action_accuracy: float = Field(ge=0, le=1)
     transition_quality: float = Field(ge=0, le=1)
-    artifact_score: float = Field(ge=0, le=1)
+    artifact_score: float = Field(
+        ge=0,
+        le=1,
+        validation_alias=AliasChoices("artifact_severity", "artifact_score"),
+        description=(
+            "Visible artifact severity (lower is better): 0 means no visible artifacts, "
+            "0.1 means minor artifacts, and 1 means severely corrupted or unusable imagery. "
+            "This is not visual quality, cleanliness or confidence."
+        ),
+    )
     explanation: str = Field(min_length=1, max_length=3000)
     failed_frames: list[Literal["start_frame", "end_frame"]] = Field(
         default_factory=list,

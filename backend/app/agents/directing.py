@@ -389,21 +389,28 @@ class Directors:
         )[: len(paths)]
         result = await self.generate_json(
             "Act as visual QA. Inspect the supplied actual frames; do not infer success from prompts. "
-            "Rate identity/count, scene, style, action, transition and artifacts from 0 to 1. "
-            "artifact_score is BAD when high. Explain failures. For keyframes assess the intended endpoints "
+            "Judge this submission independently using only the supplied images and their reviewed "
+            "targets. The target describes the desired result, not evidence of what is visible. "
+            "Rate identity/count, scene, style, action and transition from 0 to 1 (higher is better). "
+            "For artifact_severity, use the opposite direction: 0 means no visible artifacts, "
+            "0.1 means minor artifacts, and 1 means severely corrupted or unusable imagery. "
+            "artifact_severity measures visible defects, not quality or confidence; "
+            "a clean image needs a value near 0. Explain actual visible failures. "
+            "For keyframes assess the intended endpoints "
             "in shot.prompts: near-identical frames fail action/transition when endpoint change is requested. "
             "An empty final scene or departing character can be intentional; follow the current target "
             "over global cast-count or previous-scene constraints. "
             "For keyframes and start_candidate, set failed_frames to only the supplied endpoints that "
             "actually fail their respective reviewed targets. A correct start with an incorrect end "
             "must list only end_frame. Give each failed frame an actionable English frame_corrections "
-            "entry: describe the needed visual changes, preserving correct identity, framing and setting. "
+            "entry: briefly describe the desired visible result when editing this failed image, "
+            "preserving correct identity, framing and setting. Prefer concrete positive instructions "
+            "over repeating a catalog of defects or unwanted subjects. "
             "Do not invent missing frames or introduce future lifecycle features or other scenes' cast. "
             "Leave both fields empty when the supplied frames pass. For video leave these fields empty "
             "and compare sampled start/middle/end and the prior clip's last frame when supplied.",
             {
-                "bible": bible,
-                "shot": shot,
+                "shot": qa_shot_context(shot),
                 "stage": stage,
                 "frame_order": frame_order,
             },
@@ -418,6 +425,43 @@ class Directors:
                 {"stage": stage, "frame_order": frame_order, "failed_frames": result.failed_frames},
             )
         return result
+
+
+def qa_shot_context(shot: dict) -> dict:
+    """Judge current media against reviewed targets, without prior verdicts or global cast."""
+    target = {
+        key: shot[key]
+        for key in (
+            "index",
+            "title",
+            "duration",
+            "purpose",
+            "action",
+            "camera",
+            "start_state",
+            "end_state",
+            "transition_from_previous",
+        )
+        if key in shot
+    }
+    prompts = shot.get("prompts") or {}
+    target["prompts"] = {
+        key: prompts[key]
+        for key in (
+            "image_prompt",
+            "start_frame_prompt",
+            "end_frame_prompt",
+            "video_prompt",
+            "negative_prompt",
+            "camera_motion",
+            "motion_strength",
+            "allow_static_end_frame",
+        )
+        if key in prompts
+    }
+    # Saved prompts already select the Bible's identity, lifecycle and style for this shot.
+    # Sending all Bible entries again invents requirements from unrelated scenes.
+    return target
 
 
 def anchored_prompt(bible: dict, prompt: str, continuity: dict, *, stage: str = "image") -> str:

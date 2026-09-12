@@ -40,7 +40,7 @@ def install_qa(
                 and context["shot"]["index"] == shot_index
             ):
                 state["checks"] += 1
-                state["checked_starts"].append(context["shot"]["start_frame_asset_id"])
+                state["checked_starts"].append(images[0])
                 if state["failures"] is None or state["checks"] <= state["failures"]:
                     result = QAResult.model_validate(
                         {
@@ -273,7 +273,7 @@ def test_failed_inherited_start_is_rendered_again_instead_of_reinherited(system)
     assert completed["status"] == "COMPLETED", completed.get("error")
     first, second = completed["shots"]
     assert second["transition_from_previous"] == "CONTINUE_FRAME"
-    assert state["checked_starts"][0] == first["actual_end_frame_asset_id"]
+    assert state["checked_starts"][0] == app.state.assets.path(first["actual_end_frame_asset_id"])
     assert second["start_frame_asset_id"] != first["actual_end_frame_asset_id"]
     starts = shot_jobs(app, completed, 1, "SHOT_START_FRAME")
     assert len(starts) == 1 and CORRECTION in positive(starts[0])

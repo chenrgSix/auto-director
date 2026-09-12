@@ -1,5 +1,11 @@
 # 模块设计
 
+## C41 质检上下文隔离与失败帧编辑
+
+Directors.qa 用白名单投影当前镜头叙事与审核视觉提示，保留实际图像顺序，排除历史 QA、错误、比较分数、重试状态、旁白和全片 Bible。纠错建议用简洁的目标描述。模型端以 artifact_severity 明确低值为好，兼容输入旧名称 artifact_score；内部/持久化字段不变，评分门槛保持，不根据解释文字反转数值。
+
+IMAGE_TO_IMAGE 且存在 reference_image 绑定时，从 qa_retry.rejected_assets 取得当前被修正帧，配合其 qa_frame_corrections 作为编辑输入。首轮、无反馈或文生图继续原参考策略；用户高级素材覆盖在 ParameterResolver 最后生效。失败图 ID 已持久化，继续与 UNKNOWN 恢复保留输入身份，不删除历史文件。
+
 ## C40 当前镜头提示与 QA 重试状态
 
 Shot Agent 仍读取完整 Bible 和连续性上下文，最终渲染使用审核后的阶段提示，避免再次拼入其他镜头人物、生命周期和环境；参考图按其自身描述生成。无 negative 绑定时在参数解析后向自动 prompt 添加限制，显式 prompt 覆盖保持最高优先级，最终长度等约束照常验证。

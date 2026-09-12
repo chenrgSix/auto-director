@@ -1,5 +1,9 @@
 # API 与工作流契约
 
+## C41 质检与编辑输入一致
+
+模型请求不再含历史判决或内部运行数据；真实图片与当前审核视觉目标为评价依据。模型 schema 用 artifact_severity 表示瑕疵严重度（0 无瑕疵、1 严重损坏），兼容旧 artifact_score 输入，内部字段及 API/历史输出继续 artifact_score；不反转数值或改变阈值。现有 qa_retry.rejected_assets 在图生图局部纠错时用于 reference_image，最终仍受用户覆盖、资产归属和类型校验。无新增接口、表结构或自动重写剧本行为。
+
 ## C40 结构化关键帧质检
 
 QAResult 可选 failed_frames（start_frame/end_frame，最多两项且不重复）与 frame_corrections（仅失败帧键，非空建议每项最多 1500 字）。缺省为空时兼容旧分数分流；I2V 不接受尾帧反馈，视频 QA 沿用原分流。Episode 镜头 JSON 可包含内部 qa_retry/qa_frame_corrections 恢复状态，无表结构迁移。继续生成不会重写故事或删除历史文件；QA 耗尽后的新尝试使用新版本，UNKNOWN 仍核对原作业。高级 prompt 覆盖不被自动纠错或 negative 拼接改写。

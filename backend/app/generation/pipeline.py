@@ -37,7 +37,13 @@ from app.generation.preview import (
     validate_timing,
     workflow_versions,
 )
-from app.generation.qa_retry import consume_retry, corrected_prompt, failed_frames, retry_state
+from app.generation.qa_retry import (
+    consume_retry,
+    corrected_prompt,
+    correction_reference,
+    failed_frames,
+    retry_state,
+)
 from app.generation.recovery import prepare_recovery, recovery_profiles, replay_job
 from app.generation.resolvers import AssetResolver, ContinuityManager
 from app.generation.schemas import (
@@ -1087,6 +1093,7 @@ class GenerationService:
         needs_end = video["capability"] == WorkflowCapability.FIRST_LAST_TO_VIDEO
         frame_roles = ("start_frame", "end_frame") if needs_end else ("start_frame",)
         user_inputs = role_overrides(video, parameter_overrides(episode, video))
+        image_inputs = role_overrides(image, parameter_overrides(episode, image))
         frame_changes = {
             f"{role}_asset_id": user_inputs[role]
             for role in frame_roles
@@ -1201,6 +1208,14 @@ class GenerationService:
                         )
                     else:
                         self.update_shot(id, sid, status="GENERATING_START_FRAME")
+                        repair_reference = correction_reference(
+                            image, shot, "start_frame", image_inputs
+                        )
+                        start_references = (
+                            {**ref_inputs, "reference_image": repair_reference}
+                            if repair_reference
+                            else ref_inputs
+                        )
                         candidate_results = []
                         for candidate in range(budget["candidates"] if visual_qa else 1):
                             result = await self.render(
@@ -1219,9 +1234,10 @@ class GenerationService:
                                         ),
                                         shot,
                                         "start_frame",
+                                        editing_rejected=bool(repair_reference),
                                     ),
                                 },
-                                ref_inputs,
+                                start_references,
                                 stamp + f":start:{candidate}",
                                 sid,
                             )
@@ -1244,6 +1260,7 @@ class GenerationService:
                         )
                 if needs_end and not shot["end_frame_asset_id"]:
                     self.update_shot(id, sid, status="GENERATING_END_FRAME")
+                    repair_reference = correction_reference(image, shot, "end_frame", image_inputs)
                     result = await self.render(
                         episode,
                         image,
@@ -1260,9 +1277,13 @@ class GenerationService:
                                 ),
                                 shot,
                                 "end_frame",
+                                editing_rejected=bool(repair_reference),
                             ),
                         },
-                        {**ref_inputs, "reference_image": shot["start_frame_asset_id"]},
+                        {
+                            **ref_inputs,
+                            "reference_image": repair_reference or shot["start_frame_asset_id"],
+                        },
                         stamp + ":end",
                         sid,
                     )
