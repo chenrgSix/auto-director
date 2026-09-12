@@ -211,7 +211,7 @@ async def test_illegal_ai_bindings_are_rejected_without_fallback(invalid):
 
 
 @pytest.mark.asyncio
-async def test_timeout_cancels_model_request_and_partial_results_are_allowed(monkeypatch):
+async def test_timeout_cancels_model_request_and_partial_results_are_allowed():
     graph = {"text": {"class_type": "Custom", "inputs": {"words": "abc"}}}
     cancelled = asyncio.Event()
 
@@ -222,10 +222,10 @@ async def test_timeout_cancels_model_request_and_partial_results_are_allowed(mon
             finally:
                 cancelled.set()
 
-    monkeypatch.setattr("app.workflows.recognition.AI_TIMEOUT_SECONDS", 0.01)
     with pytest.raises(AppError) as exc:
-        await recognize_workflow(graph, SlowProvider())
+        await recognize_workflow(graph, SlowProvider(), timeout_seconds=0.01)
     assert exc.value.code == "WORKFLOW_AI_TIMEOUT" and cancelled.is_set()
+    assert exc.value.details == {"timeout_seconds": 0.01}
     partial = proposal("TEXT_TO_IMAGE", {}, {})
     partial["notes"] = ["无法确定输出，请手动确认"]
     result = await recognize_workflow(graph, mock_provider(partial, []))
@@ -251,7 +251,10 @@ async def test_disconnect_cancels_inflight_recognition():
     request = SimpleNamespace(
         receive=receive,
         app=SimpleNamespace(
-            state=SimpleNamespace(generation=SimpleNamespace(provider_factory=SlowProvider))
+            state=SimpleNamespace(
+                generation=SimpleNamespace(provider_factory=SlowProvider),
+                config=Settings(_env_file=None),
+            )
         ),
     )
     with pytest.raises(AppError) as exc:
@@ -299,3 +302,45 @@ async def test_ai_context_redacts_credentials_and_rejects_oversized_graph():
     with pytest.raises(AppError) as exc:
         await recognize_workflow(graph, mock_provider({}, calls))
     assert exc.value.code == "WORKFLOW_TOO_LARGE_FOR_AI" and len(calls) == 1
+
+
+def test_recognition_uses_updated_online_model_timeout_for_each_request(system, monkeypatch):
+    client, app, _ = system
+    graph = app.state.store.get("workflow", "default_image")["workflow"]
+    captured = []
+    original_timeout = asyncio.timeout
+
+    def observe_timeout(seconds):
+        captured.append(seconds)
+        return original_timeout(seconds)
+
+    class ProposalProvider:
+        async def generate_json(self, instruction, context, schema):
+            return schema.model_validate_json(json.dumps(proposal("TEXT_TO_IMAGE", {}, {})))
+
+    monkeypatch.setattr("app.workflows.recognition.asyncio.timeout", observe_timeout)
+    monkeypatch.setattr(app.state.generation, "provider_factory", ProposalProvider)
+    for seconds in (600, 1234, 12):
+        response = client.patch("/api/v1/settings", json={"llm_timeout": seconds})
+        assert response.status_code == 200, response.text
+        response = client.post("/api/v1/workflows/analyze", json={"workflow": graph})
+        assert response.status_code == 200, response.text
+        assert captured[-1] == seconds
+    assert captured == [600, 1234, 12]
+
+
+@pytest.mark.asyncio
+async def test_direct_recognition_inherits_provider_timeout(monkeypatch):
+    graph = {"text": {"class_type": "Custom", "inputs": {"words": "abc"}}}
+    provider = mock_provider(proposal("TEXT_TO_IMAGE", {}, {}), [])
+    provider.settings.llm_timeout = 900
+    captured = []
+    original_timeout = asyncio.timeout
+
+    def observe_timeout(seconds):
+        captured.append(seconds)
+        return original_timeout(seconds)
+
+    monkeypatch.setattr("app.workflows.recognition.asyncio.timeout", observe_timeout)
+    await recognize_workflow(graph, provider)
+    assert captured == [900]

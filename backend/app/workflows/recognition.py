@@ -11,7 +11,6 @@ from app.workflows.analyzer import ALIASES, analyze
 from app.workflows.ownership import ASSET_ROLES, is_asset_role
 from app.workflows.schema import Binding, WorkflowCapability
 
-AI_TIMEOUT_SECONDS = 45
 MAX_CONTEXT_CHARS = 80000
 
 
@@ -133,7 +132,10 @@ def recognition_context(graph, parameters, capability):
     return context
 
 
-async def recognize_workflow(graph, provider, capability=None):
+async def recognize_workflow(graph, provider, capability=None, *, timeout_seconds=None):
+    # The API supplies the current online configuration, including for alternate providers.
+    if timeout_seconds is None:
+        timeout_seconds = provider.settings.llm_timeout
     analysis = analyze(graph)
     schema = recognition_schema(graph, analysis["parameters"], capability)
     context = recognition_context(graph, analysis["parameters"], capability)
@@ -148,13 +150,16 @@ For duration, explain seconds versus frames in the reason. Use duration_to_frame
 model's frame_multiple and frame_offset are known; otherwise omit duration and request manual setup.
 Provide brief Chinese reasons for each binding and output. No need to quote prompt contents."""
     try:
-        async with asyncio.timeout(AI_TIMEOUT_SECONDS):
+        async with asyncio.timeout(timeout_seconds):
             result = await provider.generate_json(instruction, context, schema)
         # Keep the boundary strict even for alternate providers.
         result = schema.model_validate_json(result.model_dump_json())
     except TimeoutError as exc:
         raise AppError(
-            "WORKFLOW_AI_TIMEOUT", "AI 识别超时，可以重试或直接手动绑定", status=504
+            "WORKFLOW_AI_TIMEOUT",
+            f"AI 识别超过模型配置的 {timeout_seconds:g} 秒，可以调整模型请求超时、重试或手动绑定",
+            {"timeout_seconds": timeout_seconds},
+            status=504,
         ) from exc
     except ValidationError as exc:
         raise AppError(

@@ -136,7 +136,12 @@ async def analyze_workflow(request: Request, body: WorkflowAnalyze):
 
     state = resources(request)
     recognition = asyncio.create_task(
-        recognize_workflow(body.workflow, state.generation.provider_factory(), body.capability)
+        recognize_workflow(
+            body.workflow,
+            state.generation.provider_factory(),
+            body.capability,
+            timeout_seconds=state.config.llm_timeout,
+        )
     )
     disconnect = asyncio.create_task(disconnected())
     try:

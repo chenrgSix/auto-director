@@ -45,7 +45,7 @@ export function WorkflowAI({graph, capability, disabled, onApply}: {
   }
   return <section className="workflow-ai" aria-label="AI 识别绑定">
     <div className="actions"><button disabled={disabled || pending} onClick={() => void recognize()}>{pending ? 'AI 正在识别…' : 'AI 识别（可选）'}</button>{pending && <button onClick={cancel}>取消识别</button>}</div>
-    <p className="muted">使用“连接与设置”中的导演模型分析工作流。你可以直接导入或手动配置；识别最长等待 45 秒。</p>
+    <p className="muted">使用“连接与设置”中的导演模型分析工作流，等待上限与“导演与视觉模型”的模型请求超时一致。你可以随时取消，或直接导入、手动配置。</p>
     {error && <div className="notice" role="alert">{error}。仍可直接导入或手动绑定。</div>}
     {result && <div className="ai-proposal">
       <strong>AI 建议 · {CAPABILITY_LABELS[result.capability]}</strong>
