@@ -1,5 +1,13 @@
 # API 与工作流契约
 
+## C35 提示词与素材一起重跑
+
+POST /episodes/{id}/rerun 的 scope 增加 "prompts"：先归档旧成片和受影响镜头（含完整 prompts），清除所选镜头的提示词及关键帧/视频绑定，再入队调用 Shot Agent，重写画面/视频/负面提示词、旁白脚本和 AI-owned 参数。计划、顺序、时长、Bible、参考图及旧文件保留；不重新请求 Director/Bible。原 video/keyframes 语义不变。
+
+shot_ids 中明确选中的镜头（省略则全部启用镜头）均重写提示词，包括连续镜头。未被选择的连续依赖仍只重做关键帧/视频，独立切镜和禁用镜头保持。高级固定覆盖继续优先；allow_static_end_frame 省略时沿用原设定，显式值优先于重新生成的 AI 输出。陈旧预览提示词视图/提示词编辑标记清理，旧内容保留在 rerun_history。
+
+生成提示词时状态为 PREPARING_PROMPTS；失败保留历史，可通过 /generate 继续。已保存的新提示词不会因后续渲染失败而再次调用 Agent。原版本、任务占用、UNKNOWN 与审批前置校验全部沿用。没有表结构迁移或启动时数据改写。
+
 ## C33 首尾帧变化意图与技术门禁
 
 - ShotPrompts 新增严格布尔 allow_static_end_frame，默认 false；仅有意定格可为 true，静止摄像机不等于静止主体。

@@ -1,5 +1,13 @@
 # 模块设计
 
+## C35 重跑时重新编写所选镜头提示词
+
+沿用 GenerationService.rerun，增加 prompts 范围。先存历史，再失效素材和提示词，调用原 generate_shot 的缺失提示词分支；生成后持久化并进入 ParameterResolver。重新生成的输出继续受当前 workflow owner/type/min/max/enum 约束，用户高级覆盖不被删除或降级。错误和重连使用原流程，渲染失败续跑复用已保存的新提示词。
+
+依赖展开区分显式选择和间接影响：明确选择的 prompts 镜头不因 CONTINUE_FRAME/CONTINUE_VIDEO 降为仅关键帧；未选择的连续依赖仍复用提示词并重做素材。定格设定通过 pending_static_end_frame 跨提示词重生成保留，显式重跑选项最后应用。旧预览视图、重复 AI 提示词归档标记和旧 continuity_after 不传给本次 Agent；历史快照保留原样，新的连续上下文来自重跑前镜的实际完成状态。
+
+前端第三个生成内容选项明确说明重写提示词与 AI 参数，历史增加提示词/旁白/AI 参数只读展示。分镜故事、时长、Bible 和参考图保持，选择 prompts 不等于重新规划整部故事。
+
 ## C33 当前目标优先与首尾帧重复检测
 
 渲染 prompt 先放当前阶段的目标，再放身份特征目录和视觉风格。全片 environment/continuity_rules、历史动作及上一镜原始状态继续提供给 Shot Agent，但不再次拼成渲染硬约束；出场数量、地点、时间以当前目标为准。尾帧参考首帧用于身份保持，明确要求改变为目标终态。高级 prompt/seed 覆盖仍由 ParameterResolver 最后应用。

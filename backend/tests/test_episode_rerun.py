@@ -64,7 +64,7 @@ def test_video_rerun_preserves_story_frames_and_downloadable_history(system, new
         assert client.get(f"/api/v1/assets/{asset}/file").status_code == 200
 
 
-@pytest.mark.parametrize("scope", ["video", "keyframes"])
+@pytest.mark.parametrize("scope", ["video", "keyframes", "prompts"])
 def test_i2v_rerun_never_requires_or_generates_end_frame(system, scope):
     client, app, comfy = system
     graph = image_to_video_graph(client.get("/api/v1/workflows/default_video").json()["workflow"])
@@ -190,7 +190,8 @@ def test_rerun_rejects_invalid_or_stale_selection_without_changes(system):
     assert len(comfy.prompts) == count
 
 
-def test_unresolved_job_blocks_new_and_legacy_rerun_without_erasing_results(system):
+@pytest.mark.parametrize("scope", ["keyframes", "prompts"])
+def test_unresolved_job_blocks_new_and_legacy_rerun_without_erasing_results(system, scope):
     client, app, comfy = system
     old = complete(system)
     job = next(j for j in app.state.store.list("job", old["id"]) if j["type"] == "SHOT_VIDEO")
@@ -200,7 +201,7 @@ def test_unresolved_job_blocks_new_and_legacy_rerun_without_erasing_results(syst
         f"/api/v1/episodes/{old['id']}/rerun",
         json={
             "expected_version": old["version"],
-            "scope": "keyframes",
+            "scope": scope,
         },
     )
     assert response.status_code == 409
@@ -254,7 +255,8 @@ def test_active_and_unapproved_rerun_are_atomic(system):
         assert app.state.store.get("episode", old["id"]) == current
 
 
-def test_rerun_skips_disabled_shots_and_tracks_dependencies_across_them(system):
+@pytest.mark.parametrize("scope", ["video", "prompts"])
+def test_rerun_skips_disabled_shots_and_tracks_dependencies_across_them(system, scope):
     client, app, _ = system
     old = complete(system, target_duration=3, max_shot_duration=1)
 
@@ -263,7 +265,7 @@ def test_rerun_skips_disabled_shots_and_tracks_dependencies_across_them(system):
 
     current = app.state.store.update("episode", old["id"], disable)
     disabled = deepcopy(current["shots"][1])
-    result = rerun(client, current, shot_ids=[current["shots"][0]["id"]])
+    result = rerun(client, current, shot_ids=[current["shots"][0]["id"]], scope=scope)
     assert result["shots"][1] == disabled
     assert (
         result["shots"][2]["start_frame_asset_id"]

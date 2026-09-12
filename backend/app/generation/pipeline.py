@@ -558,6 +558,18 @@ class GenerationService:
         )
         if scope != "video":
             shot.update(start_frame_asset_id=None, end_frame_asset_id=None)
+        if scope == "prompts":
+            previous = shot.get("prompts") or {}
+            if "allow_static_end_frame" in previous:
+                shot["pending_static_end_frame"] = previous["allow_static_end_frame"]
+            shot["prompts"] = None
+            for field in ("preview_prompt_view", "legacy_ai_prompt_parameters", "continuity_after"):
+                shot.pop(field, None)
+            shot["preview_edited_fields"] = [
+                field
+                for field in shot.get("preview_edited_fields", [])
+                if field not in {"start_frame_prompt", "end_frame_prompt", "video_prompt"}
+            ]
 
     def retry(self, shot_id: str, scope: str) -> dict:
         episode, _ = self.find_shot(shot_id)
@@ -596,8 +608,12 @@ class GenerationService:
                 if not shot["enabled"]:
                     continue
                 dependent = previous_changed and shot["transition_from_previous"] in CONTINUOUS
-                if dependent or shot["id"] in selected:
-                    scopes[shot["id"]] = "keyframes" if dependent else request.scope
+                if shot["id"] in selected:
+                    scopes[shot["id"]] = (
+                        "keyframes" if dependent and request.scope == "video" else request.scope
+                    )
+                elif dependent:
+                    scopes[shot["id"]] = "keyframes"
                 previous_changed = shot["id"] in scopes
             snapshot = {
                 "id": uid(),
@@ -614,6 +630,7 @@ class GenerationService:
             current.pop("render_recovery", None)
             for shot in current["shots"]:
                 if shot["id"] in scopes:
+                    self.invalidate(shot, scopes[shot["id"]])
                     if shot["id"] in selected and request.allow_static_end_frame is not None:
                         if shot.get("prompts"):
                             shot["prompts"]["allow_static_end_frame"] = (
@@ -621,7 +638,6 @@ class GenerationService:
                             )
                         else:
                             shot["pending_static_end_frame"] = request.allow_static_end_frame
-                    self.invalidate(shot, scopes[shot["id"]])
                     if request.new_seed:
                         shot["seed_offset"] = (shot.get("seed_offset", 0) + 10000) % 2147483648
             current.update(
@@ -1073,6 +1089,8 @@ class GenerationService:
         if frame_changes:
             shot = self.update_shot(id, sid, **frame_changes)
         if not shot["prompts"]:
+            self.stage(id, "PREPARING_PROMPTS")
+            self.update_shot(id, sid, status="PREPARING_PROMPTS")
             prompts = await agents.shot(
                 episode["bible"],
                 shot,
