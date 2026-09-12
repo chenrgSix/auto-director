@@ -120,7 +120,7 @@
     },
     "inputs": {
       "model": [
-        "6",
+        "20",
         0
       ],
       "conditioning": [
@@ -214,6 +214,19 @@
     },
     "inputs": {
       "image": "codex_end.png"
+    }
+  },
+  "20": {
+    "class_type": "ModelAttentionBackend",
+    "_meta": {
+      "title": "8GB 注意力加速 · 可切回 PyTorch"
+    },
+    "inputs": {
+      "model": [
+        "6",
+        0
+      ],
+      "attention": "comfy kitchen attention"
     }
   }
 }

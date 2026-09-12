@@ -1,0 +1,1119 @@
+{
+  "id": "5e9a8124-7dcd-5e93-bd98-aa739be2f944",
+  "revision": 0,
+  "last_node_id": 99,
+  "last_link_id": 17,
+  "nodes": [
+    {
+      "id": 1,
+      "type": "UNETLoader",
+      "pos": [
+        0,
+        0
+      ],
+      "size": [
+        360,
+        156
+      ],
+      "flags": {},
+      "order": 0,
+      "mode": 0,
+      "title": "H3 FL2VA INT8",
+      "inputs": [
+        {
+          "name": "unet_name",
+          "type": "COMBO",
+          "link": null,
+          "widget": {
+            "name": "unet_name"
+          }
+        },
+        {
+          "name": "weight_dtype",
+          "type": "COMBO",
+          "link": null,
+          "widget": {
+            "name": "weight_dtype"
+          }
+        }
+      ],
+      "outputs": [
+        {
+          "name": "MODEL",
+          "type": "MODEL",
+          "links": [
+            4
+          ]
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "UNETLoader"
+      },
+      "widgets_values": [
+        "minimax_h3_fl2va_pruned_int8_convrot.safetensors",
+        "default"
+      ],
+      "widgets_values_named": {
+        "unet_name": "minimax_h3_fl2va_pruned_int8_convrot.safetensors",
+        "weight_dtype": "default"
+      }
+    },
+    {
+      "id": 2,
+      "type": "CLIPLoader",
+      "pos": [
+        0,
+        246
+      ],
+      "size": [
+        360,
+        184
+      ],
+      "flags": {},
+      "order": 1,
+      "mode": 0,
+      "title": "H3 Qwen NVFP4",
+      "inputs": [
+        {
+          "name": "clip_name",
+          "type": "COMBO",
+          "link": null,
+          "widget": {
+            "name": "clip_name"
+          }
+        },
+        {
+          "name": "type",
+          "type": "COMBO",
+          "link": null,
+          "widget": {
+            "name": "type"
+          }
+        },
+        {
+          "name": "device",
+          "type": "COMBO",
+          "link": null,
+          "shape": 7,
+          "widget": {
+            "name": "device"
+          }
+        }
+      ],
+      "outputs": [
+        {
+          "name": "CLIP",
+          "type": "CLIP",
+          "links": [
+            1
+          ]
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "CLIPLoader"
+      },
+      "widgets_values": [
+        "qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors",
+        "minimax",
+        "default"
+      ],
+      "widgets_values_named": {
+        "clip_name": "qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors",
+        "type": "minimax",
+        "device": "default"
+      }
+    },
+    {
+      "id": 3,
+      "type": "VAELoader",
+      "pos": [
+        0,
+        520
+      ],
+      "size": [
+        360,
+        128
+      ],
+      "flags": {},
+      "order": 2,
+      "mode": 0,
+      "title": "H3 视频 VAE",
+      "inputs": [
+        {
+          "name": "vae_name",
+          "type": "COMBO",
+          "link": null,
+          "widget": {
+            "name": "vae_name"
+          }
+        }
+      ],
+      "outputs": [
+        {
+          "name": "VAE",
+          "type": "VAE",
+          "links": [
+            2,
+            13
+          ]
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "VAELoader"
+      },
+      "widgets_values": [
+        "minimax_h3_video_vae_fp16.safetensors"
+      ],
+      "widgets_values_named": {
+        "vae_name": "minimax_h3_video_vae_fp16.safetensors"
+      }
+    },
+    {
+      "id": 4,
+      "type": "LoadImage",
+      "pos": [
+        0,
+        738
+      ],
+      "size": [
+        360,
+        360
+      ],
+      "flags": {},
+      "order": 3,
+      "mode": 0,
+      "title": "参考图 · 素材自动绑定",
+      "inputs": [
+        {
+          "name": "image",
+          "type": "COMBO",
+          "link": null,
+          "widget": {
+            "name": "image"
+          }
+        },
+        {
+          "name": "upload",
+          "type": "IMAGEUPLOAD",
+          "widget": {
+            "name": "upload"
+          },
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "name": "IMAGE",
+          "type": "IMAGE",
+          "links": [
+            3
+          ]
+        },
+        {
+          "name": "MASK",
+          "type": "MASK",
+          "links": null
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "LoadImage"
+      },
+      "widgets_values": [
+        "codex_reference.png",
+        "image"
+      ],
+      "widgets_values_named": {
+        "image": "codex_reference.png",
+        "upload": "image"
+      }
+    },
+    {
+      "id": 5,
+      "type": "H3ImageToImagePrepare",
+      "pos": [
+        410,
+        0
+      ],
+      "size": [
+        360,
+        446
+      ],
+      "flags": {},
+      "order": 4,
+      "mode": 0,
+      "title": "图生图 · FL2VA 匹配已安装权重",
+      "inputs": [
+        {
+          "name": "clip",
+          "type": "CLIP",
+          "link": 1
+        },
+        {
+          "name": "vae",
+          "type": "VAE",
+          "link": 2
+        },
+        {
+          "name": "source_image",
+          "type": "IMAGE",
+          "link": 3
+        },
+        {
+          "name": "edit_instruction",
+          "type": "STRING",
+          "link": null,
+          "widget": {
+            "name": "edit_instruction"
+          }
+        },
+        {
+          "name": "width",
+          "type": "INT",
+          "link": null,
+          "widget": {
+            "name": "width"
+          }
+        },
+        {
+          "name": "height",
+          "type": "INT",
+          "link": null,
+          "widget": {
+            "name": "height"
+          }
+        },
+        {
+          "name": "quality_profile",
+          "type": "COMBO",
+          "link": null,
+          "widget": {
+            "name": "quality_profile"
+          }
+        },
+        {
+          "name": "source_fidelity",
+          "type": "FLOAT",
+          "link": null,
+          "widget": {
+            "name": "source_fidelity"
+          }
+        },
+        {
+          "name": "source_fit",
+          "type": "COMBO",
+          "link": null,
+          "widget": {
+            "name": "source_fit"
+          }
+        },
+        {
+          "name": "optimize_for_still",
+          "type": "BOOLEAN",
+          "link": null,
+          "widget": {
+            "name": "optimize_for_still"
+          }
+        }
+      ],
+      "outputs": [
+        {
+          "name": "positive",
+          "type": "CONDITIONING",
+          "links": [
+            6
+          ]
+        },
+        {
+          "name": "h3_latent",
+          "type": "LATENT",
+          "links": [
+            11
+          ]
+        },
+        {
+          "name": "fitted_source",
+          "type": "IMAGE",
+          "links": [
+            15
+          ]
+        },
+        {
+          "name": "requested_frames",
+          "type": "INT",
+          "links": null
+        },
+        {
+          "name": "image_prompt",
+          "type": "STRING",
+          "links": null
+        },
+        {
+          "name": "run_info",
+          "type": "STRING",
+          "links": null
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "H3ImageToImagePrepare"
+      },
+      "widgets_values": [
+        "Preserve the same red wooden sailboat and blue water. Change the light to warm sunset, with a golden reflection on the water. Clean cinematic illustration, no text.",
+        640,
+        384,
+        "recommended | 5 frames",
+        0.6,
+        "crop_center",
+        true
+      ],
+      "widgets_values_named": {
+        "edit_instruction": "Preserve the same red wooden sailboat and blue water. Change the light to warm sunset, with a golden reflection on the water. Clean cinematic illustration, no text.",
+        "width": 640,
+        "height": 384,
+        "quality_profile": "recommended | 5 frames",
+        "source_fidelity": 0.6,
+        "source_fit": "crop_center",
+        "optimize_for_still": true
+      }
+    },
+    {
+      "id": 6,
+      "type": "RandomNoise",
+      "pos": [
+        0,
+        1188
+      ],
+      "size": [
+        360,
+        156
+      ],
+      "flags": {},
+      "order": 5,
+      "mode": 0,
+      "title": "随机种子 · 系统",
+      "inputs": [
+        {
+          "name": "noise_seed",
+          "type": "INT",
+          "link": null,
+          "widget": {
+            "name": "noise_seed"
+          }
+        }
+      ],
+      "outputs": [
+        {
+          "name": "NOISE",
+          "type": "NOISE",
+          "links": [
+            7
+          ]
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "RandomNoise"
+      },
+      "widgets_values": [
+        47002,
+        "fixed"
+      ],
+      "widgets_values_named": {
+        "noise_seed": 47002,
+        "control_after_generate": "fixed"
+      }
+    },
+    {
+      "id": 7,
+      "type": "H3ImageSamplingPreset",
+      "pos": [
+        410,
+        536
+      ],
+      "size": [
+        360,
+        352
+      ],
+      "flags": {},
+      "order": 6,
+      "mode": 0,
+      "title": "基础模型 12 步图生图",
+      "inputs": [
+        {
+          "name": "model",
+          "type": "MODEL",
+          "link": 4
+        },
+        {
+          "name": "sampling_profile",
+          "type": "COMBO",
+          "link": null,
+          "widget": {
+            "name": "sampling_profile"
+          }
+        },
+        {
+          "name": "custom_sampler",
+          "type": "COMBO",
+          "link": null,
+          "shape": 7,
+          "widget": {
+            "name": "custom_sampler"
+          }
+        },
+        {
+          "name": "custom_scheduler",
+          "type": "COMBO",
+          "link": null,
+          "shape": 7,
+          "widget": {
+            "name": "custom_scheduler"
+          }
+        },
+        {
+          "name": "custom_steps",
+          "type": "INT",
+          "link": null,
+          "shape": 7,
+          "widget": {
+            "name": "custom_steps"
+          }
+        },
+        {
+          "name": "custom_denoise",
+          "type": "FLOAT",
+          "link": null,
+          "shape": 7,
+          "widget": {
+            "name": "custom_denoise"
+          }
+        },
+        {
+          "name": "custom_shift_video",
+          "type": "FLOAT",
+          "link": null,
+          "shape": 7,
+          "widget": {
+            "name": "custom_shift_video"
+          }
+        },
+        {
+          "name": "custom_shift_audio",
+          "type": "FLOAT",
+          "link": null,
+          "shape": 7,
+          "widget": {
+            "name": "custom_shift_audio"
+          }
+        },
+        {
+          "name": "custom_beta_alpha",
+          "type": "FLOAT",
+          "link": null,
+          "shape": 7,
+          "widget": {
+            "name": "custom_beta_alpha"
+          }
+        },
+        {
+          "name": "custom_beta_beta",
+          "type": "FLOAT",
+          "link": null,
+          "shape": 7,
+          "widget": {
+            "name": "custom_beta_beta"
+          }
+        }
+      ],
+      "outputs": [
+        {
+          "name": "model",
+          "type": "MODEL",
+          "links": [
+            5
+          ]
+        },
+        {
+          "name": "sampler",
+          "type": "SAMPLER",
+          "links": [
+            9
+          ]
+        },
+        {
+          "name": "sigmas",
+          "type": "SIGMAS",
+          "links": [
+            10
+          ]
+        },
+        {
+          "name": "sampling_info",
+          "type": "STRING",
+          "links": null
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "H3ImageSamplingPreset"
+      },
+      "widgets_values": [
+        "base speed | RES 12 steps",
+        "res_multistep",
+        "simple",
+        20,
+        1.0,
+        12.0,
+        3.0,
+        0.6,
+        0.6
+      ],
+      "widgets_values_named": {
+        "sampling_profile": "base speed | RES 12 steps",
+        "custom_sampler": "res_multistep",
+        "custom_scheduler": "simple",
+        "custom_steps": 20,
+        "custom_denoise": 1.0,
+        "custom_shift_video": 12.0,
+        "custom_shift_audio": 3.0,
+        "custom_beta_alpha": 0.6,
+        "custom_beta_beta": 0.6
+      }
+    },
+    {
+      "id": 8,
+      "type": "BasicGuider",
+      "pos": [
+        820,
+        0
+      ],
+      "size": [
+        360,
+        100
+      ],
+      "flags": {},
+      "order": 7,
+      "mode": 0,
+      "title": "单条件引导",
+      "inputs": [
+        {
+          "name": "model",
+          "type": "MODEL",
+          "link": 5
+        },
+        {
+          "name": "conditioning",
+          "type": "CONDITIONING",
+          "link": 6
+        }
+      ],
+      "outputs": [
+        {
+          "name": "GUIDER",
+          "type": "GUIDER",
+          "links": [
+            8
+          ]
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "BasicGuider"
+      },
+      "widgets_values": [],
+      "widgets_values_named": {}
+    },
+    {
+      "id": 9,
+      "type": "SamplerCustomAdvanced",
+      "pos": [
+        1230,
+        0
+      ],
+      "size": [
+        360,
+        100
+      ],
+      "flags": {},
+      "order": 8,
+      "mode": 0,
+      "title": "图生图采样",
+      "inputs": [
+        {
+          "name": "noise",
+          "type": "NOISE",
+          "link": 7
+        },
+        {
+          "name": "guider",
+          "type": "GUIDER",
+          "link": 8
+        },
+        {
+          "name": "sampler",
+          "type": "SAMPLER",
+          "link": 9
+        },
+        {
+          "name": "sigmas",
+          "type": "SIGMAS",
+          "link": 10
+        },
+        {
+          "name": "latent_image",
+          "type": "LATENT",
+          "link": 11
+        }
+      ],
+      "outputs": [
+        {
+          "name": "output",
+          "type": "LATENT",
+          "links": [
+            12
+          ]
+        },
+        {
+          "name": "denoised_output",
+          "type": "LATENT",
+          "links": null
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "SamplerCustomAdvanced"
+      },
+      "widgets_values": [],
+      "widgets_values_named": {}
+    },
+    {
+      "id": 10,
+      "type": "H3ImageDecode",
+      "pos": [
+        1640,
+        0
+      ],
+      "size": [
+        360,
+        100
+      ],
+      "flags": {},
+      "order": 9,
+      "mode": 0,
+      "title": "短帧组解码",
+      "inputs": [
+        {
+          "name": "samples",
+          "type": "LATENT",
+          "link": 12
+        },
+        {
+          "name": "vae",
+          "type": "VAE",
+          "link": 13
+        }
+      ],
+      "outputs": [
+        {
+          "name": "frames",
+          "type": "IMAGE",
+          "links": [
+            14
+          ]
+        },
+        {
+          "name": "decoded_frames",
+          "type": "INT",
+          "links": null
+        },
+        {
+          "name": "decode_info",
+          "type": "STRING",
+          "links": null
+        },
+        {
+          "name": "recommended_index",
+          "type": "INT",
+          "links": [
+            16
+          ]
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "H3ImageDecode"
+      },
+      "widgets_values": [],
+      "widgets_values_named": {}
+    },
+    {
+      "id": 11,
+      "type": "H3ImageFrameSelector",
+      "pos": [
+        2050,
+        0
+      ],
+      "size": [
+        360,
+        352
+      ],
+      "flags": {},
+      "order": 10,
+      "mode": 0,
+      "title": "输出生成帧 · 排除原始第 0 帧",
+      "inputs": [
+        {
+          "name": "frames",
+          "type": "IMAGE",
+          "link": 14
+        },
+        {
+          "name": "strategy",
+          "type": "COMBO",
+          "link": null,
+          "widget": {
+            "name": "strategy"
+          }
+        },
+        {
+          "name": "manual_index",
+          "type": "INT",
+          "link": null,
+          "widget": {
+            "name": "manual_index"
+          }
+        },
+        {
+          "name": "skip_first_frames",
+          "type": "INT",
+          "link": null,
+          "widget": {
+            "name": "skip_first_frames"
+          }
+        },
+        {
+          "name": "candidate_start",
+          "type": "FLOAT",
+          "link": null,
+          "widget": {
+            "name": "candidate_start"
+          }
+        },
+        {
+          "name": "candidate_end",
+          "type": "FLOAT",
+          "link": null,
+          "widget": {
+            "name": "candidate_end"
+          }
+        },
+        {
+          "name": "similarity_weight",
+          "type": "FLOAT",
+          "link": null,
+          "widget": {
+            "name": "similarity_weight"
+          }
+        },
+        {
+          "name": "top_k",
+          "type": "INT",
+          "link": null,
+          "widget": {
+            "name": "top_k"
+          }
+        },
+        {
+          "name": "source_image",
+          "type": "IMAGE",
+          "link": 15,
+          "shape": 7
+        },
+        {
+          "name": "emit_candidate_batch",
+          "type": "BOOLEAN",
+          "link": null,
+          "shape": 7,
+          "widget": {
+            "name": "emit_candidate_batch"
+          }
+        },
+        {
+          "name": "recommended_index",
+          "type": "INT",
+          "link": 16,
+          "shape": 7,
+          "widget": {
+            "name": "recommended_index"
+          }
+        }
+      ],
+      "outputs": [
+        {
+          "name": "selected_image",
+          "type": "IMAGE",
+          "links": [
+            17
+          ]
+        },
+        {
+          "name": "candidate_batch_debug",
+          "type": "IMAGE",
+          "links": null
+        },
+        {
+          "name": "selected_index",
+          "type": "INT",
+          "links": null
+        },
+        {
+          "name": "selected_score",
+          "type": "FLOAT",
+          "links": null
+        },
+        {
+          "name": "score_report",
+          "type": "STRING",
+          "links": null
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "H3ImageFrameSelector"
+      },
+      "widgets_values": [
+        "last",
+        0,
+        1,
+        0.0,
+        1.0,
+        0.35,
+        1,
+        false,
+        0
+      ],
+      "widgets_values_named": {
+        "strategy": "last",
+        "manual_index": 0,
+        "skip_first_frames": 1,
+        "candidate_start": 0.0,
+        "candidate_end": 1.0,
+        "similarity_weight": 0.35,
+        "top_k": 1,
+        "emit_candidate_batch": false,
+        "recommended_index": 0
+      }
+    },
+    {
+      "id": 12,
+      "type": "SaveImage",
+      "pos": [
+        2460,
+        0
+      ],
+      "size": [
+        360,
+        360
+      ],
+      "flags": {},
+      "order": 11,
+      "mode": 0,
+      "title": "图片输出",
+      "inputs": [
+        {
+          "name": "images",
+          "type": "IMAGE",
+          "link": 17
+        },
+        {
+          "name": "filename_prefix",
+          "type": "STRING",
+          "link": null,
+          "widget": {
+            "name": "filename_prefix"
+          }
+        }
+      ],
+      "outputs": [
+        {
+          "name": "images",
+          "type": "IMAGE",
+          "links": null
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "SaveImage"
+      },
+      "widgets_values": [
+        "codex/H3_I2I"
+      ],
+      "widgets_values_named": {
+        "filename_prefix": "codex/H3_I2I"
+      }
+    },
+    {
+      "id": 99,
+      "type": "Note",
+      "pos": [
+        0,
+        -240
+      ],
+      "size": [
+        790,
+        170
+      ],
+      "flags": {},
+      "order": 12,
+      "mode": 0,
+      "properties": {},
+      "widgets_values": [
+        "codex · 8GB 实机配置\nAutoDirector 会自动填写提示词、素材和尺寸。独立运行请先选择首帧/尾帧/参考图片。\n视频：24 FPS，124 帧约 5.17 秒；导演可规划更短镜头。注意力加速可切回 pytorch attention。\n采用已安装模型；试跑与优化记录见仓库 docs/ACCEPTANCE.md C48。"
+      ],
+      "title": "codex-H3-图生图-8GB"
+    }
+  ],
+  "links": [
+    [
+      1,
+      2,
+      0,
+      5,
+      0,
+      "CLIP"
+    ],
+    [
+      2,
+      3,
+      0,
+      5,
+      1,
+      "VAE"
+    ],
+    [
+      3,
+      4,
+      0,
+      5,
+      2,
+      "IMAGE"
+    ],
+    [
+      4,
+      1,
+      0,
+      7,
+      0,
+      "MODEL"
+    ],
+    [
+      5,
+      7,
+      0,
+      8,
+      0,
+      "MODEL"
+    ],
+    [
+      6,
+      5,
+      0,
+      8,
+      1,
+      "CONDITIONING"
+    ],
+    [
+      7,
+      6,
+      0,
+      9,
+      0,
+      "NOISE"
+    ],
+    [
+      8,
+      8,
+      0,
+      9,
+      1,
+      "GUIDER"
+    ],
+    [
+      9,
+      7,
+      1,
+      9,
+      2,
+      "SAMPLER"
+    ],
+    [
+      10,
+      7,
+      2,
+      9,
+      3,
+      "SIGMAS"
+    ],
+    [
+      11,
+      5,
+      1,
+      9,
+      4,
+      "LATENT"
+    ],
+    [
+      12,
+      9,
+      0,
+      10,
+      0,
+      "LATENT"
+    ],
+    [
+      13,
+      3,
+      0,
+      10,
+      1,
+      "VAE"
+    ],
+    [
+      14,
+      10,
+      0,
+      11,
+      0,
+      "IMAGE"
+    ],
+    [
+      15,
+      5,
+      2,
+      11,
+      8,
+      "IMAGE"
+    ],
+    [
+      16,
+      10,
+      3,
+      11,
+      10,
+      "INT"
+    ],
+    [
+      17,
+      11,
+      0,
+      12,
+      0,
+      "IMAGE"
+    ]
+  ],
+  "groups": [],
+  "config": {},
+  "extra": {
+    "ds": {
+      "scale": 0.65,
+      "offset": [
+        50,
+        280
+      ]
+    },
+    "workflowRendererVersion": "LG"
+  },
+  "version": 0.4
+}

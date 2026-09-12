@@ -1,5 +1,37 @@
 # 验收记录
 
+## 2026-09-12 · C48 工作流计算路径优化
+
+环境延续 C47：用户 ComfyUI 0.35.1 / Windows / torch 2.12.1+cu130 / RTX 5060 8GB / 32GB RAM。读取实时节点元数据，串行提交自己创建的测试图，固定同一组船只素材、提示词、seed=48001、640×384；视频固定 24 FPS、124 帧、Turbo 8 步。节点耗时根据 WebSocket `executing` 事件测量，显存是每秒 `/system_stats` 的整卡可用量采样，不是进程精确峰值。预热对照另外固定 seed=48006。
+
+| 对照 | 采样耗时 | 解码耗时 | 结论 |
+| --- | --- | --- | --- |
+| 首尾帧原配置 | 73.939 秒 | 13.892 秒 | 比较基线 |
+| 首尾帧 Comfy Kitchen attention | 53.137 秒 | 14.172 秒 | 采样约减少 28%，最终保留 |
+| 首帧 Comfy Kitchen attention | 53.457 秒 | 14.172 秒 | 新路径真实执行成功；未宣称单独做过首帧 A/B |
+| 首尾帧分头 attention + 分块前馈 | 75.319 秒 | 13.682 秒 | 比基线慢，未保留 |
+| 首尾帧 LoRA Bypass | 73.283 秒 | 14.441 秒 | 收益不足，未保留 |
+| 图生图基础 12 步 / 匹配 Turbo 8 步 | 16.566 / 16.659 秒 | 3.341 / 3.291 秒 | 保留基础 12 步；Turbo 的总耗时下降来自条件缓存 |
+| Z-Image 分块 / 整图解码 | 原采样 1.151 秒，整图测试复用相同 latent | 0.563 / 0.126 秒 | 仅保留整图解码，不用 0.355 秒缓存试跑冒充完整生图速度 |
+
+- 两种视频只增加模型副本上的原生 `ModelAttentionBackend`，位置为 `LoraLoaderModelOnly → ModelAttentionBackend → BasicGuider → SamplerCustomAdvanced`。高级参数可切回 `pytorch attention`；未修改服务器启动参数、全局 attention 或安装 SageAttention。官方将该后端标记为实验性，数值及画面可能不同，不承诺无损。
+- 图生图 Kitchen attention 的采样 15.900 秒，与 16.566 秒基线差异小且该轮可用显存更少，未保留。视频扩大解码块或改为自动解码分别约 12.63 / 12.58 秒，收益小；最终仍保留 tile=256、temporal=32。Z-Image 的 Kitchen 采样对照 1.171 / 1.141 秒不足以支持增加节点，最终只有解码改动。没有通过缩尺寸、降步数或裁短素材制造提升。
+
+最终工作流在正式 AutoDirector 8000 中沿用 C47 原 ID 更新并校验，经过完整 `test-run → 参数解析 → 素材上传 → patched JSON → ComfyUI → 资产回收`：
+
+| 工作流 | 最终作业 ID | 应用端到端耗时 | 输出 |
+| --- | --- | --- | --- |
+| codex-ZImage-快速文生图-8GB | `cbe321e2-b9f8-4af2-9055-7b00dbab4db6` | 3.365 秒 | 640×384 PNG |
+| codex-H3-首帧视频-Turbo8-8GB | `e98b6831-d2bc-4308-b94e-81d45264ae27` | 77.366 秒 | H.264 / 640×384 / 24 FPS / 124 帧 |
+| codex-H3-首尾帧视频-Turbo8-8GB | `3b3f2022-0979-4288-9d18-8ec04d72c125` | 76.495 秒 | 同上 |
+
+- 三项最终作业均 COMPLETED，实际 patch 确认视频使用 Kitchen 且分别只有 1 / 2 个 `LoadImage`，文生图使用 `VAEDecode`。ffprobe 逐帧计数均 124 帧、5.166667 秒，仍可供 5 秒时间线裁剪。五点预览可见船体缓慢移动与白天至日落过渡，无黑帧或明显画面崩坏；没有运行整片或建立复杂场景的视觉质量基准。
+- 四份 `*.comfy.json` 保留原生节点/插槽/连线、控件值、固定随机种子及中文节点标题，通过官方 `/userdata` 以 `overwrite=false` 保存到 ComfyUI 的 `workflows/codex-*.json`，GET 内容逐项一致；服务器副本预填已有测试图片，仓库模板用素材占位名。画布/API 的图节点集合、连线两端和控件值回归通过。浏览器能发现 ComfyUI 标签页，但 DOM/截图持续超时，因此**未完成原生画布的浏览器打开/排版验收**；不把 API 图实跑等同于浏览器画布操作通过。
+- Ruff 检查/格式及 `test_codex_workflow_pack.py`、`test_workflow_configuration.py`、`test_workflow_duration.py`、`test_workflow_dimensions.py`、`test_workflow_deletion_restart.py`：**63 passed**（新增 4 项画布参数化测试，扩展采样连接和高级覆盖断言；2 条已有依赖弃用警告）。没有应用实现或前端修改，未重跑完整 786 项基线或远端 CI。
+- 更新前原 **227 条记录**中只改变 3 个 `codex` 工作流；其余 **224 条**（包括用户 3 套原工作流、图生图 codex 工作流、默认项、故事、旧作业及资产记录）散列保持。原 **109 个素材文件**散列完全保持，新增 3 作业/3 资产记录及 3 个媒体文件。没有服务重启，队列空闲；原生画布作为手动保存文件，不进入应用启动 bootstrap。
+
+证据保存在 ignored `data/repairs/c48-workflow-optimization/`：逐个 `.graph.json` / `.result.json`、最终作业及实际 patch、`final-trial-results.json`、视频缩略图与 ffprobe、`installed-canvases.json`、`updated-profiles.json`、`preservation-result.json`。可复用文件和切换说明见 [`workflow_examples/codex_8gb/README.md`](../workflow_examples/codex_8gb/README.md)。
+
 
 ## 2026-09-12 · C47 codex 8GB 工作流实机验收
 

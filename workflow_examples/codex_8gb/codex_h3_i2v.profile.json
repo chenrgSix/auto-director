@@ -119,7 +119,7 @@
       },
       "inputs": {
         "model": [
-          "6",
+          "20",
           0
         ],
         "conditioning": [
@@ -204,6 +204,19 @@
         "filename_prefix": "codex/codex_h3_i2v",
         "format": "mp4",
         "format.codec": "h264"
+      }
+    },
+    "20": {
+      "class_type": "ModelAttentionBackend",
+      "_meta": {
+        "title": "8GB 注意力加速 · 可切回 PyTorch"
+      },
+      "inputs": {
+        "model": [
+          "6",
+          0
+        ],
+        "attention": "comfy kitchen attention"
       }
     }
   },

@@ -2,7 +2,9 @@
 
 ## 可直接使用的 codex 工作流包
 
-[`workflow_examples/codex_8gb`](../workflow_examples/codex_8gb/README.md) 提供 Z-Image 文生图、H3 图生图、H3 首帧及首尾帧视频四套 API 图和完整绑定配置。针对已安装的 INT8 / FP8 / NVFP4 模型准备，无需 AI 识别。工作流包按需导入，不随重启自动恢复；设置默认项仍由用户选择。
+[`workflow_examples/codex_8gb`](../workflow_examples/codex_8gb/README.md) 提供 Z-Image 文生图、H3 图生图、H3 首帧及首尾帧视频四套原生 ComfyUI 画布、API 图和完整绑定配置。针对已安装的 INT8 / FP8 / NVFP4 模型准备，无需 AI 识别。工作流包按需导入，不随重启自动恢复；设置默认项仍由用户选择。
+
+C48 针对实际计算路径优化：视频在 LoRA 与 Guider 之间接入原生 `ModelAttentionBackend`，选择 `comfy kitchen attention`；Z-Image 使用整图 VAE 解码。图生图保留实测更合适的基础 12 步。用户 ComfyUI 的「工作流」列表已保存同名 `codex-` 画布；独立运行前选择输入图片。视频 attention 可在画布节点或 AutoDirector 参数页切回 `pytorch attention`，不会改变服务器全局设置。样例速度与验收范围见 C48 记录。
 
 本次 8GB 实机试跑使用 640×384。正常创作由系统继续按比例/显存预算分配尺寸，例如 H3 横屏低显存策略为 672×384；没有承诺任意自定义尺寸或时长都能运行。H3 图生图使用匹配 FL2VA 权重的节点，适合保留原图结构的小幅变化，输出生成的最后一帧，避免选回锁定的参考帧。
 

@@ -112,9 +112,9 @@
       }
     },
     "9": {
-      "class_type": "VAEDecodeTiled",
+      "class_type": "VAEDecode",
       "_meta": {
-        "title": "分块解码"
+        "title": "整图解码 · 显存不足由 ComfyUI 回退分块"
       },
       "inputs": {
         "samples": [
@@ -124,11 +124,7 @@
         "vae": [
           "3",
           0
-        ],
-        "tile_size": 256,
-        "overlap": 64,
-        "temporal_size": 16,
-        "temporal_overlap": 4
+        ]
       }
     },
     "10": {

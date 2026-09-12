@@ -59,6 +59,29 @@ def test_codex_pack_import_patch_and_user_override(tmp_path, path):
         assert len(loads) == (2 if profile["capability"] == "FIRST_LAST_TO_VIDEO" else 1)
         assert ("end_frame" in roles) == (len(loads) == 2)
 
+        # The fast attention path must actually feed the sampler's guider.
+        attention_id, attention = next(
+            (id, node)
+            for id, node in graph.items()
+            if node["class_type"] == "ModelAttentionBackend"
+        )
+        sampler = next(n for n in graph.values() if n["class_type"] == "SamplerCustomAdvanced")
+        guider = graph[sampler["inputs"]["guider"][0]]
+        assert guider["inputs"]["model"] == [attention_id, 0]
+        assert attention["inputs"]["attention"] == "comfy kitchen attention"
+        key = f"{attention_id}.attention"
+        assert next(p for p in profile["parameters"] if p["key"] == key)["owner"] == "workflow"
+        fallback_values, fallback_assets, fallback_raw, fallback_sources = resolve_parameters(
+            profile, automatic, assets, {key: "pytorch attention"}, True, None
+        )
+        fallback = patch(profile, {**fallback_values, **fallback_assets}, fallback_raw)
+        assert fallback[attention_id]["inputs"]["attention"] == "pytorch attention"
+        assert fallback_sources[key] == "user"
+    elif profile["capability"] == "TEXT_TO_IMAGE":
+        output = graph[profile["outputs"]["image"]]
+        decoder = graph[output["inputs"]["images"][0]]
+        assert decoder["class_type"] == "VAEDecode"
+
 
 def test_codex_pack_covers_all_capabilities_and_matches_image_conditioning():
     capabilities = {
@@ -75,3 +98,35 @@ def test_codex_pack_covers_all_capabilities_and_matches_image_conditioning():
     assert all(n["class_type"] != "H3ReferenceEditPrepare" for n in image.values())
     selector = next(n for n in image.values() if n["class_type"] == "H3ImageFrameSelector")
     assert selector["inputs"]["strategy"] == "last"
+    # Turbo/attention experiments did not improve this short image workload.
+    assert all(n["class_type"] != "LoraLoaderModelOnly" for n in image.values())
+
+
+@pytest.mark.parametrize("path", PROFILES, ids=lambda p: p.stem)
+def test_codex_canvas_preserves_executable_links_and_widget_values(path):
+    graph = json.loads(path.read_text())["workflow"]
+    canvas = json.loads(path.with_name(path.name.replace(".profile.", ".comfy.")).read_text())
+    nodes = {str(n["id"]): n for n in canvas["nodes"] if n["type"] != "Note"}
+    assert set(nodes) == set(graph)
+    links = {link[0]: link for link in canvas["links"]}
+    expected_links = set()
+    for id, source in graph.items():
+        node = nodes[id]
+        assert node["type"] == source["class_type"]
+        for name, value in source["inputs"].items():
+            if isinstance(value, list):
+                target_slot, socket = next(
+                    (slot, item) for slot, item in enumerate(node["inputs"]) if item["name"] == name
+                )
+                link_id = socket["link"]
+                expected_links.add(link_id)
+                link = links[link_id]
+                assert link[1:5] == [int(value[0]), value[1], int(id), target_slot]
+                assert link_id in nodes[value[0]]["outputs"][value[1]]["links"]
+            else:
+                assert node["widgets_values_named"][name] == value
+        # Both array and named formats must retain seed/model/prompt defaults.
+        assert node["widgets_values"] == list(node["widgets_values_named"].values())
+        if any(key in source["inputs"] for key in ("seed", "noise_seed")):
+            assert node["widgets_values_named"]["control_after_generate"] == "fixed"
+    assert set(links) == expected_links
