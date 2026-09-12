@@ -351,6 +351,9 @@ class Directors:
             "previous continuity is historical context, not a requirement to repeat the previous scene. "
             "Describe the visible endpoint changes explicitly, including departures, pose, location and time. "
             "Do not force every character to appear in every frame. "
+            "Select only identity traits visible at this shot's lifecycle stage; omit traits from earlier "
+            "or future stages, absent characters and props or lighting from other scenes. Include the "
+            "relevant identity and style directly in each visual prompt; renders use these reviewed prompts. "
             "Set allow_static_end_frame=true only for an intentional freeze or unchanged hold in the shot plan, "
             "never merely because the camera is static or motion is small. Otherwise keep it false. "
             "Describe one action, camera, light, identity and negative constraints. Prompts should be in English. "
@@ -377,50 +380,63 @@ class Directors:
         )
 
     async def qa(self, bible: dict, shot: dict, paths: list, stage: str) -> QAResult:
-        return await self.generate_json(
+        frame_order = (
+            ["start_frame"]
+            if stage == "start_candidate"
+            else ["start_frame", "end_frame"]
+            if stage == "keyframes"
+            else ["start_frame", "middle_frame", "end_frame", "previous_last_frame"]
+        )[: len(paths)]
+        result = await self.generate_json(
             "Act as visual QA. Inspect the supplied actual frames; do not infer success from prompts. "
             "Rate identity/count, scene, style, action, transition and artifacts from 0 to 1. "
             "artifact_score is BAD when high. Explain failures. For keyframes assess the intended endpoints "
             "in shot.prompts: near-identical frames fail action/transition when endpoint change is requested. "
             "An empty final scene or departing character can be intentional; follow the current target "
             "over global cast-count or previous-scene constraints. "
-            "for video compare sampled start/middle/end and the prior clip's last frame when supplied.",
+            "For keyframes and start_candidate, set failed_frames to only the supplied endpoints that "
+            "actually fail their respective reviewed targets. A correct start with an incorrect end "
+            "must list only end_frame. Give each failed frame an actionable English frame_corrections "
+            "entry: describe the needed visual changes, preserving correct identity, framing and setting. "
+            "Do not invent missing frames or introduce future lifecycle features or other scenes' cast. "
+            "Leave both fields empty when the supplied frames pass. For video leave these fields empty "
+            "and compare sampled start/middle/end and the prior clip's last frame when supplied.",
             {
                 "bible": bible,
                 "shot": shot,
                 "stage": stage,
-                "frame_order": "current start/middle/end; optional previous last frame",
+                "frame_order": frame_order,
             },
             QAResult,
             images=paths,
         )
+        editable_frames = set(frame_order) if stage in {"keyframes", "start_candidate"} else set()
+        if not set(result.failed_frames).issubset(editable_frames):
+            raise AppError(
+                "LLM_INVALID_OUTPUT",
+                "视觉质检返回了当前阶段未提供的关键帧",
+                {"stage": stage, "frame_order": frame_order, "failed_frames": result.failed_frames},
+            )
+        return result
 
 
 def anchored_prompt(bible: dict, prompt: str, continuity: dict, *, stage: str = "image") -> str:
-    # Continuity is interpreted by the Shot Agent. Re-appending its previous state here
-    # would override reviewed endpoints, especially after a cut or a character's exit.
-    identities = [
-        {
-            "id": item["id"],
-            "features": item.get("distinguishing_features") or item.get("description", ""),
-        }
-        if isinstance(item, dict)
-        else item
-        for item in bible.get("characters", [])
+    # The Shot Agent already selects Bible identity, lifecycle and style for the
+    # reviewed target. Replaying the entire catalog here adds unrelated cast and scenes.
+    parts = [
+        f"Requested {stage} target (highest priority):\n{prompt}",
+        (
+            "Render the requested END state. When <Picture 1> is supplied, edit it to reach this "
+            "target. Preserve the requested identity, framing and background; change pose, position, "
+            "setting, lighting or visible subject count only as required by the requested endpoint."
+            if stage == "end_frame"
+            else "Render only the subjects and setting requested in the target."
+        ),
     ]
-    return "\n\n".join(
-        [
-            f"Requested {stage} target (highest priority):\n{prompt}",
-            (
-                "Render the requested END state. When <Picture 1> is supplied, edit it to reach this "
-                "target, preserving identity but changing pose, position, setting, lighting and visible "
-                "subject count as requested. Do not copy its starting action or composition."
-                if stage == "end_frame"
-                else "Render only the subjects and setting requested in the target."
-            ),
-            "Identity catalog for requested subjects only (not a required cast list): "
-            + json.dumps(identities, ensure_ascii=False),
+    # Reference targets are composed from their own Bible entry instead of ShotPrompts.
+    if stage == "image":
+        parts.append(
             "Visual style, subordinate to the requested target: "
-            + json.dumps(bible.get("style", {}), ensure_ascii=False),
-        ]
-    )[:20000]
+            + json.dumps(bible.get("style", {}), ensure_ascii=False)
+        )
+    return "\n\n".join(parts)[:20000]

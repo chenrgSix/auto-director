@@ -1,5 +1,13 @@
 # 验收记录
 
+## C40 当前镜头提示与定向 QA 纠错（2026-09-12）
+
+- 新增场景覆盖：生命周期/跨场景角色不再重复注入；失败帧/纠错字段及阶段边界校验；无 negative 输入的实际 edit_instruction、AI/用户覆盖优先级、长度/枚举与幂等解析；只重画失败尾帧、I2V 无尾帧、固定用户素材停止无效重试、旧失败记录继续及零重试预算、UNKNOWN/取消后复用原提交、连续镜头失败首帧不重复继承、高质量切标准先复检旧图。
+- 夹具验证剧本、审核提示、合格首帧、已完成第一镜视频、旧 Job 内容与全部资产字节保持。新纠错确实进入 patched JSON；已完成纠错图尚未绑定时取消，继续也不会重复提交。模拟 ComfyUI/VLM 与真实 FFmpeg，不代表真实视觉模型质量验收。
+- 对真实短片 a5288495/version162 的 MiniMaxH3 图生图工作流执行纯内存参数解析与 patch：实际 `5.edit_instruction` 保留审核尾帧目标并包含负向限制，不含全片角色/风格追加和强制改变构图指令，原工作流快照未改。未上传或提交任务，证据 `data/repairs/c40-qa-retries/offline-patch-verification.json`。
+- 完整 `make check` **592 passed**（163.59 秒），新增 43 项回归，98 个 Python 文件 Ruff/格式与前端 lint/typecheck/build 通过，仅两项既有第三方弃用提醒。
+- 确认无活动或未结算任务后重启本地 8000，健康检查通过；重启前后 **123 条记录、47 个素材文件及在线配置散列完全一致**。短片仍 FAILED/version162，第一镜视频 ea527826 保留；未自动续跑真实任务，未做新一轮模型视觉质量验收或远端 CI。证据 `data/repairs/c40-qa-retries/restart-verification.json`。
+
 ## C39 生成前校验与可见约束（2026-09-12）
 
 - 完整 `make check` **549 passed**（152.01 秒），94 个 Python 文件 Ruff/格式及前端 lint/typecheck/build 通过；两项既有第三方弃用提醒。最终增加下游问题跳转源参数后，前端三项检查再次通过。

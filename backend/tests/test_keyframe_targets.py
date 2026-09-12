@@ -16,7 +16,7 @@ from tests.test_episode_rerun import complete, rerun
 from tests.test_oom_recovery import interrupted
 
 
-def test_render_target_precedes_identity_and_excludes_conflicting_history():
+def test_reviewed_render_target_excludes_global_identity_style_and_conflicting_history():
     bible = {
         "characters": [
             {
@@ -35,12 +35,57 @@ def test_render_target_precedes_identity_and_excludes_conflicting_history():
         bible, target, {"state": "Three tigers roaring; no portal"}, stage="end_frame"
     )
     assert prompt.startswith("Requested end_frame target (highest priority):\n" + target)
-    assert "striped golden fur" in prompt and "cinematic" in prompt and "<Picture 1>" in prompt
-    for conflict in ["always standing", "always daytime", "Exactly three", "no portal"]:
+    assert "<Picture 1>" in prompt
+    assert "Preserve the requested identity, framing and background" in prompt
+    for conflict in [
+        "striped golden fur",
+        "cinematic",
+        "always standing",
+        "always daytime",
+        "Exactly three",
+        "no portal",
+        "Do not copy its starting action or composition",
+    ]:
         assert conflict not in prompt
     assert bible == before
     bible["style"]["look"] *= 30000
     assert target in anchored_prompt(bible, target, {}, stage="end_frame")
+
+
+@pytest.mark.parametrize("stage", ["start_frame", "end_frame", "video", "intermediate_frame"])
+def test_hatching_prompt_never_inherits_future_lifecycle_features_or_absent_cook(stage):
+    bible = {
+        "characters": [
+            {
+                "id": "chicken",
+                "description": "A chicken at different ages",
+                "distinguishing_features": ["red adult comb", "golden neck feathers"],
+            },
+            {
+                "id": "cook_hands",
+                "description": "Hands visible only during the kitchen shots",
+                "distinguishing_features": ["silver ring", "linen cuffs"],
+            },
+        ],
+        "style": {"lighting": "dawn nest, sunset field, hot oven fire, dinner candles"},
+    }
+    target = "Locked macro: a damp yellow chick emerges from a white egg in a straw nest at dawn."
+    result = anchored_prompt(bible, target, {}, stage=stage)
+    assert target in result
+    for contamination in ["adult comb", "neck feathers", "cook_hands", "silver ring", "oven"]:
+        assert contamination not in result
+
+
+def test_character_reference_keeps_its_target_and_style_without_other_characters():
+    bible = {
+        "characters": [{"id": "cook", "distinguishing_features": ["silver ring"]}],
+        "style": {"look": "cinematic photography"},
+    }
+    target = "Yellow chick with a small apricot tuft."
+    result = anchored_prompt(bible, target, {})
+    assert target in result
+    assert "cinematic photography" in result
+    assert "silver ring" not in result
 
 
 def frame(path, shift=0):

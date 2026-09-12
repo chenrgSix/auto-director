@@ -38,7 +38,14 @@ def change_quality(store, busy: set[str], id: str, request: EpisodeQualityUpdate
                 "shot_execution": {
                     shot["id"]: {
                         key: deepcopy(shot.get(key))
-                        for key in ("retry_version", "render_cursor", "status", "error")
+                        for key in (
+                            "retry_version",
+                            "render_cursor",
+                            "qa_retry",
+                            "qa_frame_corrections",
+                            "status",
+                            "error",
+                        )
                     }
                     for shot in episode["shots"]
                 },
@@ -53,6 +60,10 @@ def change_quality(store, busy: set[str], id: str, request: EpisodeQualityUpdate
         for shot in episode["shots"]:
             if shot["status"] == "PASSED":
                 continue
+            # A previous quality floor must not force regeneration under the new policy.
+            # Retain frames/error so Continue first reinspects them with current thresholds.
+            shot.pop("qa_retry", None)
+            shot.pop("qa_frame_corrections", None)
             if shot.get("render_cursor") or shot["id"] in rendered_shots:
                 # Do not replay old policy snapshots or reuse an exhausted attempt.
                 shot["retry_version"] = shot.get("retry_version", 0) + 1

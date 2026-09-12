@@ -95,6 +95,48 @@ def usable_ai_values(profile: dict, values: dict, *, stage_prompt=False) -> dict
     }
 
 
+def include_unbound_negative(profile: dict, values: dict, overrides: dict) -> None:
+    """Deliver exclusions through an instruction-only workflow's automatic prompt.
+
+    Run after owner resolution so an explicit user prompt stays exact. The suffix check
+    keeps the engine's second resolution and unsubmitted recovery idempotent. Never
+    truncate either the reviewed target or exclusions to make the combined text fit.
+    """
+    if "negative" in profile["bindings"] or "prompt" in overrides:
+        return
+    binding = profile["bindings"].get("prompt")
+    prompt, negative = values.get("prompt"), values.get("negative")
+    if not binding or not isinstance(prompt, str) or not negative:
+        return
+    check_value({"key": "negative", "field": "negative", "type": "text"}, negative)
+    if not negative.strip():
+        return
+    suffix = (
+        "\n\nVisual exclusions (do not depict these; this is not a subject list):\n"
+        + negative.strip()
+    )
+    combined = prompt if prompt.endswith(suffix) else prompt + suffix
+    item = next(
+        (
+            item
+            for item in profile["parameters"]
+            if item["node_id"] == binding["node_id"] and item["field"] == binding["input"]
+        ),
+        None,
+    )
+    if item is None:
+        return  # Let the binding validator report an actionable configuration error.
+    try:
+        check_value(item, combined)
+    except AppError as exc:
+        raise AppError(
+            exc.code,
+            f"提示词合并负向限制后不满足工作流参数约束：{exc.message}",
+            exc.details,
+        ) from exc
+    values["prompt"] = combined
+
+
 def duration_seconds(profile: dict, value, fps: float) -> float:
     binding = profile["bindings"].get("duration", {})
     if binding.get("transform") == "duration_to_frames":
@@ -162,6 +204,7 @@ def resolve_parameters(
                 bound_assets[role] = value
         elif role != "duration":
             values[role] = value
+    include_unbound_negative(profile, values, roles)
     if "duration" in roles and not recovery:
         duration = duration_seconds(profile, roles["duration"], values.get("fps", 16))
         if "duration" in automatic and abs(duration - automatic["duration"]) > 0.011:

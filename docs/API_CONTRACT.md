@@ -1,5 +1,9 @@
 # API 与工作流契约
 
+## C40 结构化关键帧质检
+
+QAResult 可选 failed_frames（start_frame/end_frame，最多两项且不重复）与 frame_corrections（仅失败帧键，非空建议每项最多 1500 字）。缺省为空时兼容旧分数分流；I2V 不接受尾帧反馈，视频 QA 沿用原分流。Episode 镜头 JSON 可包含内部 qa_retry/qa_frame_corrections 恢复状态，无表结构迁移。继续生成不会重写故事或删除历史文件；QA 耗尽后的新尝试使用新版本，UNKNOWN 仍核对原作业。高级 prompt 覆盖不被自动纠错或 negative 拼接改写。
+
 ## C39 生成前参数检查
 
 生成前错误提供工作流身份及节点/字段问题，在参考图/首尾帧生成前检查可确定的配置，在资产上传前复核最终参数与全部资产。预检不提交 ComfyUI，不改变故事或素材绑定；已提交的 UNKNOWN 作业继续按原图恢复。合法高级覆盖可替代失效 Workflow 默认值，AI 非法值仍拒绝。参数的 step/downstream_constraints 同步给前端与 Agent，旧记录在实时校验时补齐，无新增迁移。

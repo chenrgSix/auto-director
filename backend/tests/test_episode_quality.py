@@ -181,6 +181,59 @@ def test_completed_film_and_passed_shots_stay_available_after_quality_change(sys
     assert before["id"] not in app.state.generation.busy
 
 
+def test_lower_quality_rechecks_exhausted_qa_frames_before_regenerating(system):
+    client, app, comfy = system
+
+    class BorderlineFrameQA(FakeProvider):
+        async def generate_json(self, system, context, schema, *, images=None):
+            result = await super().generate_json(system, context, schema, images=images)
+            if schema is QAResult and context["stage"] == "keyframes":
+                result.character_consistency = 0.82  # Fails high, passes standard.
+                result.explanation = "Slight fur detail mismatch; otherwise the targets match."
+            return result
+
+    app.state.generation.provider_factory = BorderlineFrameQA
+    before = preview(system, target_duration=1, quality="high", max_retries=0, qa_enabled=True)
+    assert (
+        client.post(
+            f"/api/v1/episodes/{before['id']}/approve",
+            json={"expected_version": before["version"]},
+        ).status_code
+        == 202
+    )
+    failed = wait_episode(client, before["id"])
+    assert failed["status"] == "FAILED" and failed["error"]["code"] == "QA_FAILED"
+    shot = failed["shots"][0]
+    assert shot["qa_retry"]["pending"] and shot["qa_frame_corrections"]
+    old_jobs = app.state.store.list("job", before["id"])
+    old_ids = {job["id"] for job in old_jobs}
+    submissions = len(comfy.prompts)
+
+    response = change(client, failed, "standard")
+    assert response.status_code == 200, response.text
+    saved = response.json()
+    saved_shot = saved["shots"][0]
+    assert not saved_shot.get("qa_retry") and not saved_shot.get("qa_frame_corrections")
+    assert saved_shot["error"] == shot["error"]
+    history = saved["generation_settings_history"][-1]["shot_execution"][shot["id"]]
+    for field in ("qa_retry", "qa_frame_corrections", "render_cursor"):
+        assert history[field] == shot.get(field)
+    assert len(comfy.prompts) == submissions
+
+    assert client.post(f"/api/v1/episodes/{before['id']}/generate").status_code == 202
+    final = wait_episode(client, before["id"])
+    assert final["status"] == "COMPLETED", final.get("error")
+    for field in ("prompts", "start_frame_asset_id", "end_frame_asset_id"):
+        assert final["shots"][0][field] == shot[field]
+    for field in ("plan", "bible", "references"):
+        assert final[field] == failed[field]
+    new_jobs = [
+        job for job in app.state.store.list("job", before["id"]) if job["id"] not in old_ids
+    ]
+    assert [job["type"] for job in new_jobs] == ["SHOT_VIDEO"]
+    assert all(app.state.store.get("job", job["id"]) == job for job in old_jobs)
+
+
 @pytest.mark.parametrize(
     "state", ["PLANNING", "RENDERING_VIDEO", "busy", "QUEUED_JOB", "RUNNING_JOB", "UNKNOWN_JOB"]
 )

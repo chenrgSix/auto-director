@@ -1,7 +1,14 @@
 from enum import StrEnum
-from typing import Any
+from typing import Annotated, Any, Literal, Self
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    StringConstraints,
+    field_validator,
+    model_validator,
+)
 
 from app.core.limits import (
     MAX_EPISODE_SECONDS,
@@ -120,6 +127,35 @@ class QAResult(StrictModel):
     transition_quality: float = Field(ge=0, le=1)
     artifact_score: float = Field(ge=0, le=1)
     explanation: str = Field(min_length=1, max_length=3000)
+    failed_frames: list[Literal["start_frame", "end_frame"]] = Field(
+        default_factory=list,
+        max_length=2,
+        description=(
+            "For keyframe QA, list only the supplied endpoints that actually fail their target. "
+            "Leave empty for passing frames and video QA."
+        ),
+    )
+    frame_corrections: dict[
+        Literal["start_frame", "end_frame"],
+        Annotated[
+            str,
+            StringConstraints(strict=True, strip_whitespace=True, min_length=1, max_length=1500),
+        ],
+    ] = Field(
+        default_factory=dict,
+        description=(
+            "English visual corrections for failed_frames only. Describe concrete changes needed "
+            "to match the reviewed target, preserving correct identity, framing and setting."
+        ),
+    )
+
+    @model_validator(mode="after")
+    def valid_frame_feedback(self) -> Self:
+        if len(self.failed_frames) != len(set(self.failed_frames)):
+            raise ValueError("failed_frames must contain unique endpoints")
+        if not set(self.frame_corrections).issubset(self.failed_frames):
+            raise ValueError("frame_corrections may only address failed_frames")
+        return self
 
     def retry_scope(self, *, high: bool = False) -> str | None:
         floor = 0.85 if high else 0.80

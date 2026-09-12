@@ -37,6 +37,7 @@ from app.generation.preview import (
     validate_timing,
     workflow_versions,
 )
+from app.generation.qa_retry import consume_retry, corrected_prompt, failed_frames, retry_state
 from app.generation.recovery import prepare_recovery, recovery_profiles, replay_job
 from app.generation.resolvers import AssetResolver, ContinuityManager
 from app.generation.schemas import (
@@ -549,6 +550,8 @@ class GenerationService:
     def invalidate(shot: dict, scope="keyframes") -> None:
         shot.pop("render_cursor", None)
         shot.pop("keyframe_comparison", None)
+        shot.pop("qa_retry", None)
+        shot.pop("qa_frame_corrections", None)
         shot.update(
             video_asset_id=None,
             actual_end_frame_asset_id=None,
@@ -1105,6 +1108,42 @@ class GenerationService:
                 prompts.allow_static_end_frame = shot["pending_static_end_frame"]
             shot = self.update_shot(id, sid, prompts=prompts.model_dump(mode="json"))
         prompts = shot["prompts"]
+        recovery = self.store.get("episode", id).get("render_recovery") or {}
+        cursor = recovery.get("cursor") if recovery.get("shot_id") == sid else None
+        pending_retry = shot.get("qa_retry") or {}
+        if not cursor and pending_retry and not pending_retry.get("pending"):
+            saved_cursor = shot.get("render_cursor") or {}
+            if saved_cursor.get("retry_version") == shot.get("retry_version"):
+                # A cancellation may occur after a corrected job completes but before
+                # its asset pointer is saved. Resume that attempt instead of redrawing it.
+                cursor = saved_cursor
+        recheck_legacy_frames = (
+            not cursor
+            and not pending_retry
+            and (shot.get("error") or {}).get("code") in {"QA_FAILED", "KEYFRAMES_TOO_SIMILAR"}
+            and not shot.get("video_asset_id")
+            and all(shot.get(f"{role}_asset_id") for role in frame_roles)
+        )
+        if not cursor and (
+            pending_retry
+            or (shot.get("error") or {}).get("code")
+            in {"QA_FAILED", "KEYFRAMES_TOO_SIMILAR", "VIDEO_TOO_SHORT"}
+        ):
+            # Continue is a fresh attempt after rejected output, not a replay of it.
+            # Legacy failures retain their frames for structured re-inspection first.
+            retry_updates = consume_retry(shot)
+            for role in frame_roles:
+                field = f"{role}_asset_id"
+                if role in user_inputs and field in retry_updates:
+                    retry_updates[field] = user_inputs[role]
+            shot = self.update_shot(
+                id,
+                sid,
+                **retry_updates,
+                retry_version=shot.get("retry_version", 0) + 1,
+                seed_offset=(shot.get("seed_offset", 0) + 10000) % 2147483648,
+                error=None,
+            )
         ref_inputs = ContinuityManager.references(episode)
         video_inputs = ContinuityManager.video_reference(previous, video)
         if previous and shot["transition_from_previous"] == "CONTINUE_VIDEO" and not video_inputs:
@@ -1119,15 +1158,15 @@ class GenerationService:
         }
         retry_scope = "keyframes"
         retries = {"remaining": budget["max_retries"]}
-        recovery = self.store.get("episode", id).get("render_recovery") or {}
-        cursor = recovery.get("cursor") if recovery.get("shot_id") == sid else None
         start_attempt = 0
+        attempt_limit = budget["max_retries"] + int(recheck_legacy_frames)
         if cursor:
             base = deepcopy(cursor["base"])
             start_attempt = cursor["attempt"]
             retries["remaining"] = min(cursor["remaining"], budget["max_retries"])
             retry_scope = "video" if recovery.get("skip_keyframe_qa") else cursor["retry_scope"]
-        for attempt in range(start_attempt, budget["max_retries"] + 1):
+            attempt_limit = max(attempt_limit, cursor.get("attempt_limit", start_attempt))
+        for attempt in range(start_attempt, attempt_limit + 1):
             self.check_cancel(id)
             shot = self.shot(id, sid)
             self.update_shot(
@@ -1135,6 +1174,7 @@ class GenerationService:
                 sid,
                 render_cursor={
                     "attempt": attempt,
+                    "attempt_limit": attempt_limit,
                     "retry_version": shot["retry_version"],
                     "remaining": retries["remaining"],
                     "base": deepcopy(base),
@@ -1145,7 +1185,14 @@ class GenerationService:
             try:
                 self.stage(id, "GENERATING_KEYFRAMES")
                 if not shot["start_frame_asset_id"]:
-                    if previous and shot["transition_from_previous"] in CONTINUOUS:
+                    repairing_start = "start_frame" in (shot.get("qa_retry") or {}).get(
+                        "failed_frames", []
+                    )
+                    if (
+                        previous
+                        and shot["transition_from_previous"] in CONTINUOUS
+                        and not repairing_start
+                    ):
                         shot = self.update_shot(
                             id,
                             sid,
@@ -1163,11 +1210,15 @@ class GenerationService:
                                 {
                                     **base,
                                     "seed": base["seed"] + attempt * 7 + candidate,
-                                    "prompt": anchored_prompt(
-                                        episode["bible"],
-                                        prompts["start_frame_prompt"],
-                                        continuity,
-                                        stage="start_frame",
+                                    "prompt": corrected_prompt(
+                                        anchored_prompt(
+                                            episode["bible"],
+                                            prompts["start_frame_prompt"],
+                                            continuity,
+                                            stage="start_frame",
+                                        ),
+                                        shot,
+                                        "start_frame",
                                     ),
                                 },
                                 ref_inputs,
@@ -1200,11 +1251,15 @@ class GenerationService:
                         {
                             **base,
                             "seed": base["seed"] + 1 + attempt * 7,
-                            "prompt": anchored_prompt(
-                                episode["bible"],
-                                prompts["end_frame_prompt"],
-                                {},
-                                stage="end_frame",
+                            "prompt": corrected_prompt(
+                                anchored_prompt(
+                                    episode["bible"],
+                                    prompts["end_frame_prompt"],
+                                    {},
+                                    stage="end_frame",
+                                ),
+                                shot,
+                                "end_frame",
                             ),
                         },
                         {**ref_inputs, "reference_image": shot["start_frame_asset_id"]},
@@ -1242,7 +1297,16 @@ class GenerationService:
                             f"第 {shot['index'] + 1} 镜首尾帧几乎相同，已暂停视频生成。"
                             "请检查尾帧变化描述、参考图设置及 seed 绑定；"
                             "有意定格的镜头可在分镜预览或重跑选项中允许静止首尾帧。",
-                            {"shot_id": sid, **comparison},
+                            {
+                                "shot_id": sid,
+                                **comparison,
+                                "failed_frames": ["end_frame"],
+                                "frame_corrections": {
+                                    "end_frame": "The previous output duplicated the start frame. "
+                                    "Show the visible change specified by the requested ending state; "
+                                    "preserve framing when the target calls for a locked camera."
+                                },
+                            },
                         )
                 if visual_qa and not shot["video_asset_id"] and retry_scope != "video":
                     keyframes = [shot[f"{role}_asset_id"] for role in frame_roles]
@@ -1253,6 +1317,8 @@ class GenerationService:
                         "keyframes",
                     )
                     scope = qa.retry_scope(high=episode["quality"] == "high")
+                    if qa.failed_frames:
+                        scope = "keyframes"
                     self.record_qa(
                         id,
                         sid,
@@ -1271,7 +1337,13 @@ class GenerationService:
                         raise AppError(
                             "QA_FAILED",
                             "关键帧未通过视觉质检",
-                            {"scope": retry_scope, "explanation": qa.explanation},
+                            {
+                                "scope": retry_scope,
+                                "explanation": qa.explanation,
+                                "failed_frames": qa.failed_frames
+                                or failed_frames(retry_scope, needs_end),
+                                "frame_corrections": qa.frame_corrections,
+                            },
                         )
                 if not shot["video_asset_id"]:
                     self.stage(id, "RENDERING_VIDEO")
@@ -1325,10 +1397,50 @@ class GenerationService:
                     actual_end_frame_asset_id=end["id"],
                     continuity_after={**continuity, **prompts["continuity_state"]},
                     error=None,
+                    qa_retry=None,
+                    qa_frame_corrections={},
                 )
                 self.clear_recovery(id, sid)
                 return
             except AppError as exc:
+                repair_frames = None
+                inspecting_old_frames = (
+                    recheck_legacy_frames
+                    and attempt == start_attempt
+                    and exc.code in {"QA_FAILED", "KEYFRAMES_TOO_SIMILAR"}
+                    and not self.shot(id, sid).get("video_asset_id")
+                )
+                if exc.code in {"QA_FAILED", "KEYFRAMES_TOO_SIMILAR", "VIDEO_TOO_SHORT"}:
+                    if exc.code == "VIDEO_TOO_SHORT":
+                        retry_scope = "video"
+                    details = exc.details or {}
+                    repair_frames = details.get("failed_frames") or failed_frames(
+                        retry_scope, needs_end
+                    )
+                    shot = self.shot(id, sid)
+                    corrections = dict(shot.get("qa_frame_corrections") or {})
+                    for role in repair_frames:
+                        correction = details.get("frame_corrections", {}).get(role)
+                        if not correction:
+                            correction = details.get("explanation", "")[:1500]
+                        if correction:
+                            corrections[role] = correction
+                    self.update_shot(
+                        id,
+                        sid,
+                        qa_retry=retry_state(shot, retry_scope, repair_frames),
+                        qa_frame_corrections=corrections,
+                    )
+                    # The recovered submission is settled now; future QA attempts are new work.
+                    self.clear_recovery(id, sid)
+                    recovery = {}
+                    locked = [role for role in repair_frames if role in user_inputs]
+                    if locked:
+                        raise AppError(
+                            exc.code,
+                            exc.message + "；失败帧已由高级素材覆盖固定，请更换该素材后再继续。",
+                            {**details, "locked_frames": locked},
+                        ) from exc
                 if (
                     exc.code
                     not in {
@@ -1337,11 +1449,12 @@ class GenerationService:
                         "VIDEO_TOO_SHORT",
                         "KEYFRAMES_TOO_SIMILAR",
                     }
-                    or retries["remaining"] == 0
+                    or (retries["remaining"] == 0 and not inspecting_old_frames)
                     or (exc.code == "KEYFRAMES_TOO_SIMILAR" and "end_frame" in user_inputs)
                 ):
                     raise
-                retries["remaining"] -= 1
+                if not inspecting_old_frames:
+                    retries["remaining"] -= 1
                 if exc.code == "VIDEO_TOO_SHORT":
                     retry_scope = "video"
                 if exc.code == "OUT_OF_MEMORY":
@@ -1357,6 +1470,9 @@ class GenerationService:
                     )
                     self.warn(id, "检测到显存不足，降低生成分辨率后重试，目标时间线保持不变。")
                 shot = self.shot(id, sid)
+                if repair_frames is not None:
+                    self.update_shot(id, sid, **consume_retry(shot))
+                    continue
                 updates = {"video_asset_id": None, "actual_end_frame_asset_id": None}
                 if retry_scope == "keyframes":
                     updates.update(start_frame_asset_id=None, end_frame_asset_id=None)
