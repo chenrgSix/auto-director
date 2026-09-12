@@ -445,9 +445,17 @@ def patch(
     decorate_parameters(decorated)
     parameters = {item["key"]: item for item in decorated["parameters"]}
     validate_ai_parameters(decorated, ai_values or {})
+    replaced = set(ai_values or {}) | set(parameter_values or {})
+    replaced.update(
+        f"{binding['node_id']}.{binding['input']}"
+        for role, binding in profile["bindings"].items()
+        if role in values
+    )
     for key, value in profile.get("parameter_values", {}).items():
         if key not in parameters:
             raise AppError("WORKFLOW_INVALID", f"未知动态参数 {key}")
+        if key in replaced:
+            continue  # A saved default must not reject its valid effective replacement.
         item = parameters[key]
         check_value(item, value)
         graph[item["node_id"]]["inputs"][item["field"]] = value
@@ -503,7 +511,7 @@ def autogrow_present(node: dict, field: str, definition: list) -> bool:
     return count >= template.get("min", 1)
 
 
-def validate_dependencies(profile: dict, object_info: dict) -> dict:
+def validate_dependencies(profile: dict, object_info: dict, *, deferred_inputs=()) -> dict:
     issues = validate_bindings(profile)
     graph = patch(profile, {}) if not issues else profile["workflow"]
     for id, node in graph.items():
@@ -533,6 +541,8 @@ def validate_dependencies(profile: dict, object_info: dict) -> dict:
                     }
                 )
         for field, value in node["inputs"].items():
+            if f"{id}.{field}" in deferred_inputs:
+                continue
             if is_link(value):
                 source = object_info.get(graph[value[0]]["class_type"], {})
                 if source.get("output") is not None and value[1] >= len(source["output"]):
@@ -545,7 +555,11 @@ def validate_dependencies(profile: dict, object_info: dict) -> dict:
                         }
                     )
                 primitive = primitive_source(graph, value)
-                if primitive is not None and field in input_definitions(node, object_info):
+                if (
+                    primitive is not None
+                    and primitive[0] not in deferred_inputs
+                    and field in input_definitions(node, object_info)
+                ):
                     source_key, literal = primitive
                     try:
                         check_value(parameter(id, node, field, literal, object_info), literal)

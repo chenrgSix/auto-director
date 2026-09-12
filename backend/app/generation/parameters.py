@@ -32,7 +32,19 @@ def ai_parameters(*profiles: dict) -> list[dict]:
             "source": "stage_prompt" if item.get("role") == "prompt" else "ai_parameters",
             **{
                 key: item.get(key)
-                for key in ("key", "field", "role", "owner", "type", "min", "max", "enum")
+                for key in (
+                    "key",
+                    "field",
+                    "role",
+                    "owner",
+                    "type",
+                    "min",
+                    "max",
+                    "step",
+                    "enum",
+                    "downstream_constraints",
+                )
+                if key != "downstream_constraints" or item.get(key)
             },
         }
         for profile in profiles

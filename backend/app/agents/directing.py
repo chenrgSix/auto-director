@@ -328,7 +328,9 @@ class Directors:
             "Act as Bible Agent. Specify distinct, stable character identities, environment, visual style, "
             "lighting and continuity rules for this episode only. Preserve the exact subject count in the idea. "
             "Fill ai_parameters[workflow_id][parameter_key] for the listed AI-owned parameters, "
-            "respecting their types, bounds and enums. Never fill unlisted workflows or parameters. "
+            "respecting their types, bounds, enums and steps, including every downstream constraint. "
+            "Each step sequence starts at that constraint's min (or zero when absent); "
+            "the same value must satisfy all constraints. Never fill unlisted workflows or parameters. "
             "Inputs with source=stage_prompt are supplied automatically for each reference image; "
             "do not put them in ai_parameters. Keep narration out of visual descriptions.",
             {
@@ -352,7 +354,9 @@ class Directors:
             "Set allow_static_end_frame=true only for an intentional freeze or unchanged hold in the shot plan, "
             "never merely because the camera is static or motion is small. Otherwise keep it false. "
             "Describe one action, camera, light, identity and negative constraints. Prompts should be in English. "
-            "Respect the AI-owned workflow parameter types, ranges and enum options. "
+            "Respect the AI-owned workflow parameter types, ranges, enum options and steps, "
+            "including every downstream constraint. Each step sequence starts at that constraint's "
+            "min (or zero when absent); the same value must satisfy all constraints. "
             "Fill ai_parameters[workflow_id][parameter_key] for the listed parameters only. "
             "Inputs with source=stage_prompt are supplied automatically from start_frame_prompt, "
             "end_frame_prompt or video_prompt according to the render stage; never put these "

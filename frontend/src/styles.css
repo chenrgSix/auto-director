@@ -243,6 +243,14 @@ summary { cursor: pointer; font-size: 12px; color: #c0c8ac; line-height: 1.8; }
 .workflow-parameter > small { overflow-wrap: anywhere; }
 .workflow-parameter input[type="checkbox"] { width: auto; }
 .parameter-hint { display: flex; align-items: center; gap: 12px; justify-content: space-between; }
+.parameter-constraints { color: #b5c69d; font-size: 11px; line-height: 1.7; overflow-wrap: anywhere; }
+.parameter-constraints summary { cursor: pointer; }
+.parameter-consumers { margin-top: 8px; padding: 10px 12px; border: 1px solid #526540; border-radius: 6px; }
+.parameter-consumers p, .parameter-enum p { margin: 6px 0; font-size: inherit; }
+.parameter-consumers ul { margin: 8px 0 0; padding-left: 18px; }
+.parameter-consumers li + li { margin-top: 8px; }
+.parameter-consumers strong { display: block; font-weight: 500; color: #d0e0b8; }
+.parameter-enum { margin-top: 4px; }
 .parameter-hint small { color: #9eb587; font-size: 10px; line-height: 1.7; }
 .parameter-hint button, .parameter-policy button { padding: 5px 8px; font-size: 11px; flex-shrink: 0; }
 .parameter-policy { font-size: 11px; color: #b5c59d; }

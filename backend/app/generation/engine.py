@@ -7,6 +7,7 @@ from app.core.config import Settings
 from app.core.errors import AppError
 from app.db.store import Store, now
 from app.generation.parameters import resolve_parameters
+from app.generation.preflight import check_graph
 from app.generation.resolvers import AssetResolver
 from app.media.service import Assets, require_video_duration
 from app.workflows.analyzer import patch, refresh_profile, validate_dependencies, workflow_hash
@@ -169,6 +170,19 @@ class RenderEngine:
                             ai_values=job.get("ai_parameter_values", {}),
                         )
                         resolved_values = dict(values)
+                        check_graph(
+                            checked,
+                            info,
+                            values,
+                            raw,
+                            advanced=job.get("advanced_mode", True),
+                            ai_values=job.get("ai_parameter_values", {}),
+                            deferred_inputs={
+                                p["key"]
+                                for p in checked["parameters"]
+                                if p.get("owner") == "asset_resolver"
+                            },
+                        )
                         values.update(
                             await AssetResolver(self.store, self.assets).resolve(
                                 profile,

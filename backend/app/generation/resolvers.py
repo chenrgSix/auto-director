@@ -67,9 +67,11 @@ class AssetResolver:
                 {"roles": sorted(missing)},
             )
         result = {}
-        for role, asset_id in bindings.items():
-            if role not in profile["bindings"]:
-                continue
+        selected = {
+            role: asset_id for role, asset_id in bindings.items() if role in profile["bindings"]
+        }
+        for role, asset_id in selected.items():
             self.validate(role, asset_id, episode_id, allowed, test=test)
+        for role, asset_id in selected.items():
             result[role] = await client.upload(self.assets.path(asset_id))
         return result

@@ -1,5 +1,9 @@
 # API 与工作流契约
 
+## C39 生成前参数检查
+
+生成前错误提供工作流身份及节点/字段问题，在参考图/首尾帧生成前检查可确定的配置，在资产上传前复核最终参数与全部资产。预检不提交 ComfyUI，不改变故事或素材绑定；已提交的 UNKNOWN 作业继续按原图恢复。合法高级覆盖可替代失效 Workflow 默认值，AI 非法值仍拒绝。参数的 step/downstream_constraints 同步给前端与 Agent，旧记录在实时校验时补齐，无新增迁移。
+
 ## C38 直连数值参数的约束
 
 Workflow 参数可选 downstream_constraints 列表记录 PrimitiveInt/PrimitiveFloat.value 输出 0 的直连消费者字段 schema；实时依赖检查和生成前刷新补齐旧记录，无需重导入或表迁移。源参数与各消费者的 type/min/max/step/enum 必须同时满足；非法值返回 WORKFLOW_INVALID 并指出源参数与消费者字段。自动尺寸向下适配，用户显式覆盖仍严格拒绝，失败续跑保持原计划及素材。

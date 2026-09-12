@@ -1,5 +1,11 @@
 # 模块设计
 
+## C39 生效参数预检与约束可见性
+
+Generation preflight 在给定实时 object_info 下解析自动值/高级覆盖并 deepcopy patch；只校验将执行的参考图、关键帧和视频工作流，跳过尚待 AI/素材绑定的值，按每镜实际时长复核。已有 render_recovery 时不以新前检阻塞旧作业核对；新提交始终经 RenderEngine 再检查。参数冲突以最终生效值为准，非法 AI 输出仍独立拒绝。
+
+RenderEngine 上传前验证图，AssetResolver 先检查所有所需资产的归属/类型/文件，再执行上传；上传后继续最终校验。参数表单和 Agent 上下文/schema 保留源及各消费者的独立 type/min/max/step/enum，特别保留每个步长起点，不错误合并。未知计算节点只能依赖其公开输入约束，本地预检不等同于真实模型执行成功。
+
 ## C38 数值透传节点的下游约束
 
 Analyzer 为 PrimitiveInt/PrimitiveFloat.value 的输出 0 收集直连消费者的实际字段 schema，存入参数的 downstream_constraints。check_value 分别验证源参数和每个消费者，保留各自 min/step 起点，避免合并范围后改变合法网格；不穿过数学、开关或未知节点推算输出。依赖检查也验证可确定的直连数值。

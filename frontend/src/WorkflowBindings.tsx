@@ -79,8 +79,8 @@ export function WorkflowReadiness({workflow, dirty, busy, onCheck, onLocate}: {w
     <button type="button" disabled={busy} onClick={onCheck}>保存并检查依赖</button>
     {!dirty && workflow.validation?.valid && <p className="success-text">依赖检查通过，可以试跑。</p>}
     {workflow.validation?.issues.map((raw, index) => {
-      const issue = raw as typeof raw & {node_id?: string; field?: string; parameter?: string; role?: string; class_type?: string};
-      const key = issue.parameter || (issue.node_id && issue.field ? `${issue.node_id}.${issue.field}` : undefined);
+      const issue = raw as typeof raw & {node_id?: string; field?: string; source?: string; parameter?: string; role?: string; class_type?: string};
+      const key = issue.source || issue.parameter || (issue.node_id && issue.field ? `${issue.node_id}.${issue.field}` : undefined);
       const writable = key && workflow.parameters.some(p => p.key === key);
       const details = issue.details as {value?: unknown} | undefined;
       return <div className="notice config-problem" key={index}><strong>{issue.code === 'MISSING_MODEL' ? '模型不可用' : issue.code === 'MISSING_NODE' ? '缺少节点' : '配置需要调整'}</strong><p>{issue.message}{issue.role ? `：${roleLabel(issue.role)}` : ''}</p>{key && <p>{parameterLabel(workflow, key)}</p>}{details?.value != null && <p>{String(details.value)}</p>}

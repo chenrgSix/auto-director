@@ -24,6 +24,7 @@ from app.generation.parameters import (
     validate_overrides,
     validate_strategy,
 )
+from app.generation.preflight import check_episode
 from app.generation.preview import (
     apply_edits,
     prepare_review,
@@ -873,6 +874,8 @@ class GenerationService:
                 budget, budget["max_duration"], low_memory=budget["low_memory"], ceilings=ceilings
             )
             fit_budget_dimensions(episode, video, budget)
+            if not preview_only:
+                check_episode(episode, image, video, reference_profile, budget, object_info)
             fixed_duration = None
             if "duration" in override_roles:
                 fixed_duration = duration_seconds(video, override_roles["duration"], budget["fps"])
