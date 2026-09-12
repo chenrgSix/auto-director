@@ -357,3 +357,13 @@ summary { cursor: pointer; font-size: 12px; color: #c0c8ac; line-height: 1.8; }
 .previous-films > a { justify-self: start; }
 .rerun-form label { display: grid; gap: 8px; }
 .rerun-form label:has(input[type="checkbox"]) { display: flex; align-items: center; }
+
+.prompt-optimization .panel-title { gap: 12px; flex-wrap: wrap; }
+.optimization-content { display: grid; gap: 14px; }
+.optimization-proposal { min-width: 0; }
+.optimization-change { margin: 18px 0; }
+.optimization-change h4 { margin-bottom: 8px; }
+.optimization-comparison { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 14px; }
+.optimization-comparison > div { min-width: 0; }
+.optimization-comparison pre { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 280px; overflow-y: auto; }
+@media (max-width: 640px) { .optimization-comparison { grid-template-columns: minmax(0, 1fr); } }

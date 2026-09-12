@@ -37,6 +37,7 @@ from app.generation.preview import (
     validate_timing,
     workflow_versions,
 )
+from app.generation.prompt_optimization import validate_proposal
 from app.generation.qa_retry import (
     consume_retry,
     corrected_prompt,
@@ -44,7 +45,7 @@ from app.generation.qa_retry import (
     failed_frames,
     retry_state,
 )
-from app.generation.qa_review import current_review_notes, video_review_key
+from app.generation.qa_review import VIDEO_SAMPLE_FRACTIONS, current_review_notes, video_review_key
 from app.generation.recovery import prepare_recovery, recovery_profiles, replay_job
 from app.generation.resolvers import AssetResolver, ContinuityManager
 from app.generation.schemas import (
@@ -569,7 +570,7 @@ class GenerationService:
         self.update_shot(id, sid, status="QA")
         samples = []
         # Decoding errors remain hard failures. Only model review errors are advisory.
-        for fraction in (0, 0.5, 1):
+        for fraction in VIDEO_SAMPLE_FRACTIONS:
             frame = self.assets.allocate(id, ".png")
             await extract_frame(
                 self.assets.path(shot["video_asset_id"]),
@@ -642,12 +643,14 @@ class GenerationService:
         raise AppError("NOT_FOUND", "镜头不存在", status=404)
 
     @staticmethod
-    def invalidate(shot: dict, scope="keyframes") -> None:
+    def invalidate(shot: dict, scope="keyframes", *, frames=None) -> None:
         shot.pop("render_cursor", None)
         shot.pop("keyframe_comparison", None)
         shot.pop("qa_retry", None)
         shot.pop("qa_frame_corrections", None)
         shot.pop("qa_video_check", None)
+        shot.pop("optimization_attempt", None)
+        shot.pop("optimization_reference_assets", None)
         shot.update(
             video_asset_id=None,
             actual_end_frame_asset_id=None,
@@ -658,7 +661,10 @@ class GenerationService:
             review_notes=[],
             retry_version=shot.get("retry_version", 0) + 1,
         )
-        if scope != "video":
+        if frames is not None:
+            for role in frames:
+                shot[f"{role}_asset_id"] = None
+        elif scope != "video":
             shot.update(start_frame_asset_id=None, end_frame_asset_id=None)
         if scope == "prompts":
             previous = shot.get("prompts") or {}
@@ -680,7 +686,7 @@ class GenerationService:
             EpisodeRerun(expected_version=episode["version"], scope=scope, shot_ids=[shot_id]),
         )
 
-    def rerun(self, id: str, request: EpisodeRerun) -> dict:
+    def rerun(self, id: str, request: EpisodeRerun, *, optimization=None) -> dict:
         if id in self.busy:
             raise AppError("CONFLICT", "请先等待或取消当前生成", status=409)
         if self.engine.unresolved():
@@ -695,6 +701,8 @@ class GenerationService:
                 raise AppError("CONFLICT", "短片已更新，请刷新后重新选择重跑范围", status=409)
             if current["status"] in ACTIVE:
                 raise AppError("CONFLICT", "请先等待或取消当前生成", status=409)
+            if optimization is not None:
+                validate_proposal(self, current, optimization)
             if current.get("preview_required") and not current.get("preview_approved_at"):
                 raise AppError("PREVIEW_REQUIRED", "请先确认分镜", status=409)
             enabled = {s["id"] for s in current["shots"] if s["enabled"]}
@@ -729,10 +737,31 @@ class GenerationService:
                 "shots": [deepcopy(s) for s in current["shots"] if s["id"] in scopes],
             }
             current.setdefault("rerun_history", []).append(snapshot)
+            if optimization is not None:
+                snapshot["prompt_optimization"] = deepcopy(optimization)
             current.pop("render_recovery", None)
             for shot in current["shots"]:
                 if shot["id"] in scopes:
-                    self.invalidate(shot, scopes[shot["id"]])
+                    optimizing = optimization is not None and shot["id"] == optimization["shot_id"]
+                    old_frames = {
+                        role: shot.get(f"{role}_asset_id")
+                        for role in (optimization["frames"] if optimizing else [])
+                    }
+                    self.invalidate(
+                        shot,
+                        scopes[shot["id"]],
+                        frames=optimization["frames"] if optimizing else None,
+                    )
+                    if optimization is not None:
+                        shot["optimization_attempt"] = {
+                            "id": optimization["id"],
+                            "retry_version": shot["retry_version"],
+                        }
+                    if optimizing:
+                        for field, change in optimization["changes"].items():
+                            shot["prompts"][field] = change["prompt"]
+                        shot["optimization_reference_assets"] = old_frames
+                        shot.pop("preview_prompt_view", None)
                     if shot["id"] in selected and request.allow_static_end_frame is not None:
                         if shot.get("prompts"):
                             shot["prompts"]["allow_static_end_frame"] = (
@@ -1182,7 +1211,10 @@ class GenerationService:
         self, episode, shot, previous, continuity, image, video, budget, agents, visual_qa
     ):
         id, sid = episode["id"], shot["id"]
-        advisory = episode.get("qa_policy", "strict") == "advisory"
+        optimization = shot.get("optimization_attempt") or {}
+        advisory = episode.get("qa_policy", "strict") == "advisory" or (
+            bool(optimization) and optimization["retry_version"] == shot["retry_version"]
+        )
         strict_qa = visual_qa and not advisory
         needs_end = video["capability"] == WorkflowCapability.FIRST_LAST_TO_VIDEO
         frame_roles = ("start_frame", "end_frame") if needs_end else ("start_frame",)

@@ -1,5 +1,13 @@
 # API 与工作流契约
 
+## C44 提示词定向优化
+
+- `POST /episodes/{id}/shots/{shot_id}/prompt-optimization`：`{expected_version, feedback?}`。短片空闲且该启用镜头有提示词和视频时生成优化预览；不生成图片/视频、不更改 Episode。feedback 最长 1000 字，只作为希望检查的问题。响应含方案 ID、源版本、模型判断/置信度/解释、逐字段原文/新文/原因、需重做关键帧、受影响镜头列表。模型失败或请求取消不失效现有素材。
+- `POST /episodes/{id}/prompt-optimizations/{proposal_id}/apply`：`{expected_version}`，202。仅确认服务端保存的方案，禁止客户端注入补丁；保存新提示词、归档旧版并沿原队列重跑/合成。过期版本、工作流变化、非 revise/低置信度、禁用镜头、未结算作业均拒绝；重复提交不会重复入队。
+- `GET /episodes/{id}/shots/{shot_id}/prompt-optimization`：返回最新方案或 null，支持刷新恢复预览；已应用/过期方案不可再次确认。删除 Episode 同步删除其方案记录。
+
+仅 start_frame_prompt/end_frame_prompt/video_prompt 可修改，字段由 capability、连续性、固定素材和覆盖规则进一步限制。方案不改变时长、计划、AI 参数或其他设置；旧数据不需结构迁移。
+
 ## C42 质检策略
 
 `EpisodeCreate.qa_policy` 接受 `advisory|strict`，API 与旧数据缺省 strict；页面显式提交默认 advisory。`PATCH /episodes/{id}/qa-policy` 接受 `{expected_version, qa_policy}`，忙碌、版本冲突或 QUEUED/RUNNING/UNKNOWN 作业返回 409。保存不入队、不重写剧本或删除素材；归档旧策略/失败执行状态，仅清理已结算语义失败的重试状态，技术故障和提交恢复身份保留。

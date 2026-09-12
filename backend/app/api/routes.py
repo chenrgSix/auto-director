@@ -13,6 +13,7 @@ from app.core.errors import AppError
 from app.core.limits import DURATION_POLICY, LIMITS
 from app.core.runtime_settings import SettingsPatch
 from app.db.store import uid
+from app.generation.prompt_optimization import apply_proposal, find_shot, propose
 from app.generation.qa_policy import change_qa_policy
 from app.generation.quality import change_quality
 from app.generation.schemas import (
@@ -25,6 +26,7 @@ from app.generation.schemas import (
     EpisodeWorkflowsUpdate,
     PreviewApproval,
     PreviewUpdate,
+    PromptOptimizationRequest,
     TestRun,
     TimelineUpdate,
 )
@@ -347,6 +349,8 @@ async def delete_episode(request: Request, id: str, delete_assets: bool = False)
         state.store.delete("job", job["id"])
     for result in state.store.list("qa", id):
         state.store.delete("qa", result["id"])
+    for proposal in state.store.list("prompt_optimization", id):
+        state.store.delete("prompt_optimization", proposal["id"])
     state.store.delete("episode", id)
 
 
@@ -358,6 +362,53 @@ async def generate(request: Request, id: str):
 @router.post("/episodes/{id}/rerun", status_code=202)
 async def rerun_episode(request: Request, id: str, body: EpisodeRerun):
     return resources(request).generation.rerun(id, body)
+
+
+@router.get("/episodes/{id}/shots/{shot_id}/prompt-optimization")
+def latest_prompt_optimization(request: Request, id: str, shot_id: str):
+    state = resources(request)
+    current = state.store.get("episode", id)
+    find_shot(current, shot_id)
+    return next(
+        (p for p in state.store.list("prompt_optimization", id) if p["shot_id"] == shot_id),
+        None,
+    )
+
+
+@router.post("/episodes/{id}/shots/{shot_id}/prompt-optimization", status_code=201)
+async def propose_prompt_optimization(
+    request: Request, id: str, shot_id: str, body: PromptOptimizationRequest
+):
+    state = resources(request)
+
+    async def disconnected():
+        while True:
+            if (await request.receive())["type"] == "http.disconnect":
+                return
+
+    operation = asyncio.create_task(propose(state.generation, id, shot_id, body))
+    disconnect = asyncio.create_task(disconnected())
+    try:
+        async with asyncio.timeout(state.config.llm_timeout):
+            done, _ = await asyncio.wait(
+                {operation, disconnect}, return_when=asyncio.FIRST_COMPLETED
+            )
+            if operation in done:
+                return operation.result()
+            raise AppError("REQUEST_CANCELLED", "已取消提示词优化", status=499)
+    except TimeoutError as exc:
+        raise AppError("LLM_TIMEOUT", "提示词优化超时，原视频与提示词已保留", status=504) from exc
+    finally:
+        for task in (operation, disconnect):
+            task.cancel()
+        await asyncio.gather(operation, disconnect, return_exceptions=True)
+
+
+@router.post("/episodes/{id}/prompt-optimizations/{proposal_id}/apply", status_code=202)
+async def confirm_prompt_optimization(
+    request: Request, id: str, proposal_id: str, body: PreviewApproval
+):
+    return apply_proposal(resources(request).generation, id, proposal_id, body.expected_version)
 
 
 @router.post("/episodes/{id}/preview", status_code=202)

@@ -5,10 +5,12 @@ import json
 
 from app.agents.directing import qa_shot_context
 
+VIDEO_SAMPLE_FRACTIONS = (0, 0.25, 0.5, 0.75, 1)
+
 
 def video_review_key(episode: dict, shot: dict, previous: dict | None, settings) -> str:
     context = {
-        "contract": 1,
+        "contract": 2,
         "video": shot["video_asset_id"],
         "previous_end": (previous or {}).get("actual_end_frame_asset_id"),
         "target": qa_shot_context(shot),

@@ -40,20 +40,33 @@ def consume_retry(shot: dict) -> dict:
     }
 
 
+def optimization_reference(shot: dict, role: str):
+    attempt = shot.get("optimization_attempt") or {}
+    if attempt.get("retry_version") != shot.get("retry_version") or not attempt:
+        return None
+    return (shot.get("optimization_reference_assets") or {}).get(role)
+
+
 def correction_reference(profile: dict, shot: dict, role: str, overrides: dict | None = None):
     if (
         profile.get("capability") != WorkflowCapability.IMAGE_TO_IMAGE
         or "reference_image" not in profile.get("bindings", {})
-        or not (shot.get("qa_frame_corrections") or {}).get(role)
+        or not (
+            (shot.get("qa_frame_corrections") or {}).get(role) or optimization_reference(shot, role)
+        )
     ):
         return None
-    rejected = (shot.get("qa_retry") or {}).get("rejected_assets", {}).get(f"{role}_asset_id")
+    rejected = (shot.get("qa_retry") or {}).get("rejected_assets", {}).get(
+        f"{role}_asset_id"
+    ) or optimization_reference(shot, role)
     override = (overrides or {}).get("reference_image")
     return rejected if not override or override == rejected else None
 
 
 def corrected_prompt(prompt: str, shot: dict, role: str, *, editing_rejected=False) -> str:
     correction = (shot.get("qa_frame_corrections") or {}).get(role)
+    if not correction and optimization_reference(shot, role):
+        correction = "Apply the revised target above, preserving all correct visual details."
     if not correction:
         return prompt
     return (

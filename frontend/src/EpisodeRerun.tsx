@@ -69,6 +69,7 @@ export function RerunHistory({ episode }: { episode: Episode }) {
   </section>}<details className="panel details-panel" onToggle={e => setOpen(e.currentTarget.open)}><summary>重跑历史 · {history.length} 个旧版本</summary>{open && <div className="rerun-history-content">
     <label>重跑前的版本<select value={record.id} onChange={e => setSelected(e.target.value)}>{[...history].reverse().map((h, i) => <option key={h.id} value={h.id}>版本 {history.length - i} · {new Date(h.created_at).toLocaleString('zh-CN')} · {h.scope === 'video' ? '视频重跑前' : h.scope === 'prompts' ? '提示词与关键帧重跑前' : '关键帧重跑前'}</option>)}</select></label>
     <label>旧版镜头<select value={shot?.id || ''} onChange={e => setSelectedShot(e.target.value)}>{record.shots.map(s => <option key={s.id} value={s.id}>{s.index + 1} · {s.title}</option>)}</select></label>
+    {record.prompt_optimization && <div className="notice"><strong>AI 定向优化</strong><p>{record.prompt_optimization.summary}</p></div>}
     {shot?.prompts && <details className="preview-extra"><summary>旧版提示词与 AI 参数</summary><pre>{JSON.stringify(shot.prompts, null, 2)}</pre></details>}
     {shot && <><div className="keyframe-grid"><Media id={shot.start_frame_asset_id} kind="image" label="旧版首帧" />{shot.end_frame_asset_id && <Media id={shot.end_frame_asset_id} kind="image" label="旧版尾帧" />}</div><Media id={shot.video_asset_id} kind="video" label="旧版镜头视频" />{shot.video_asset_id && <a href={assetUrl(shot.video_asset_id, true)} download>下载旧版镜头</a>}</>}
   </div>}</details></>;

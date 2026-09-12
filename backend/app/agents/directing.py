@@ -357,6 +357,11 @@ class Directors:
             "Set allow_static_end_frame=true only for an intentional freeze or unchanged hold in the shot plan, "
             "never merely because the camera is static or motion is small. Otherwise keep it false. "
             "Describe one action, camera, light, identity and negative constraints. Prompts should be in English. "
+            "Match action complexity to this shot's fixed duration and workflow capability. "
+            "Prioritize one readable primary action and a feasible camera move; do not pack a short "
+            "shot with multiple sequential actions, viewpoint changes and an additional ending effect. "
+            "Preserve required start/end story beats, clarify their temporal order and remove redundant "
+            "or contradictory embellishments rather than adding more instructions. "
             "Respect the AI-owned workflow parameter types, ranges, enum options and steps, "
             "including every downstream constraint. Each step sequence starts at that constraint's "
             "min (or zero when absent); the same value must satisfy all constraints. "
@@ -380,12 +385,24 @@ class Directors:
         )
 
     async def qa(self, bible: dict, shot: dict, paths: list, stage: str) -> QAResult:
+        video_order = (
+            [
+                "start_frame",
+                "quarter_frame",
+                "middle_frame",
+                "three_quarter_frame",
+                "end_frame",
+                "previous_last_frame",
+            ]
+            if len(paths) >= 5
+            else ["start_frame", "middle_frame", "end_frame", "previous_last_frame"]
+        )
         frame_order = (
             ["start_frame"]
             if stage == "start_candidate"
             else ["start_frame", "end_frame"]
             if stage == "keyframes"
-            else ["start_frame", "middle_frame", "end_frame", "previous_last_frame"]
+            else video_order
         )[: len(paths)]
         result = await self.generate_json(
             "Act as visual QA. Inspect the supplied actual frames; do not infer success from prompts. "
@@ -408,7 +425,12 @@ class Directors:
             "over repeating a catalog of defects or unwanted subjects. "
             "Do not invent missing frames or introduce future lifecycle features or other scenes' cast. "
             "Leave both fields empty when the supplied frames pass. For video leave these fields empty "
-            "and compare sampled start/middle/end and the prior clip's last frame when supplied.",
+            "and compare the ordered timeline samples and the prior clip's last frame when supplied. "
+            "quarter_frame and three_quarter_frame are 25% and 75% of the timeline. "
+            "These are sampled stills, not a full video or audio inspection. Never infer that a brief "
+            "action did not occur merely because it is missing between samples. Distinguish visible "
+            "contradictions from uncertain motion evidence and explain that uncertainty. Do not penalize "
+            "an unobservable action or camera move solely because the sampling cannot verify it.",
             {
                 "shot": qa_shot_context(shot),
                 "stage": stage,

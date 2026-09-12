@@ -38,11 +38,17 @@ export type Shot = {
   error: Problem | null; qa: QA[]; needs_review?: boolean; review_notes?: ReviewNote[];
 };
 export type PreviewPromptField = 'start_frame_prompt' | 'end_frame_prompt' | 'video_prompt';
+export type PromptOptimizationProposal = {
+  id: string; source_version: number; shot_id: string; decision: 'revise' | 'keep' | 'manual'; confidence: 'high' | 'medium' | 'low';
+  summary: string; limitations: string; changes: Partial<Record<PreviewPromptField, { prompt: string; reason: string }>>;
+  original_prompts: Record<PreviewPromptField, string>; locked_fields: Partial<Record<PreviewPromptField, string>>;
+  frames: ('start_frame' | 'end_frame')[]; affected_shot_ids: string[];
+};
 export type PreviewShotEdit = Pick<Shot, 'id' | 'title' | 'duration'> & Record<PreviewPromptField, string> & { allow_static_end_frame: boolean };
 export type Episode = {
   version: number; image_workflow_id: string; video_workflow_id: string; reference_workflow_id: string;
   workflow_binding_history?: unknown[];
-  rerun_history?: { id: string; created_at: string; scope: string; shot_ids: string[]; affected_shot_ids: string[]; new_seed: boolean; final_video_asset_id: string | null; final_duration?: number | null; shots: Shot[] }[];
+  rerun_history?: { id: string; created_at: string; scope: string; shot_ids: string[]; affected_shot_ids: string[]; new_seed: boolean; final_video_asset_id: string | null; final_duration?: number | null; shots: Shot[]; prompt_optimization?: PromptOptimizationProposal }[];
   recoverable_workflow_revision?: number;
   refresh_workflow_budget?: boolean;
   id: string; idea: string; title: string | null; target_duration: number; aspect_ratio: string; style: string; quality: string; qa_policy?: QAPolicy;

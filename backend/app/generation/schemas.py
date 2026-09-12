@@ -72,6 +72,11 @@ class EpisodeQAPolicyUpdate(StrictModel):
     qa_policy: Literal["advisory", "strict"]
 
 
+class PromptOptimizationRequest(StrictModel):
+    expected_version: int = Field(ge=1)
+    feedback: str = Field(default="", max_length=1000)
+
+
 class EpisodeWorkflowsUpdate(StrictModel):
     expected_version: int = Field(ge=1)
     image_workflow_id: str = Field(min_length=1)

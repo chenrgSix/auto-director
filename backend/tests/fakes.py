@@ -8,6 +8,7 @@ from fractions import Fraction
 import httpx
 from PIL import Image
 
+from app.agents.optimization import PromptOptimization
 from app.agents.schemas import EpisodePlan, QAResult, ShotPrompts, VisualBible
 from app.comfyui.client import ComfyUIClient
 from app.core.config import ROOT
@@ -66,6 +67,20 @@ class FakeProvider:
                 "camera_motion": "slow tracking",
                 "motion_strength": 0.6,
                 "continuity_state": {"direction": "right"},
+            }
+        elif issubclass(schema, PromptOptimization):
+            assert images and len(images) <= 8 and all(path.is_file() for path in images)
+            data = {
+                "decision": "revise",
+                "confidence": "medium",
+                "summary": "合成测试：明确动作方向，保留已有关键帧。",
+                "limitations": "测试响应，不代表真实视觉质量；抽帧不能验证所有动作。",
+                "changes": {
+                    "video_prompt": {
+                        "prompt": "The lion walks steadily forward in one continuous tracking shot.",
+                        "reason": "合成测试：精简动作指令。",
+                    }
+                },
             }
         elif schema is QAResult:
             assert images and all(path.is_file() for path in images)
