@@ -126,11 +126,11 @@ WorkflowProfile 响应新增 `execution_info: {mode: "unknown" | "local" | "clou
 
 保存继续使用现有 `bindings/outputs/parameter_values/parameter_rules`，没有新增第二套固定参数。未绑定完整的草稿仍可保存；设为默认需完整绑定，依赖检查与真实试跑独立。AUTOGROW 的必需容器认可其声明的实际槽位与最小数量，原来的缺失字段/越界链接错误仍有效。
 
-## 导演规划时间契约（C13）
+## 导演规划时间契约（C13 / C36）
 
-API 请求与存储结构保持兼容。新计划的内部 Agent context 增加 `min_shot_duration`、`recommended_shots`、`recommended_shot_duration`，与既有 `max_shot_duration/min_shots/max_shots` 同时渲染到 system 提示词。动态输出 schema 对每镜秒数和镜头数量使用相同 min/max；默认争取每镜至少 2.5 秒，但 1 秒总片长、较低工作流上限或合法固定时长仍可采用更低值。2.5 秒是规划偏好，不是 Episode/Workflow API 新增的硬下限。
+API 请求与存储结构保持兼容。内部 Agent context 的 `min_shot_duration/max_shot_duration/min_shots/max_shots` 与 system 提示词、动态输出 schema 使用相同的可行范围。C36 移除 `recommended_shots/recommended_shot_duration`，由模型按剧情决定数量与节奏；最少镜头数只表示容量下限，最长时长只表示上限。默认硬下限为 1 秒，`preferred_min_shot_duration`（最多 2.5 秒）仅供完整动作的软节奏提示，允许有剧情依据的短镜；用户明确固定时长时上下限一致。
 
-例如总长 10 秒、有效上限 3 秒：每镜 2.5～3 秒、恰好 4 镜、建议每镜 2.5 秒。总长 3.01 秒、上限 3 秒：下限 1.5 秒、恰好 2 镜，最终分配 1.51 与 1.5 秒。原始合法比例保持，总和按百分之一秒精确归一化，不向后续镜头转嫁累计偏差。
+例如 30 秒 / 5 秒上限可以规划成 8 镜 `[3,4,5,3,4,5,3,3]`，也可按另一剧本选择其他合法数量，不再推荐 6×5。每批最多输出 12 镜，长片给叙事拆镜预留空间；`available_shots` 表示扣除已用和后续最低必要额度后本批可用数量，动态 schema 同时受全片 240 镜约束。原始合法比例保持，总和按百分之一秒精确归一化。
 
 已有 EpisodePlan 不重算；继续生成保留旧时间线，新建短片采用新约束。不更改 ComfyUI 真实渲染时长、显存策略或高级覆盖优先级。
 

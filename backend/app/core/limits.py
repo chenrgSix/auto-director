@@ -3,7 +3,7 @@
 MIN_EPISODE_SECONDS = 1
 MAX_EPISODE_SECONDS = 600
 MIN_SHOT_SECONDS = 1
-# A planning preference; short episodes and narrower workflow limits can lower it.
+# A soft pacing hint, never a schema minimum or a target shot duration/count.
 PREFERRED_MIN_SHOT_SECONDS = 2.5
 MAX_SHOT_SECONDS = 30
 MAX_EPISODE_SHOTS = 240

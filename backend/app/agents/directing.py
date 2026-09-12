@@ -92,20 +92,24 @@ def normalize_plan(
     return result
 
 
-def segment_timing(total: float, maximum: float, fixed: float | None = None) -> dict:
-    """Prefer sustained shots, relaxing only when the segment cannot otherwise fit."""
+def segment_timing(
+    total: float,
+    maximum: float,
+    fixed: float | None = None,
+    *,
+    available_shots: int = PLAN_BATCH_SHOTS,
+) -> dict:
+    """Expose feasibility bounds, leaving shot count and pacing to the story."""
     target, limit = round(total * 100), int(Fraction(str(maximum)) * 100)
-    recommended = math.ceil(target / limit)
-    floor = min(round(PREFERRED_MIN_SHOT_SECONDS * 100), target // recommended)
+    floor = round(MIN_SHOT_SECONDS * 100)
     if fixed is not None:
         floor = limit = round(fixed * 100)
     return {
-        "min_shot_duration": max(round(MIN_SHOT_SECONDS * 100), floor) / 100,
+        "min_shot_duration": floor / 100,
         "max_shot_duration": limit / 100,
-        "min_shots": recommended,
-        "max_shots": min(PLAN_BATCH_SHOTS, target // floor),
-        "recommended_shots": recommended,
-        "recommended_shot_duration": round(total / recommended, 2),
+        "min_shots": math.ceil(target / limit),
+        "max_shots": min(PLAN_BATCH_SHOTS, available_shots, target // floor),
+        "preferred_min_shot_duration": min(PREFERRED_MIN_SHOT_SECONDS, total, limit / 100),
     }
 
 
@@ -201,10 +205,15 @@ class Directors:
             raise AppError("LLM_INVALID_OUTPUT", "总时长无法按每镜至少 1 秒和工作流上限拆分")
         length, remainder = divmod(total, count)
         allocation = [length + (index < remainder) for index in range(count)]
+        # A full 12 * maximum segment would force exactly 12 maximum-length shots.
+        # Leave output space for the Director to add shots when the story needs them.
+        flexible_count = fixed is None and count < min(MAX_EPISODE_SHOTS, total // 100)
+        batch_capacity = max(1, PLAN_BATCH_SHOTS // 2) if flexible_count else PLAN_BATCH_SHOTS
         segments = [
-            sum(allocation[index : index + PLAN_BATCH_SHOTS])
-            for index in range(0, count, PLAN_BATCH_SHOTS)
+            sum(allocation[index : index + batch_capacity])
+            for index in range(0, count, batch_capacity)
         ]
+        minimum_counts = [math.ceil(duration / limit) for duration in segments]
         shots, first = [], None
         start = 0
         for index, segment_duration in enumerate(segments):
@@ -217,6 +226,9 @@ class Directors:
                 "start_time": start / 100,
                 "is_final_segment": index == len(segments) - 1,
                 "previous_shots": [shot.model_dump(mode="json") for shot in shots[-3:]],
+                "available_shots": MAX_EPISODE_SHOTS
+                - len(shots)
+                - sum(minimum_counts[index + 1 :]),
             }
             if first is not None:
                 context.update(episode_title=first.title, episode_logline=first.logline)
@@ -244,10 +256,28 @@ class Directors:
             key: episode[key] for key in ("idea", "target_duration", "aspect_ratio", "style")
         }
         timing = segment_timing(
-            episode["target_duration"], maximum, episode.get("fixed_shot_duration")
+            episode["target_duration"],
+            maximum,
+            episode.get("fixed_shot_duration"),
+            available_shots=segment["available_shots"],
         )
         context.update(**timing, **segment)
         schema = planning_schema(PlanBatch if segment["segment_count"] > 1 else EpisodePlan, timing)
+        pacing = (
+            "The user explicitly fixed every shot's duration; honor that exact duration. "
+            if episode.get("fixed_shot_duration") is not None
+            else (
+                "Choose shot count and individual durations from the story's actions, emotional beats, "
+                "reveals and changes of viewpoint. The minimum shot count is only a feasibility bound, "
+                "not a recommended count; the maximum duration is a ceiling, not a target. "
+                "Give each action enough time to read and vary duration when the story needs it. "
+                f"For sustained actions, {timing['preferred_min_shot_duration']:g} seconds is a soft "
+                "pacing reference, not a minimum: briefer reaction, insert or transition shots are "
+                "allowed within the timing contract. Avoid mechanical quick cuts or padding. "
+                "Do not force equal durations or artificial alternation; uniform timing is fine "
+                "when justified by the story. Explain each shot's narrative role and pacing in purpose. "
+            )
+        )
         for attempt in range(2):
             check_cancel()
             plan = await self.generate_json(
@@ -259,13 +289,10 @@ class Directors:
                 f"Timing contract for this segment: each shot must last {timing['min_shot_duration']:g} "
                 f"to {timing['max_shot_duration']:g} seconds, inclusive. "
                 f"Return {timing['min_shots']} to {timing['max_shots']} shots; "
-                f"prefer {timing['recommended_shots']} shots of about {timing['recommended_shot_duration']:g} seconds. "
-                f"Their durations must sum to {episode['target_duration']:g} seconds. "
+                f"their durations must sum to {episode['target_duration']:g} seconds. "
                 "These are timeline seconds, not frames or milliseconds. Use at most two decimal places. "
-                "Prefer fewer sustained shots with enough time for the action to read. "
-                "Do not turn every narrative beat into a separate quick cut. "
-                "Add a shot only for an essential change of viewpoint or action, within the timing contract. "
-                "Simplify actions to fit the available time; never lower the minimum or raise the maximum.",
+                + pacing
+                + "Simplify actions to fit the available time; never lower the minimum or raise the maximum.",
                 context,
                 schema,
             )

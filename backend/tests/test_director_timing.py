@@ -80,12 +80,12 @@ def episode(total, **extra):
 @pytest.mark.parametrize(
     ("total", "maximum", "minimum", "counts"),
     [
-        (10, 3, 2.5, (4, 4)),
-        (10, 5, 2.5, (2, 4)),
+        (10, 3, 1, (4, 10)),
+        (10, 5, 1, (2, 10)),
         (1, 5, 1, (1, 1)),
-        (3.01, 3, 1.5, (2, 2)),
-        (4, 2, 2, (2, 2)),
-        (1.5, 5, 1.5, (1, 1)),
+        (3.01, 3, 1, (2, 3)),
+        (4, 2, 1, (2, 4)),
+        (1.5, 5, 1, (1, 1)),
     ],
 )
 async def test_prompt_context_and_schema_share_feasible_timing(total, maximum, minimum, counts):
@@ -96,7 +96,9 @@ async def test_prompt_context_and_schema_share_feasible_timing(total, maximum, m
     assert f"Return {counts[0]} to {counts[1]} shots" in system
     assert context["min_shot_duration"] == minimum
     assert (context["min_shots"], context["max_shots"]) == counts
-    assert context["recommended_shots"] == counts[0]
+    assert "recommended_shots" not in context
+    assert "recommended_shot_duration" not in context
+    assert "not a recommended count" in system
     assert schema["properties"]["shots"]["minItems"] == counts[0]
     assert schema["properties"]["shots"]["maxItems"] == counts[1]
     duration = schema["$defs"]["TimedShotPlan"]["properties"]["duration"]
@@ -114,6 +116,7 @@ async def test_fixed_user_duration_overrides_planning_preference():
     _, context, _ = provider.requests[0]
     assert context["min_shot_duration"] == context["max_shot_duration"] == 1
     assert context["min_shots"] == context["max_shots"] == 5
+    assert "user explicitly fixed every shot's duration" in provider.requests[0][0]
 
 
 @pytest.mark.parametrize(("total", "maximum"), [(60, 5), (90, 5), (600, 2.5), (59.8, 1.15)])
@@ -123,7 +126,7 @@ async def test_every_batch_has_constraints_and_keeps_total(total, maximum):
     assert len(result.shots) <= 240
     assert sum(Decimal(str(s.duration)) for s in result.shots) == Decimal(str(total))
     for system, context, _ in provider.requests:
-        assert str(context["recommended_shots"]) in system
+        assert f"Return {context['min_shots']} to {context['max_shots']} shots" in system
         assert context["min_shots"] <= context["max_shots"] <= 12
         assert 1 <= context["min_shot_duration"] <= context["max_shot_duration"] <= maximum
         assert (
@@ -131,7 +134,7 @@ async def test_every_batch_has_constraints_and_keeps_total(total, maximum):
         )
 
 
-@pytest.mark.parametrize("bad", [[1.7] * 6, [2.49, 2.51, 2.5, 2.5], [3.01, 2.5, 2.5, 2.5]])
+@pytest.mark.parametrize("bad", [[3] * 3, [0.99, 3, 3, 3], [3.01, 2.5, 2.5, 2.5], [1] * 11])
 async def test_real_provider_rejects_out_of_contract_json_then_repairs(bad):
     calls = []
 
@@ -148,20 +151,21 @@ async def test_real_provider_rejects_out_of_contract_json_then_repairs(bad):
     result = await Directors(provider).plan(episode(10), 3)
     assert len(calls) == 2
     instruction = calls[0]["messages"][0]["content"]
-    assert '"minimum": 2.5' in instruction and '"maxItems": 4' in instruction
-    assert "each shot must last 2.5 to 3 seconds" in instruction
+    assert '"minimum": 1.0' in instruction and '"maxItems": 10' in instruction
+    assert "each shot must last 1 to 3 seconds" in instruction
     assert "previous response did not match the schema" in calls[1]["messages"][-1]["content"]
     assert [s.duration for s in result.shots] == [2.5] * 4
 
 
-async def test_repeated_invalid_timing_fails_instead_of_accepting_fragments():
+async def test_repeated_invalid_timing_fails_instead_of_accepting_out_of_range_shots():
     count = 0
 
     def handler(request):
         nonlocal count
         count += 1
         return httpx.Response(
-            200, json={"choices": [{"message": {"content": weighted([1.7] * 6).model_dump_json()}}]}
+            200,
+            json={"choices": [{"message": {"content": weighted([0.9] * 11).model_dump_json()}}]},
         )
 
     provider = LLMProvider(

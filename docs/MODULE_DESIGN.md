@@ -224,11 +224,13 @@ C04：`agents/parameters.py` 为 Bible/Shot 构造按 workflow ID 隔离的 AI �
 ComfyUI AUTOGROW 容器的必需输入检查识别其 template.names / prefix 声明的实际点分槽位，例如 `values.a` 可满足 `values` 最小数量；保留普通必填、链接索引及现有参数检查。不从动态槽位推断角色或修改原图。
 
 
-## C13 导演时长约束
+## C13 / C36 导演时长约束与剧情节奏
 
-`Directors.plan` 继续读取 workflow/显存/用户上限的有效交集并分批规划，`segment_timing` 为每批产生同一份时间契约。以 `ceil(批次总时长 / 单镜有效上限)` 作为建议镜头数；默认最小时长争取 2.5 秒，当必要镜头数无法满足时下降到可行的百分之一秒值，仍不少于全局 1 秒。允许镜头数同时受该最小时长、批次 12 镜与总镜头 240 上限约束。用户合法的每镜固定时长覆盖默认偏好。
+`Directors.plan` 读取有效工作流/用户上限并分批规划。`ceil(批次总时长 / 单镜有效上限)` 只作镜头数下限，Director 根据剧情动作、情绪和机位选择实际数量及每镜秒数。`segment_timing` 默认硬下限为 1 秒；2.5 秒仅是持续动作的软提示，不限制合理的短暂反应/细节镜头。用户合法固定时长仍令上下限相等。等长或非等长均可采用，不人为随机化时长。
 
-自然语言 system 提示词、context 的 `min_shot_duration/max_shot_duration/min_shots/max_shots/recommended_shots/recommended_shot_duration` 和动态输出 schema 共用时间契约。提示词说明单位是时间线秒数，优先少量完整动作，只有必要的机位/动作变化才增加镜头。模型违反数量或单镜范围时由实际 Provider 的本地 schema 校验拒绝并最多纠正一次，不接受超限碎片。
+有数量选择空间时，自动批次按最多 6 个最低必需镜头对应的时间容量划分，每批可输出最多 12 镜，避免旧 12×上限的整批把镜头数和时长一起排死。固定时长或容量约束已唯一决定数量时仍按 12 镜分批，避免无意义增加模型调用。每批先预留后续批次的最低必要数量，再用剩余全片额度收紧 `max_shots`，保障最终最多 240 镜。前序三镜、全片剧情、片名和结尾标志继续进入后续批次。
+
+自然语言 system、context 的 `min_shot_duration/max_shot_duration/min_shots/max_shots` 和动态 schema 共用硬约束，context 的 `preferred_min_shot_duration` 仅作软提示，不提供推荐数量/等长值。模型违反数量或单镜范围时由实际 Provider 校验拒绝并最多纠正一次；仅避免机械碎切，不把合法短镜视为错误。
 
 `normalize_plan` 先求按权重缩放且落在上下限内的精确分配，再以最大余数法分配剩余百分之一秒；使用 Fraction 避免先后顺序扣减和浮点边界偏差。合法原比例保持，均匀权重最多相差 0.01 秒，受约束的片段仍精确覆盖总时间线。时间线秒数与模型实际渲染帧数/最短时长的适配仍由既有 ParameterResolver 完成。
 
