@@ -11,6 +11,7 @@ from PIL import Image
 from app.agents.optimization import PromptOptimization
 from app.agents.schemas import EpisodePlan, QAResult, ShotPrompts, VisualBible
 from app.agents.script_review import ScriptReview
+from app.agents.shot_batch import ShotPromptBatch
 from app.comfyui.client import ComfyUIClient
 from app.core.config import ROOT
 
@@ -64,6 +65,23 @@ class FakeProvider:
                 "camera_motion": "static reference view",
                 "motion_strength": 0.2,
             }
+        elif issubclass(schema, ShotPromptBatch):
+            items, continuity = [], context["continuity"]
+            entries = schema.model_fields["shots"].annotation.__args__
+            for shot, entry in zip(context["shots"], entries, strict=True):
+                # Dispatch through subclasses so existing shot-specific fault doubles still work.
+                before = self.usage["calls"]
+                try:
+                    prompts = await self.generate_json(
+                        system,
+                        {**context, "shot": shot, "continuity": continuity},
+                        entry.model_fields["prompts"].annotation,
+                    )
+                finally:
+                    self.usage["calls"] = before
+                items.append({"shot_id": shot["id"], "prompts": prompts.model_dump()})
+                continuity = prompts.continuity_state
+            data = {"shots": items}
         elif issubclass(schema, ShotPrompts):
             data = {
                 "image_prompt": "A lion",

@@ -14,6 +14,7 @@ from app.core.limits import DURATION_POLICY, LIMITS
 from app.core.runtime_settings import SettingsPatch
 from app.db.store import uid
 from app.generation.prompt_optimization import apply_proposal, find_shot, propose
+from app.generation.prompt_preparation import preparation_progress
 from app.generation.qa_policy import change_qa_policy
 from app.generation.quality import change_quality
 from app.generation.schemas import (
@@ -492,14 +493,20 @@ def progress(request: Request, id: str):
     item = state.store.get("episode", id)
     enabled = [shot for shot in item["shots"] if shot["enabled"]]
     passed = sum(shot["status"] == "PASSED" for shot in enabled)
+    reviewing = item.get("preview_required") and not item.get("preview_approved_at")
+    preparation = preparation_progress(item) if reviewing else None
     return {
         "episode_id": id,
         "status": item["status"],
         "version": item["version"],
         "shots_passed": passed,
         "shots_total": len(enabled),
+        "phase": "preview" if reviewing else "generation",
+        "preparation": preparation,
         "percent": 100
         if item["status"] == "COMPLETED"
+        else round(preparation["completed"] / max(preparation["total"], 1) * 100)
+        if reviewing
         else round(passed / max(len(enabled), 1) * 90),
         "error": item["error"],
         "jobs": [public_job(job) for job in state.store.list("job", id)[:10]],

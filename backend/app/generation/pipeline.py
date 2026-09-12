@@ -39,6 +39,7 @@ from app.generation.preview import (
     workflow_versions,
 )
 from app.generation.prompt_optimization import validate_proposal
+from app.generation.prompt_preparation import prepare_prompts
 from app.generation.qa_retry import (
     consume_retry,
     corrected_prompt,
@@ -127,6 +128,18 @@ class GenerationService:
                             "code": "WORKER_INTERRUPTED",
                             "message": "服务重启；已保留计划、镜头和作业，可继续生成",
                         },
+                        **(
+                            {
+                                "prompt_preparation": {
+                                    **episode["prompt_preparation"],
+                                    "status": "failed",
+                                    "active_shot_ids": [],
+                                    "batch_started_at": None,
+                                }
+                            }
+                            if (episode.get("prompt_preparation") or {}).get("status") == "running"
+                            else {}
+                        ),
                     },
                 )
         self.worker = asyncio.create_task(self._consume())
@@ -1089,21 +1102,7 @@ class GenerationService:
                 episode = self.stage(id, "BUILDING_BIBLE", bible=bible.model_dump(mode="json"))
             if preview_only:
                 self.stage(id, "PREPARING_PROMPTS")
-                continuity = {}
-                for shot in episode["shots"]:
-                    self.check_cancel(id)
-                    if not shot["prompts"]:
-                        prompts = await agents.shot(
-                            episode["bible"],
-                            shot,
-                            continuity,
-                            ai_parameters(image, video),
-                            idea=episode["idea"],
-                        )
-                        shot = self.update_shot(
-                            id, shot["id"], prompts=prompts.model_dump(mode="json")
-                        )
-                    continuity = shot["prompts"].get("continuity_state", {})
+                await prepare_prompts(self, id, agents, (image, video, reference_profile))
                 self.check_cancel(id)
                 self.store.update(
                     "episode",

@@ -21,6 +21,7 @@ class SettingsPatch(BaseModel):
     llm_model: str | None = Field(default=None, max_length=200)
     vlm_model: str | None = Field(default=None, max_length=200)
     llm_timeout: float | None = Field(default=None, ge=1, le=3600)
+    prompt_batch_size: int | None = Field(default=None, ge=1, le=3, strict=True)
     llm_api_key: SecretStr | None = Field(default=None, max_length=4096)
     clear_llm_api_key: bool = False
     render_timeout: float | None = Field(default=None, ge=1, le=14400)

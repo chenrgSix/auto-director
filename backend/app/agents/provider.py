@@ -73,6 +73,7 @@ class LLMProvider:
         self.settings = settings
         self.transport = transport
         self.usage = {"prompt_tokens": 0, "completion_tokens": 0, "calls": 0}
+        self.request_count = 0
 
     async def generate_json(
         self, system: str, context: dict, schema: type[T], *, images: list[Path] | None = None
@@ -122,6 +123,7 @@ class LLMProvider:
         ) as client:
             for attempt in range(2):
                 try:
+                    self.request_count += 1
                     response = await client.post(
                         settings.llm_base_url.rstrip("/") + "/chat/completions",
                         json={

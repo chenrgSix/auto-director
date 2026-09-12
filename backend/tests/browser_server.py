@@ -14,6 +14,7 @@ import uvicorn
 
 from app.agents.diagnostics import DirectorProbe, VisionProbe
 from app.agents.script_review import ScriptReview
+from app.agents.shot_batch import ShotPromptBatch
 from app.core.config import Settings
 from app.core.errors import AppError
 from app.main import create_app
@@ -28,6 +29,9 @@ class BrowserProvider(FakeProvider):
         self.config = config
 
     async def generate_json(self, system, context, schema, *, images=None):
+        if issubclass(schema, ShotPromptBatch) and context["idea"].startswith("C49_BATCH_FIXTURE"):
+            # Long enough to inspect persisted partial results and cancel without real models.
+            await asyncio.sleep(2 if context["shots"][0]["index"] == 0 else 45)
         if issubclass(schema, ScriptReview) and context["idea"].startswith("C46_REVIEW_FIXTURE"):
             return schema.model_validate(
                 {

@@ -77,10 +77,13 @@ class PromptProvider(CreativeProvider):
         return result
 
 
-def test_preview_is_render_free_edits_reach_patch_and_approval_reuses_plan(system):
+@pytest.mark.parametrize("batch_size", [1, 3])
+def test_preview_is_render_free_edits_reach_patch_and_approval_reuses_plan(system, batch_size):
     client, app, comfy = system
     configure_ai_parameters(client, comfy)
-    app.state.generation.provider_factory = PromptProvider
+    app.state.generation.settings.prompt_batch_size = batch_size
+    # Replay the legacy provider only in the compatibility path; new batches forbid prompt roles.
+    app.state.generation.provider_factory = PromptProvider if batch_size == 1 else CreativeProvider
     episode = preview(system)
     id = episode["id"]
     assert len(episode["shots"]) == 2 and episode["bible"]

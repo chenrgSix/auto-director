@@ -9,7 +9,7 @@ import { ErrorNotice, Loading } from './ui';
 import { ModelTests } from './ModelTests';
 
 type Connection = { connected: boolean; node_count: number; system: { devices?: { name?: string; vram_total?: number; vram_free?: number }[] }; workflows: { id: string; name: string; validation: { valid: boolean; issues: { message?: string; code: string; class_type?: string; field?: string }[] } }[] };
-const editable = ['comfyui_url', 'allow_public_comfyui', 'llm_base_url', 'llm_model', 'vlm_model', 'llm_timeout', 'render_timeout', 'request_timeout', 'max_asset_mb', 'poll_interval'] as const;
+const editable = ['comfyui_url', 'allow_public_comfyui', 'llm_base_url', 'llm_model', 'vlm_model', 'llm_timeout', 'prompt_batch_size', 'render_timeout', 'request_timeout', 'max_asset_mb', 'poll_interval'] as const;
 type Draft = Pick<Settings, typeof editable[number]>;
 const limits = [
   { key: 'render_timeout', label: '渲染等待上限（秒）', min: 1, max: 14400, step: 1 },
@@ -127,6 +127,13 @@ export default function SetupPage({ notify, onChange }: { notify: Notify; onChan
             <small>默认 600 秒，可设置 1～3600 秒；导演、视觉模型和模型测试共用。</small>
           </div>
           <ModelTests key={modelTestVersion} settings={saved} disabled={!!busy} dirty={dirty} onPending={setModelTesting} />
+          {typeof saved.prompt_batch_size === 'number' && <div className="field">
+            <label htmlFor="prompt-batch-size">每次准备镜头数</label>
+            <select id="prompt-batch-size" value={draft.prompt_batch_size} onChange={event => change('prompt_batch_size', Number(event.target.value))}>
+              <option value={3}>最多 3 镜</option><option value={2}>最多 2 镜</option><option value={1}>逐镜准备（兼容模式）</option>
+            </select>
+            <small>相邻镜头共享一次模型请求，按顺序保持故事连续。内容过长时自动缩小批次；模型不适应时可切回逐镜准备，已有分镜保留。</small>
+          </div>}
         </section>
         <details className="panel full-span settings-advanced">
           <summary><SlidersHorizontal size={16} />运行参数</summary>

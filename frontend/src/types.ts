@@ -25,7 +25,7 @@ export type Settings = {
   comfyui_url: string; allow_public_comfyui: boolean; default_image: string; default_video: string;
   llm_base_url: string; llm_configured: boolean; llm_model: string; llm_api_key_configured: boolean;
   vlm_configured: boolean; vlm_model: string; max_asset_mb: number;
-  render_timeout: number; request_timeout: number; llm_timeout: number; poll_interval: number;
+  render_timeout: number; request_timeout: number; llm_timeout: number; poll_interval: number; prompt_batch_size: number;
 };
 export type QAPolicy = 'advisory' | 'strict';
 export type ReviewNote = { stage: string; code: string; message: string };
@@ -63,6 +63,12 @@ export type Episode = {
   bible: unknown; plan: unknown;
   script_review?: ScriptReview | null;
   preview_required?: boolean; preview_approved_at?: string | null;
+  prompt_preparation?: {
+    run_id: string; status: 'running' | 'completed' | 'failed' | 'cancelled'; batch_size: number;
+    video_capability?: WorkflowCapability | null;
+    active_shot_ids: string[]; batch_started_at: string | null; requests: number; batches: number; elapsed_seconds: number;
+    recent_batches: { shot_ids: string[]; status: string; elapsed_seconds: number; requests: number; error_code: string | null }[];
+  };
   preview?: { capability: WorkflowCapability; min_duration: number; max_duration: number; render_max_duration: number; fixed_duration: number | null } | null;
 };
 export type Asset = { id: string; type: string; episode_id: string; path: string; metadata: { kind: string }; size: number };

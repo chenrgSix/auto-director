@@ -1,5 +1,15 @@
 # API 与工作流契约
 
+## C49 小批次准备与阶段进度
+
+`PATCH /settings` 新增 `prompt_batch_size: integer`，只接受 1、2、3，默认 3；保存/读取/重启沿用在线配置契约，任务运行中仍禁止修改。1 使用原单镜接口，2/3 是每批上限，按上下文和输出估算进一步缩小，不跨镜并发。
+
+Episode 可含 `prompt_preparation`：本次 `run_id/status/batch_size/video_capability/started_at/finished_at`、活动 `active_shot_ids/batch_started_at`、累计 `requests/batches/elapsed_seconds/prompt_tokens/completion_tokens` 与最多 30 条 `recent_batches`。记录包含镜号、耗时、请求数、token、状态/错误码，无模型原始响应或密钥。统计按本次准备重置；耗时覆盖已结束批次的模型等待及其格式纠正，请求数包含失败尝试，在批次结束时结算，不是全片所有 Agent 调用数。旧记录可无此字段，无数据库表迁移。
+
+`GET /episodes/{id}/progress` 与 SSE 增加 `phase=preview/generation`、`preparation`。未批准预览的 percent 按所有已准备提示词/全部计划镜头计算为 0～100，`preparation.completed/total` 明示分母；原 `shots_passed/shots_total` 保留渲染语义。批准后 preparation=null，恢复原渲染进度。完整剧本仍可在 `/episodes/{id}` 读取，部分提示词只读展示，批准/编辑门禁不提前开放。
+
+一个批次只能包含固定顺序的已请求 shot_id，并通过各镜的动作时间与 AI owner/type/min/max/enum/step 校验后整体保存。取消返回 `CANCELLED`；运行身份、来源或工作流执行配置变更返回 `PROMPT_PREPARATION_STALE`，不写入该批结果。Provider 最多一次格式纠正；网络/限流/非法结果不触发外层自动拆批重试。显式继续仅补缺失提示词。
+
 ## C46 剧本 AI 审查
 
 新增活动阶段 `REVIEWING_SCRIPT`。Episode 可含 `script_review`：`status=pending/passed/corrected/needs_attention`、摘要、逐镜修正/遗留问题、原稿、审后剧本摘要散列与审查时间。旧记录字段缺省，不自动改写。编辑预览后的审查记录仍指向原审稿，`edited_after_review` 表示之后有过用户改动。
