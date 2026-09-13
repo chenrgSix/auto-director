@@ -345,6 +345,7 @@ async def delete_episode(request: Request, id: str, delete_assets: bool = False)
             {"jobs": pending},
             status=409,
         )
+    await state.generation.reviews.cancel_episode(id)
     if delete_assets:
         await state.assets.delete_episode(id)
     for job in state.store.list("job", id):
@@ -439,7 +440,11 @@ async def update_episode_quality(request: Request, id: str, body: EpisodeQuality
 @router.patch("/episodes/{id}/qa-policy")
 async def update_episode_qa_policy(request: Request, id: str, body: EpisodeQAPolicyUpdate):
     state = resources(request)
-    return change_qa_policy(state.store, state.generation.busy, id, body)
+    result = change_qa_policy(state.store, state.generation.busy, id, body)
+    if not result.get("qa_enabled", True) or result.get("qa_policy") != "advisory":
+        await state.generation.reviews.cancel_episode(id)
+        result = state.store.get("episode", id)
+    return result
 
 
 @router.patch("/episodes/{id}/workflows")

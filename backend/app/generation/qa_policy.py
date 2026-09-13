@@ -13,7 +13,11 @@ def change_qa_policy(store, busy: set[str], id: str, request: EpisodeQAPolicyUpd
     def check(episode):
         if episode["version"] != request.expected_version:
             raise AppError("CONFLICT", "短片已变更，请关闭编辑后重新打开", status=409)
-        if (
+        live_toggle = (
+            episode.get("qa_policy", "strict") == request.qa_policy == "advisory"
+            and request.qa_enabled is not None
+        )
+        if not live_toggle and (
             id in busy
             or episode["status"] in ACTIVE
             or any(
@@ -24,7 +28,9 @@ def change_qa_policy(store, busy: set[str], id: str, request: EpisodeQAPolicyUpd
 
     current = store.get("episode", id)
     check(current)
-    if current.get("qa_policy", "strict") == request.qa_policy:
+    if current.get("qa_policy", "strict") == request.qa_policy and (
+        request.qa_enabled is None or current.get("qa_enabled", True) == request.qa_enabled
+    ):
         return current
 
     def change(episode):
@@ -33,6 +39,7 @@ def change_qa_policy(store, busy: set[str], id: str, request: EpisodeQAPolicyUpd
             {
                 "changed_at": now(),
                 "qa_policy": episode.get("qa_policy", "strict"),
+                "qa_enabled": episode.get("qa_enabled", True),
                 "status": episode["status"],
                 "error": deepcopy(episode.get("error")),
                 "render_recovery": deepcopy(episode.get("render_recovery")),
@@ -53,6 +60,16 @@ def change_qa_policy(store, busy: set[str], id: str, request: EpisodeQAPolicyUpd
             }
         )
         episode["qa_policy"] = request.qa_policy
+        if request.qa_enabled is not None:
+            episode["qa_enabled"] = request.qa_enabled
+        if (
+            id in busy
+            or episode["status"] in ACTIVE
+            or any(
+                job["status"] in {"QUEUED", "RUNNING", "UNKNOWN"} for job in store.list("job", id)
+            )
+        ):
+            return  # A live advisory toggle must never rewrite render/recovery state.
         recovery = episode.get("render_recovery") or {}
         for shot in episode["shots"]:
             if (

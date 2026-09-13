@@ -70,6 +70,7 @@ class EpisodeQualityUpdate(StrictModel):
 class EpisodeQAPolicyUpdate(StrictModel):
     expected_version: int = Field(ge=1)
     qa_policy: Literal["advisory", "strict"]
+    qa_enabled: bool | None = None
 
 
 class PromptOptimizationRequest(StrictModel):

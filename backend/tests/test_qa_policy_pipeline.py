@@ -252,7 +252,9 @@ def test_cancel_after_completed_review_resumes_cached_video_check_and_rerun_chec
     original = pipeline.extract_frame
 
     async def block_after_qa(*args, **kwargs):
-        if state["stages"] and len(args) == 2:
+        if len(args) == 2:
+            # Place cancellation after the independent review has published its result.
+            await app.state.generation.reviews.queue.join()
             entered.set()
             assert await asyncio.to_thread(release.wait, 5)
             app.state.generation.check_cancel(created["id"])
@@ -354,7 +356,9 @@ def test_rechecking_same_video_replaces_old_warning_and_archives_review_without_
     original = pipeline.extract_frame
 
     async def pause_after_review(*args, **kwargs):
-        if state["stages"] and len(args) == 2:
+        if len(args) == 2:
+            # Place cancellation after the independent review has published its result.
+            await app.state.generation.reviews.queue.join()
             entered.set()
             assert await asyncio.to_thread(release.wait, 5)
             app.state.generation.check_cancel(created["id"])

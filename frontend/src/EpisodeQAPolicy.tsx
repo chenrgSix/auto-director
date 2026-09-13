@@ -5,42 +5,47 @@ import type { Episode, QAPolicy } from './types';
 import { ErrorNotice } from './ui';
 
 export const QA_POLICIES = [
-  { id: 'advisory', label: '先完成整片（推荐）', detail: '每段视频生成后检查一次。画面问题标为待复核，继续完成整片，再由你选择镜头重做。' },
-  { id: 'strict', label: '严格质检', detail: '检查关键帧和视频，画面不达标时自动重试；达到重试上限会暂停，等待处理。' },
+  { id: 'advisory', label: '后台复核（推荐）', detail: '每镜在后台检查一次，不等待模型即可继续渲染和导出。画面问题标为待复核，由你决定是否重做。' },
+  { id: 'strict', label: '严格质检', detail: '检查关键帧和视频，等待结果后继续。画面不达标时自动重试；达到上限会暂停。' },
 ] as const;
 
-export function EpisodeQAPolicy({ episode, busy, locked, setBusy, onSaved, notify }: {
-  episode: Episode; busy: boolean; locked: boolean; setBusy: (value: boolean) => void;
+export function EpisodeQAPolicy({ episode, busy, locked, toggleLocked, setBusy, onSaved, notify }: {
+  episode: Episode; busy: boolean; locked: boolean; toggleLocked: boolean; setBusy: (value: boolean) => void;
   onSaved: () => void; notify: Notify;
 }) {
   const policy = episode.qa_policy ?? 'strict';
-  const [draft, setDraft] = useState<{ qa_policy: QAPolicy; expected_version: number }>();
+  const enabled = episode.qa_enabled ?? true;
+  const manual = episode.creation_visual_review === 'manual';
+  const [draft, setDraft] = useState<{ qa_policy: QAPolicy; qa_enabled: boolean; expected_version: number }>();
   const [error, setError] = useState<string>();
+  const canToggle = policy === 'advisory' && !toggleLocked;
   const current = QA_POLICIES.find(item => item.id === policy)!;
   async function save() {
     if (!draft) return;
     setBusy(true); setError(undefined);
     try {
-      await api(`/episodes/${episode.id}/qa-policy`, 'PATCH', draft);
+      await api(`/episodes/${episode.id}/qa-policy`, 'PATCH', {
+        ...draft, expected_version: canToggle && draft.qa_policy === policy ? episode.version : draft.expected_version,
+      });
       setDraft(undefined); onSaved();
-      notify('质检策略已保存，剧本和已有素材已保留，尚未开始生成');
+      notify(draft.qa_enabled ? '视觉复核设置已保存，作用于后续镜头' : 'AI 视觉复核已关闭，未完成复核已停止，已有素材和复核结果保留');
     } catch (error) { setError((error as Error).message); }
     finally { setBusy(false); }
   }
-  return <section className="panel" aria-label="短片质检策略">
-    <div className="panel-title">质检策略 · {current.label}</div>
-    {!draft ? <>
-      <p className="muted">{current.detail}</p>
-      <button disabled={busy || locked} onClick={() => { setError(undefined); setDraft({ qa_policy: policy, expected_version: episode.version }); }}>切换质检策略</button>
+  return <section className="panel" aria-label="短片视觉复核设置">
+    <div className="panel-title">AI 视觉复核 · {manual ? '人工复核' : enabled ? current.label : '已关闭'}</div>
+    {manual ? <p className="muted">本片在创作包交付时选择了人工复核，不调用视觉模型。需要 AI 复核时，在创作包交付设置选择视觉模型。</p> : !draft ? <>
+      <p className="muted">{enabled ? current.detail : '不调用视觉模型，仍检查视频文件、时长和拼接。'}</p>
+      <button disabled={busy || (locked && !canToggle)} onClick={() => { setError(undefined); setDraft({ qa_policy: policy, qa_enabled: enabled, expected_version: episode.version }); }}>设置视觉复核</button>
     </> : <>
-      <div className="field"><label htmlFor="episode-qa-policy">质检策略</label><select id="episode-qa-policy" disabled={busy || locked} value={draft.qa_policy} onChange={event => setDraft({ ...draft, qa_policy: event.target.value as QAPolicy })}>
+      <label className="checkbox"><input type="checkbox" checked={draft.qa_enabled} disabled={busy || (locked && !canToggle)} onChange={event => setDraft({ ...draft, qa_enabled: event.target.checked })} />启用 AI 视觉复核</label>
+      <div className="field"><label htmlFor="episode-qa-policy">质检策略</label><select id="episode-qa-policy" disabled={busy || locked || !draft.qa_enabled} value={draft.qa_policy} onChange={event => setDraft({ ...draft, qa_policy: event.target.value as QAPolicy })}>
         {QA_POLICIES.map(item => <option key={item.id} value={item.id}>{item.label}</option>)}
       </select><small className="muted">{QA_POLICIES.find(item => item.id === draft.qa_policy)?.detail}</small></div>
-      <p className="muted">保存只影响后续质检，保留剧本、提示词和已有素材。{episode.status === 'COMPLETED' ? '已完成的视频保持原样，需要调整时选择镜头重跑。' : episode.preview_required && !episode.preview_approved_at ? '确认分镜后点击「开始视频生成」。' : '保存后点击「继续生成」补齐剩余镜头。'}</p>
-      <div className="actions"><button disabled={busy} onClick={() => setDraft(undefined)}>取消修改</button><button className="primary" disabled={busy || locked || draft.qa_policy === policy} onClick={() => void save()}>保存质检策略</button></div>
+      <p className="muted">建议式复核可在生成期间开关。关闭会停止排队及正在进行的复核；开启作用于后续镜头，旧视频不会自动重检。剧本、提示词、已有素材和历史复核结果保留。</p>
+      <div className="actions"><button disabled={busy} onClick={() => setDraft(undefined)}>取消修改</button><button className="primary" disabled={busy || (locked && !canToggle) || (draft.qa_policy === policy && draft.qa_enabled === enabled)} onClick={() => void save()}>保存复核设置</button></div>
     </>}
-    <p className="muted">视觉检查需启用并配置视觉模型。连接中断、生成失败和不可用的视频仍会保留进度并暂停，避免丢失结果或重复提交。</p>
-    {locked && <p className="muted">请先等待任务停止、页面重新连接并核对未完成作业，再切换质检策略。</p>}
+    <p className="muted">开启后需要配置视觉模型。严格质检需停止生成并核对原任务后切换；关闭 AI 复核不会跳过媒体技术检查。</p>
     {error && <ErrorNotice>{error}</ErrorNotice>}
   </section>;
 }

@@ -1,5 +1,11 @@
 # API 与工作流契约
 
+## C55 视觉复核开关与异步状态
+
+`POST /episodes` 的 `qa_enabled` 不要求高级模式；缺省保持 true。`PATCH /episodes/{id}/qa-policy` 接受 `{expected_version, qa_policy, qa_enabled?}`，省略开关保持原值。advisory 策略不变时可在运行中开关；切换 strict 或其开关仍要求制作空闲、没有未结算作业。版本冲突返回 409，不能借开关绕过 UNKNOWN 保护或变更渲染游标。
+
+建议式复核的 `shots[].visual_review` 可选，包含任务身份、素材绑定和 `status: pending|running|completed|failed|skipped`。渲染继续使用 PASSED，Episode 的 COMPLETED 不等待复核；查询会随后返回 QA 结果/提示，failed 表示复核未完成，skipped 表示关闭、取消或来源改变。strict 的 QA 状态和失败门槛不变。关闭会取消所有未完成复核，保留历史；重新开启仅作用于后续镜头，不自动复检旧视频。
+
 ## C53 创作包与 MCP
 
 `/api/v1/creation` 提供草稿、不可变版本、校验与制作交付；`/mcp/` 提供 12 个共享业务服务的 Streamable HTTP 工具。修改携带基础版本，提交/确认携带 UUID 请求身份，断线不取消受理制作。字段、路径、工具及配置说明见 [C53](CREATION_PACKAGES.md)。既有 API 创作路径保持；带 creation_source 的 Episode 禁止内部重新编写提示词与模型优化，需回到创作包保存新版本。

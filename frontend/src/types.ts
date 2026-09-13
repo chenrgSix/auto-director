@@ -41,6 +41,7 @@ export type Shot = {
   transition_from_previous: string; start_frame_asset_id: string | null; end_frame_asset_id: string | null; video_asset_id: string | null;
   prompts: { allow_static_end_frame?: boolean; start_frame_prompt: string; end_frame_prompt: string; video_prompt: string; negative_prompt: string; narration_text?: string; camera_motion?: string; motion_strength?: number; ai_parameters?: Record<string, Record<string, Value>> } | null;
   preview_prompt_view?: { values: Record<PreviewPromptField, string>; locked: Partial<Record<PreviewPromptField, string>>; hints?: Partial<Record<PreviewPromptField, string>> };
+  visual_review?: { status: 'pending' | 'running' | 'completed' | 'failed' | 'skipped'; reason?: string; error?: Problem };
   error: Problem | null; qa: QA[]; needs_review?: boolean; review_notes?: ReviewNote[];
 };
 export type PreviewPromptField = 'start_frame_prompt' | 'end_frame_prompt' | 'video_prompt';
@@ -53,6 +54,7 @@ export type PromptOptimizationProposal = {
 export type PreviewShotEdit = Pick<Shot, 'id' | 'title' | 'duration'> & Record<PreviewPromptField, string> & { allow_static_end_frame: boolean };
 export type Episode = {
   creation_source?: { project_id: string; revision: number; content_hash: string; constraints_hash: string };
+  qa_enabled?: boolean;
   creation_visual_review?: 'manual' | 'model';
   version: number; image_workflow_id: string; video_workflow_id: string; reference_workflow_id: string;
   workflow_binding_history?: unknown[];

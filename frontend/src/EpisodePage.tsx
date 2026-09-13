@@ -42,6 +42,7 @@ export function EpisodePage({ id, notify }: { id: string; notify: Notify }) {
   const total = episode.shots.filter(item => item.enabled).length;
   const completed = episode.shots.filter(item => item.enabled && item.status === 'PASSED').length;
   const reviewShots = episode.shots.filter(item => item.enabled && item.status === 'PASSED' && item.needs_review);
+  const pendingReviews = episode.shots.filter(item => item.enabled && ['pending', 'running'].includes(item.visual_review?.status ?? ''));
   const currentShot = episode.shots.find(item => item.enabled && ['GENERATING_START_FRAME', 'START_FRAME_READY', 'GENERATING_END_FRAME', 'KEYFRAMES_READY', 'RENDERING_VIDEO', 'VIDEO_READY', 'QA'].includes(item.status));
   const settingsLocked = active || disconnected || !jobs.data || jobs.data.some(job => ['QUEUED', 'RUNNING', 'UNKNOWN'].includes(job.status));
   function showDiagnostics() {
@@ -85,6 +86,7 @@ export function EpisodePage({ id, notify }: { id: string; notify: Notify }) {
         {reviewShots.length > 0 && <details className="film-review"><summary>{reviewShots.length} 镜待复核 · 查看镜头</summary><p>视频已保留，可查看后选择镜头重跑。</p><div className="actions">{reviewShots.map(item => <button key={item.id} onClick={() => selectReviewShot(item.id)}>查看第 {item.index + 1} 镜 · {item.title}</button>)}</div></details>}
       </div>
     </section>}
+    {pendingReviews.length > 0 && <div className="notice" role="status">AI 视觉复核在后台进行：{pendingReviews.length} 镜未完成。视频生成与导出继续，复核完成后自动更新结果。</div>}
     {episode.creation_source && <div className="notice creation-provenance">来自 <a href={`#creation/${episode.creation_source.project_id}`}>创作包版本 {episode.creation_source.revision} → 返回创作</a>。此处的分镜调整仅作用于本次制作，更新故事请保存创作包新版本。{episode.creation_visual_review === 'manual' && ' 画面由你和 Codex 复核，技术检查不会调用视觉模型。'}</div>}
     {reviewing ? episode.status === 'AWAITING_REVIEW' ? <><EpisodePreview key={id} episode={episode} busy={busy} setBusy={setBusy} refresh={() => { resource.refresh(); jobs.refresh(); }} notify={notify} />{!episode.creation_source && <button className="text-button" disabled={busy} onClick={() => void action(`/episodes/${id}/preview`, '正在更新分镜预览')}>工作流配置有变化？更新分镜预览</button>}</> : episode.shots.length ? <PromptPreparation key={id} episode={episode} /> : <Empty title={active ? '导演正在准备分镜和提示词' : '继续准备分镜即可预览'}>预览准备完成后会等待你确认，再开始图片与视频生成。</Empty> : !episode.shots.length ? <Empty title={active ? '导演正在规划故事' : '你的故事，即将成为镜头'}>计划完成后，镜头、首尾帧和视频将在这里出现。</Empty> : <div className="editing-grid episode-editor">
       {shot && <section className="shot-detail" id="episode-shot-detail" aria-label="镜头预览">
@@ -92,6 +94,7 @@ export function EpisodePage({ id, notify }: { id: string; notify: Notify }) {
           <div className="panel-title"><strong>第 {shot.index + 1} 镜 · {shot.title}</strong><Badge status={shot.status === 'PASSED' && shot.needs_review ? 'NEEDS_REVIEW' : shot.status} /></div>
           <Media id={shot.video_asset_id || shot.start_frame_asset_id} kind={shot.video_asset_id || !shot.start_frame_asset_id ? 'video' : 'image'} label={shot.video_asset_id ? '镜头预览 / CLIP' : '关键帧预览 · 等待视频生成'} />
           <div className="shot-player-meta"><span>{shot.duration.toFixed(2)} 秒 · {episode.aspect_ratio}</span>{shot.video_asset_id && <a href={assetUrl(shot.video_asset_id, true)} download>下载本镜</a>}</div>
+          {shot.visual_review && <p className="muted">AI 视觉复核：{({ pending: '等待后台复核', running: '后台复核中，不阻塞生成', completed: '复核已完成', failed: '复核未完成，请人工查看', skipped: '未复核（已关闭、取消或素材变更）' })[shot.visual_review.status]}</p>}
           {shot.error && <ErrorNotice>{shot.error.message}</ErrorNotice>}
           {shot.needs_review && <details className="notice shot-review"><summary>画面待复核 · 查看问题</summary><span>视频已保留，可先播放，再决定是否重跑。</span>{(shot.review_notes ?? []).map((note, index) => <p key={index}><strong>{qaStageLabel(note.stage)}</strong> · {note.message}</p>)}</details>}
         </div>
@@ -104,7 +107,7 @@ export function EpisodePage({ id, notify }: { id: string; notify: Notify }) {
     {!reviewing && !!episode.shots.length && <EpisodeRerun episode={episode} shot={shot} locked={active || disconnected || recovering || !jobs.data} busy={busy} setBusy={setBusy} refresh={() => { resource.refresh(); jobs.refresh(); }} notify={notify} />}
     <details className="panel details-panel episode-settings"><summary>生成设置 · 质量、质检与工作流</summary>
     <EpisodeQuality key={`${id}:quality`} episode={episode} busy={busy} setBusy={setBusy} locked={settingsLocked} onSaved={() => { resource.refresh(); jobs.refresh(); }} notify={notify} />
-    <EpisodeQAPolicy key={`${id}:qa-policy`} episode={episode} busy={busy} setBusy={setBusy} locked={settingsLocked} onSaved={() => { resource.refresh(); jobs.refresh(); }} notify={notify} />
+    <EpisodeQAPolicy key={`${id}:qa-policy`} toggleLocked={disconnected || !jobs.data} episode={episode} busy={busy} setBusy={setBusy} locked={settingsLocked} onSaved={() => { resource.refresh(); jobs.refresh(); }} notify={notify} />
     <EpisodeWorkflows episode={episode} busy={busy} setBusy={setBusy} locked={active || !jobs.data || jobs.data.some(job => ['QUEUED', 'RUNNING', 'UNKNOWN'].includes(job.status))} onSaved={() => { resource.refresh(); jobs.refresh(); }} notify={notify} />
     </details>
     <RerunHistory episode={episode} />

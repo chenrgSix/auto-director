@@ -15,6 +15,7 @@ from app.core.errors import AppError
 from app.core.limits import MAX_EPISODE_SHOTS
 from app.creation.provider import ExternalCreationProvider
 from app.db.store import Store, now, uid
+from app.generation.async_reviews import AdvisoryReviews, visual_qa_enabled
 from app.generation.engine import RenderEngine
 from app.generation.parameters import (
     ai_parameters,
@@ -99,6 +100,7 @@ class GenerationService:
         self.queue: asyncio.Queue[tuple[str, str]] = asyncio.Queue()
         self.worker: asyncio.Task | None = None
         self.busy: set[str] = set()
+        self.reviews = AdvisoryReviews(self)
 
     async def start(self) -> None:
         for job in self.store.list("job"):
@@ -145,12 +147,14 @@ class GenerationService:
                     },
                 )
         self.worker = asyncio.create_task(self._consume())
+        await self.reviews.start()
 
     async def stop(self) -> None:
         if self.worker:
             self.worker.cancel()
             with contextlib.suppress(asyncio.CancelledError):
                 await self.worker
+        await self.reviews.stop()
 
     async def _consume(self) -> None:
         while True:
@@ -657,8 +661,9 @@ class GenerationService:
                     + [{"replaced_at": now(), "notes": previous_notes}],
                 )
 
-        self.stage(id, "QA")
-        self.update_shot(id, sid, status="QA")
+        if not advisory:
+            self.stage(id, "QA")
+            self.update_shot(id, sid, status="QA")
         samples = []
         # Decoding errors remain hard failures. Only model review errors are advisory.
         for fraction in VIDEO_SAMPLE_FRACTIONS:
@@ -670,50 +675,33 @@ class GenerationService:
                 duration_limit=shot["duration"],
             )
             sample = await self.assets.register(frame, id, "QA_SAMPLE_FRAME", sid)
-            samples.append(self.assets.path(sample["id"]))
+            samples.append(sample["id"])
         if previous:
-            samples.append(self.assets.path(previous["actual_end_frame_asset_id"]))
-        try:
-            qa = await agents.qa(episode["bible"], shot, samples, "video")
-        except AppError as exc:
-            if not advisory or not (
-                exc.code.startswith("LLM_") or exc.code == "CONFIGURATION_REQUIRED"
-            ):
-                raise
-            replace_previous_review()
-            self.note_review(
-                id,
-                sid,
-                "video",
-                exc.code,
-                f"视觉检查未完成：{exc.message}；视频已保留，请人工复核。",
-                [shot["video_asset_id"]],
-            )
-            self.update_shot(id, sid, qa_video_check={"key": key, "error_code": exc.code})
+            samples.append(previous["actual_end_frame_asset_id"])
+        if advisory:
+            current = self.store.get("episode", id)
+            if visual_qa_enabled(current, self.settings):
+                self.reviews.submit(current, self.shot(id, sid), previous, samples)
             return
+        qa = await agents.qa(
+            episode["bible"], shot, [self.assets.path(asset) for asset in samples], "video"
+        )
         scope = qa.retry_scope(high=episode["quality"] == "high")
         self.record_qa(id, sid, "video", qa, [shot["video_asset_id"]])
         entry = {"stage": "video", **qa.model_dump(), "retry_scope": scope}
-        if advisory:
-            entry["disposition"] = "warning" if scope else "passed"
         self.update_shot(id, sid, qa=self.shot(id, sid)["qa"] + [entry])
         replace_previous_review()
         if scope:
-            if not advisory:
-                raise AppError(
-                    "QA_FAILED",
-                    "镜头未通过视觉质检",
-                    {"scope": scope, "explanation": qa.explanation},
-                )
-            self.note_review(
-                id, sid, "video", "QA_FAILED", qa.explanation, [shot["video_asset_id"]]
+            raise AppError(
+                "QA_FAILED",
+                "镜头未通过视觉质检",
+                {"scope": scope, "explanation": qa.explanation},
             )
-        if advisory:
-            self.update_shot(id, sid, qa_video_check={"key": key})
 
     async def cancel(self, id: str) -> dict:
         episode = self.store.get("episode", id)
         if episode["status"] not in ACTIVE:
+            await self.reviews.cancel_episode(id)
             return episode
         result = self.store.update("episode", id, {"status": "CANCELLED"})
         # Queue operations are synchronous here; the worker cannot take an item mid-removal.
@@ -724,6 +712,7 @@ class GenerationService:
             else:
                 self.queue.put_nowait((kind, queued_id))
             self.queue.task_done()
+        await self.reviews.cancel_episode(id)
         return result
 
     def find_shot(self, shot_id: str) -> tuple[dict, dict]:
@@ -740,6 +729,7 @@ class GenerationService:
         shot.pop("qa_retry", None)
         shot.pop("qa_frame_corrections", None)
         shot.pop("qa_video_check", None)
+        shot.pop("visual_review", None)
         shot.pop("optimization_attempt", None)
         shot.pop("optimization_reference_assets", None)
         shot.update(
@@ -1186,14 +1176,7 @@ class GenerationService:
                 )
                 preview_complete = True
                 return
-            visual_qa = (
-                episode["qa_enabled"]
-                and bool(self.settings.vlm_model)
-                and (
-                    not episode.get("creation_source")
-                    or episode.get("creation_visual_review") == "model"
-                )
-            )
+            visual_qa = visual_qa_enabled(episode, self.settings)
             if episode["qa_enabled"] and not visual_qa:
                 self.warn(
                     id,
@@ -1270,7 +1253,15 @@ class GenerationService:
                     continue
                 try:
                     await self.generate_shot(
-                        episode, shot, previous, continuity, image, video, budget, agents, visual_qa
+                        episode,
+                        shot,
+                        previous,
+                        continuity,
+                        image,
+                        video,
+                        budget,
+                        agents,
+                        visual_qa_enabled(self.store.get("episode", id), self.settings),
                     )
                 except AppError as exc:
                     if not self.cancelled(id):
@@ -1618,9 +1609,10 @@ class GenerationService:
                     shot = self.update_shot(
                         id, sid, video_asset_id=result["id"], status="VIDEO_READY"
                     )
-                if visual_qa:
-                    await self.review_video(episode, shot, previous, agents, advisory=advisory)
-                elif advisory and episode["qa_enabled"]:
+                current = self.store.get("episode", id)
+                if visual_qa_enabled(current, self.settings):
+                    await self.review_video(current, shot, previous, agents, advisory=advisory)
+                elif advisory and current["qa_enabled"]:
                     self.note_review(
                         id,
                         sid,

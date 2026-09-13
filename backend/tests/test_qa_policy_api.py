@@ -228,7 +228,7 @@ def test_policy_change_blocks_active_and_unsettled_work(system, state):
         {"qa_policy": None},
         {"quality": "fast"},
         {"shots": []},
-        {"qa_enabled": False},
+        {"qa_enabled": "invalid"},
     ],
 )
 def test_policy_request_cannot_edit_unrelated_fields_or_accept_invalid_values(system, extra):
@@ -260,3 +260,24 @@ def test_policy_archives_each_change_without_rewriting_earlier_history(system):
     assert len(second["qa_policy_history"]) == 2
     assert second["qa_policy_history"][:1] == original_history
     assert second["qa_policy_history"][1]["qa_policy"] == "advisory"
+
+
+@pytest.mark.parametrize("policy", ["advisory", "strict"])
+def test_visual_switch_never_changes_unresolved_job_or_retry_cursor(system, policy):
+    client, app, _ = system
+    before = stored_episode(system, qa_policy=policy)
+    job = app.state.store.create(
+        "job",
+        {"status": "UNKNOWN", "type": "SHOT_VIDEO", "comfy_prompt_id": "saved-prompt"},
+        parent=before["id"],
+    )
+    response = change(client, before, policy, qa_enabled=False)
+    if policy == "strict":
+        assert response.status_code == 409
+        assert app.state.store.get("episode", before["id"]) == before
+    else:
+        assert response.status_code == 200, response.text
+        assert response.json()["qa_enabled"] is False
+        for key in ["shots", "error", "status", "plan", "bible"]:
+            assert response.json()[key] == before[key]
+    assert app.state.store.get("job", job["id"]) == job
