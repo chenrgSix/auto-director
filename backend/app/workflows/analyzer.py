@@ -84,7 +84,7 @@ def validate_graph(graph: dict) -> None:
 
 
 def input_definitions(node: dict, object_info: dict) -> dict:
-    """Flatten only the selected DynamicCombo branch, including its required inputs."""
+    """Resolve selected dynamic branches and declared Autogrow slots from the live schema."""
     result = {}
 
     def visit(inputs, prefix=""):
@@ -92,6 +92,25 @@ def input_definitions(node: dict, object_info: dict) -> dict:
             for name, definition in inputs.get(group, {}).items():
                 field = prefix + name
                 result[field] = (definition, group == "required")
+                if definition and definition[0] == "COMFY_AUTOGROW_V3":
+                    options = definition[1] if len(definition) > 1 else {}
+                    template = options.get("template", {})
+                    slot_prefix = template.get("prefix")
+                    slot_inputs = template.get("input", {}).get("required", {})
+                    if slot_prefix and len(slot_inputs) == 1:
+                        slot_definition = next(iter(slot_inputs.values()))
+                        maximum = template.get("max", 0)
+                        minimum = template.get("min", 0)
+                        for candidate in node["inputs"]:
+                            suffix = candidate.removeprefix(field + "." + slot_prefix)
+                            if (
+                                candidate.startswith(field + "." + slot_prefix)
+                                and suffix.isascii()
+                                and suffix.isdecimal()
+                                and str(int(suffix)) == suffix
+                                and int(suffix) < maximum
+                            ):
+                                result[candidate] = (slot_definition, int(suffix) < minimum)
                 if definition and definition[0] == "COMFY_DYNAMICCOMBO_V3":
                     options = definition[1].get("options", []) if len(definition) > 1 else []
                     selected = node["inputs"].get(field)

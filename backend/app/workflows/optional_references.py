@@ -28,14 +28,11 @@ def optional_targets(profile, info=None):
             and source not in profile["outputs"].values()
         )
         if valid and info is not None:
+            from app.workflows.analyzer import input_definitions
+
             target, field = uses[0]
-            definition = (
-                info.get(graph[target]["class_type"], {})
-                .get("input", {})
-                .get("optional", {})
-                .get(field)
-            )
-            valid = bool(definition and definition[0] == "IMAGE")
+            definition, required = input_definitions(graph[target], info).get(field, (None, True))
+            valid = bool(definition and definition[0] == "IMAGE" and not required)
         if not valid:
             raise AppError(
                 "WORKFLOW_INVALID",

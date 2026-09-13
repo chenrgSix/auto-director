@@ -1,0 +1,483 @@
+{
+  "name": "H3-Ref2VA-多图参考与首帧-Turbo4",
+  "capability": "IMAGE_TO_VIDEO",
+  "workflow": {
+    "1": {
+      "class_type": "UNETLoader",
+      "_meta": {
+        "title": "H3 Ref2VA INT8"
+      },
+      "inputs": {
+        "unet_name": "minimax_h3_ref2va_pruned_int8_convrot.safetensors",
+        "weight_dtype": "default"
+      }
+    },
+    "2": {
+      "class_type": "CLIPLoader",
+      "_meta": {
+        "title": "H3 Qwen NVFP4"
+      },
+      "inputs": {
+        "clip_name": "qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors",
+        "type": "minimax",
+        "device": "default"
+      }
+    },
+    "3": {
+      "class_type": "VAELoader",
+      "_meta": {
+        "title": "H3 视频 VAE"
+      },
+      "inputs": {
+        "vae_name": "minimax_h3_video_vae_fp16.safetensors"
+      }
+    },
+    "4": {
+      "class_type": "LoadImage",
+      "_meta": {
+        "title": "首帧 · 素材自动绑定"
+      },
+      "inputs": {
+        "image": "codex_start.png"
+      }
+    },
+    "5": {
+      "class_type": "MiniMaxH3ReferenceToVideo",
+      "_meta": {
+        "title": "有序人物 / 场景 / 道具参考"
+      },
+      "inputs": {
+        "clip": [
+          "2",
+          0
+        ],
+        "vae": [
+          "3",
+          0
+        ],
+        "width": 640,
+        "height": 384,
+        "length": 124,
+        "audio_vae": [
+          "21",
+          0
+        ],
+        "ref_image_size": "match",
+        "prompt": "integrated_multimodal_description: [Shot 1] The subject gently moves in the referenced scene.\nSpeech performance: No spoken dialogue.\noverall_soundscape: Quiet room ambience.\nnon_diegetic_music: N/A",
+        "ref_images.ref_image_0": [
+          "101",
+          0
+        ],
+        "ref_images.ref_image_1": [
+          "102",
+          0
+        ],
+        "ref_images.ref_image_2": [
+          "103",
+          0
+        ],
+        "ref_images.ref_image_3": [
+          "104",
+          0
+        ],
+        "ref_images.ref_image_4": [
+          "105",
+          0
+        ],
+        "ref_images.ref_image_5": [
+          "106",
+          0
+        ],
+        "ref_images.ref_image_6": [
+          "107",
+          0
+        ],
+        "ref_images.ref_image_7": [
+          "108",
+          0
+        ],
+        "ref_images.ref_image_8": [
+          "109",
+          0
+        ]
+      }
+    },
+    "6": {
+      "class_type": "LoraLoaderModelOnly",
+      "_meta": {
+        "title": "Ref2V Turbo 4-step"
+      },
+      "inputs": {
+        "model": [
+          "1",
+          0
+        ],
+        "lora_name": "minimax_h3_ref2v_turbo_4step_v0.1_comfyui_bf16.safetensors",
+        "strength_model": 1.0
+      }
+    },
+    "7": {
+      "class_type": "KSamplerSelect",
+      "_meta": {
+        "title": "Turbo Euler"
+      },
+      "inputs": {
+        "sampler_name": "euler"
+      }
+    },
+    "8": {
+      "class_type": "BasicScheduler",
+      "_meta": {
+        "title": "Turbo simple 8 步"
+      },
+      "inputs": {
+        "model": [
+          "6",
+          0
+        ],
+        "scheduler": "simple",
+        "steps": 4,
+        "denoise": 1.0
+      }
+    },
+    "9": {
+      "class_type": "RandomNoise",
+      "_meta": {
+        "title": "随机种子 · 系统"
+      },
+      "inputs": {
+        "noise_seed": 47003
+      }
+    },
+    "10": {
+      "class_type": "BasicGuider",
+      "_meta": {
+        "title": "单条件引导"
+      },
+      "inputs": {
+        "model": [
+          "20",
+          0
+        ],
+        "conditioning": [
+          "30",
+          0
+        ]
+      }
+    },
+    "11": {
+      "class_type": "SamplerCustomAdvanced",
+      "_meta": {
+        "title": "视频采样"
+      },
+      "inputs": {
+        "noise": [
+          "9",
+          0
+        ],
+        "guider": [
+          "10",
+          0
+        ],
+        "sampler": [
+          "7",
+          0
+        ],
+        "sigmas": [
+          "8",
+          0
+        ],
+        "latent_image": [
+          "5",
+          1
+        ]
+      }
+    },
+    "12": {
+      "class_type": "VAEDecodeTiled",
+      "_meta": {
+        "title": "视频分块解码"
+      },
+      "inputs": {
+        "samples": [
+          "11",
+          0
+        ],
+        "vae": [
+          "3",
+          0
+        ],
+        "tile_size": 256,
+        "overlap": 64,
+        "temporal_size": 32,
+        "temporal_overlap": 8
+      }
+    },
+    "13": {
+      "class_type": "CreateVideo",
+      "_meta": {
+        "title": "24 FPS · 与 H3 原生时钟一致"
+      },
+      "inputs": {
+        "images": [
+          "12",
+          0
+        ],
+        "fps": 24.0,
+        "bit_depth": 8,
+        "color_space": "sRGB",
+        "audio": [
+          "22",
+          0
+        ]
+      }
+    },
+    "14": {
+      "class_type": "SaveVideo",
+      "_meta": {
+        "title": "MP4 视频输出"
+      },
+      "inputs": {
+        "video": [
+          "13",
+          0
+        ],
+        "filename_prefix": "autodirector/H3_Ref2VA",
+        "format": "mp4",
+        "format.codec": "h264"
+      }
+    },
+    "20": {
+      "class_type": "ModelAttentionBackend",
+      "_meta": {
+        "title": "8GB 注意力加速 · 可切回 PyTorch"
+      },
+      "inputs": {
+        "model": [
+          "6",
+          0
+        ],
+        "attention": "comfy kitchen attention"
+      }
+    },
+    "21": {
+      "class_type": "VAELoader",
+      "_meta": {
+        "title": "H3 原生音频 VAE"
+      },
+      "inputs": {
+        "vae_name": "minimax_h3_audio_vae_fp32.safetensors"
+      }
+    },
+    "22": {
+      "class_type": "VAEDecodeAudio",
+      "_meta": {
+        "title": "解码同次采样的原生声音"
+      },
+      "inputs": {
+        "samples": [
+          "11",
+          0
+        ],
+        "vae": [
+          "21",
+          0
+        ]
+      }
+    },
+    "30": {
+      "class_type": "MiniMaxH3AddGuide",
+      "inputs": {
+        "positive": [
+          "5",
+          0
+        ],
+        "latent": [
+          "5",
+          1
+        ],
+        "vae": [
+          "3",
+          0
+        ],
+        "image": [
+          "4",
+          0
+        ],
+        "frame_idx": 0
+      },
+      "_meta": {
+        "title": "首帧锚定"
+      }
+    },
+    "101": {
+      "class_type": "LoadImage",
+      "inputs": {
+        "image": "REQUIRES_REAL_REFERENCE.png"
+      },
+      "_meta": {
+        "title": "参考图 1"
+      }
+    },
+    "102": {
+      "class_type": "LoadImage",
+      "inputs": {
+        "image": "REQUIRES_REAL_REFERENCE.png"
+      },
+      "_meta": {
+        "title": "参考图 2"
+      }
+    },
+    "103": {
+      "class_type": "LoadImage",
+      "inputs": {
+        "image": "REQUIRES_REAL_REFERENCE.png"
+      },
+      "_meta": {
+        "title": "参考图 3"
+      }
+    },
+    "104": {
+      "class_type": "LoadImage",
+      "inputs": {
+        "image": "REQUIRES_REAL_REFERENCE.png"
+      },
+      "_meta": {
+        "title": "参考图 4"
+      }
+    },
+    "105": {
+      "class_type": "LoadImage",
+      "inputs": {
+        "image": "REQUIRES_REAL_REFERENCE.png"
+      },
+      "_meta": {
+        "title": "参考图 5"
+      }
+    },
+    "106": {
+      "class_type": "LoadImage",
+      "inputs": {
+        "image": "REQUIRES_REAL_REFERENCE.png"
+      },
+      "_meta": {
+        "title": "参考图 6"
+      }
+    },
+    "107": {
+      "class_type": "LoadImage",
+      "inputs": {
+        "image": "REQUIRES_REAL_REFERENCE.png"
+      },
+      "_meta": {
+        "title": "参考图 7"
+      }
+    },
+    "108": {
+      "class_type": "LoadImage",
+      "inputs": {
+        "image": "REQUIRES_REAL_REFERENCE.png"
+      },
+      "_meta": {
+        "title": "参考图 8"
+      }
+    },
+    "109": {
+      "class_type": "LoadImage",
+      "inputs": {
+        "image": "REQUIRES_REAL_REFERENCE.png"
+      },
+      "_meta": {
+        "title": "参考图 9"
+      }
+    }
+  },
+  "bindings": {
+    "prompt": {
+      "node_id": "5",
+      "input": "prompt"
+    },
+    "start_frame": {
+      "node_id": "4",
+      "input": "image"
+    },
+    "width": {
+      "node_id": "5",
+      "input": "width"
+    },
+    "height": {
+      "node_id": "5",
+      "input": "height"
+    },
+    "duration": {
+      "node_id": "5",
+      "input": "length",
+      "transform": "duration_to_frames",
+      "frame_multiple": 17,
+      "frame_offset": 5,
+      "frame_fps": 24
+    },
+    "fps": {
+      "node_id": "13",
+      "input": "fps"
+    },
+    "seed": {
+      "node_id": "9",
+      "input": "noise_seed"
+    },
+    "reference_image": {
+      "node_id": "101",
+      "input": "image",
+      "optional": false
+    },
+    "reference_image_2": {
+      "node_id": "102",
+      "input": "image",
+      "optional": true
+    },
+    "reference_image_3": {
+      "node_id": "103",
+      "input": "image",
+      "optional": true
+    },
+    "reference_image_4": {
+      "node_id": "104",
+      "input": "image",
+      "optional": true
+    },
+    "reference_image_5": {
+      "node_id": "105",
+      "input": "image",
+      "optional": true
+    },
+    "reference_image_6": {
+      "node_id": "106",
+      "input": "image",
+      "optional": true
+    },
+    "reference_image_7": {
+      "node_id": "107",
+      "input": "image",
+      "optional": true
+    },
+    "reference_image_8": {
+      "node_id": "108",
+      "input": "image",
+      "optional": true
+    },
+    "reference_image_9": {
+      "node_id": "109",
+      "input": "image",
+      "optional": true
+    }
+  },
+  "outputs": {
+    "video": "14"
+  },
+  "capabilities": {
+    "max_duration": 5,
+    "audio_prompt_format": "minimax_h3",
+    "supports_multi_reference": true
+  },
+  "parameter_rules": {}
+}
