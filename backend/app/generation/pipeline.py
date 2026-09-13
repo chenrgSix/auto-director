@@ -13,6 +13,7 @@ from app.core.cancellation import run_cancellable
 from app.core.config import Settings
 from app.core.errors import AppError
 from app.core.limits import MAX_EPISODE_SHOTS
+from app.creation.provider import ExternalCreationProvider
 from app.db.store import Store, now, uid
 from app.generation.engine import RenderEngine
 from app.generation.parameters import (
@@ -201,6 +202,10 @@ class GenerationService:
                 self.queue.task_done()
 
     def create(self, request: EpisodeCreate) -> dict:
+        return self.store.create("episode", self.draft(request))
+
+    def draft(self, request: EpisodeCreate) -> dict:
+        """Resolve a new episode without persisting it or invoking a model."""
         data = request.model_dump()
         for kind in ("image", "video"):
             profile = self.router.select(kind, data[f"{kind}_workflow_id"])
@@ -223,24 +228,21 @@ class GenerationService:
                     AssetResolver(self.store, self.assets).validate(role, value, "workflow-tests")
                     allowed.add(value)
         data["allowed_asset_ids"] = sorted(allowed)
-        return self.store.create(
-            "episode",
-            {
-                **data,
-                "status": "DRAFT",
-                "title": None,
-                "plan": None,
-                "bible": None,
-                "shots": [],
-                "references": {},
-                "continuity": {},
-                "final_video_asset_id": None,
-                "error": None,
-                "warnings": [],
-                "metrics": {},
-                "budget": None,
-            },
-        )
+        return {
+            **data,
+            "status": "DRAFT",
+            "title": None,
+            "plan": None,
+            "bible": None,
+            "shots": [],
+            "references": {},
+            "continuity": {},
+            "final_video_asset_id": None,
+            "error": None,
+            "warnings": [],
+            "metrics": {},
+            "budget": None,
+        }
 
     def change_workflows(self, id: str, request: EpisodeWorkflowsUpdate) -> dict:
         def change(episode):
@@ -466,12 +468,34 @@ class GenerationService:
         return self.store.update("episode", id, change)
 
     def enqueue(
-        self, id: str, operation="episode", expected_version=None, *, accept_script_review=False
+        self,
+        id: str,
+        operation="episode",
+        expected_version=None,
+        *,
+        accept_script_review=False,
+        request_id=None,
     ) -> dict:
+        request = {
+            "operation": operation,
+            "expected_version": expected_version,
+            "accept_script_review": accept_script_review,
+        }
+        if request_id:
+            current = self.store.get("episode", id)
+            previous = current.get("operation_requests", {}).get(request_id)
+            if previous:
+                if previous != request:
+                    raise AppError("IDEMPOTENCY_CONFLICT", "请求编号已用于不同制作操作", status=409)
+                return current
         if id in self.busy:
             raise AppError("CONFLICT", "上一任务尚未结束，请等待取消完成后重试", status=409)
 
         def change(episode):
+            if episode.get("creation_source") and operation == "preview":
+                raise AppError(
+                    "CREATION_PACKAGE_REQUIRED", "请在创作项目中校验并提交新版本", status=409
+                )
             if operation == "approve":
                 self.check_review_state(episode, expected_version)
                 profiles = self.preview_profiles(episode)
@@ -479,6 +503,8 @@ class GenerationService:
                 validate_timing(episode, profiles[1])
                 validate_review_prompts(episode, *profiles[:2])
                 require_review_acknowledgement(episode, accept_script_review)
+                if episode.get("creation_source"):
+                    self.validate_external_prompts(episode, profiles)
                 episode["preview_approved_at"] = now()
             elif operation == "preview":
                 if (
@@ -505,11 +531,34 @@ class GenerationService:
             if episode["status"] == "COMPLETED" and operation != "compose":
                 raise AppError("CONFLICT", "单集已完成；请重试指定镜头或重新导出", status=409)
             episode.update(status="QUEUED", queued_operation=operation, error=None)
+            if request_id:
+                episode.setdefault("operation_requests", {})[request_id] = request
 
         result = self.store.update("episode", id, change)
         self.busy.add(id)
         self.queue.put_nowait((operation, id))
         return result
+
+    def validate_external_prompts(self, episode, profiles):
+        from pydantic import ValidationError
+
+        from app.agents.audio import audio_output
+        from app.agents.parameters import constrained_output
+        from app.agents.schemas import ShotPrompts
+
+        schema = audio_output(
+            constrained_output(ShotPrompts, ai_parameters(*profiles[:2])),
+            ai_parameters(*profiles[:2]),
+        )
+        try:
+            for shot in episode["shots"]:
+                schema.model_validate(shot.get("prompts"))
+        except ValidationError as exc:
+            raise AppError(
+                "CREATION_PACKAGE_REQUIRED",
+                "提示词不完整或不符合当前制作约束，请修改创作包",
+                status=422,
+            ) from exc
 
     def cancelled(self, id: str) -> bool:
         return self.store.get("episode", id)["status"] == "CANCELLED"
@@ -726,6 +775,10 @@ class GenerationService:
             raise AppError("CONFLICT", "当前仍有未结束的作业，暂不能重跑", status=409)
 
         def change(current):
+            if current.get("creation_source") and request.scope == "prompts":
+                raise AppError(
+                    "CREATION_PACKAGE_REQUIRED", "请在创作项目中修改提示词并提交新版本", status=409
+                )
             if current["version"] != request.expected_version:
                 raise AppError("CONFLICT", "短片已更新，请刷新后重新选择重跑范围", status=409)
             if current["status"] in ACTIVE:
@@ -976,7 +1029,13 @@ class GenerationService:
         image, video, reference_profile = recovery_profiles(
             self.store, episode, (image, video, reference_profile)
         )
-        provider = self.provider_factory()
+        provider = (
+            ExternalCreationProvider(
+                self.provider_factory, visual_review=episode.get("creation_visual_review")
+            )
+            if episode.get("creation_source")
+            else self.provider_factory()
+        )
 
         def check_cancel():
             self.check_cancel(id)
@@ -1078,7 +1137,8 @@ class GenerationService:
                     shots=shots,
                     script_review={"status": "pending"},
                 )
-            episode = await audit_new_script(self, episode, agents, image, video, budget)
+            if not episode.get("creation_source"):
+                episode = await audit_new_script(self, episode, agents, image, video, budget)
             if (episode.get("script_review") or {}).get(
                 "status"
             ) == "needs_attention" and not episode.get("preview_approved_at"):
@@ -1112,9 +1172,21 @@ class GenerationService:
                 )
                 preview_complete = True
                 return
-            visual_qa = episode["qa_enabled"] and bool(self.settings.vlm_model)
+            visual_qa = (
+                episode["qa_enabled"]
+                and bool(self.settings.vlm_model)
+                and (
+                    not episode.get("creation_source")
+                    or episode.get("creation_visual_review") == "model"
+                )
+            )
             if episode["qa_enabled"] and not visual_qa:
-                self.warn(id, "未配置 VLM，视觉 QA 已跳过；仅执行媒体技术校验。")
+                self.warn(
+                    id,
+                    "画面采用人工复核；仅执行媒体技术校验。"
+                    if episode.get("creation_source")
+                    else "未配置 VLM，视觉 QA 已跳过；仅执行媒体技术校验。",
+                )
             if "reference_image" not in image["bindings"]:
                 self.warn(id, REFERENCE_INPUT_WARNING)
             elif REFERENCE_INPUT_WARNING in episode.get("warnings", []):
@@ -1540,7 +1612,7 @@ class GenerationService:
                         sid,
                         "video",
                         "CONFIGURATION_REQUIRED",
-                        "未配置视觉模型，视频仅通过媒体技术检查，请人工复核画面。",
+                        "视频仅通过媒体技术检查，请人工复核画面。",
                         [shot["video_asset_id"]],
                     )
                 last = self.assets.allocate(id, ".png")

@@ -35,3 +35,24 @@ MCP 不负责唤醒 Codex；首版提供用户会话的连接说明。自动启�
 - 完整 make check；真实 Codex 创作质量、真实模型渲染、CI 和生产验收单独记录。
 
 状态：设计冻结，实施中。最终字段、工具与验证证据随交付补齐。
+
+## 创作包与 HTTP 契约
+
+格式标识 `autodirector.creation/v1`。`brief` 保存需求、时长、画幅、风格、质量、三类工作流选择、种子和 `visual_review=manual|model`（默认人工）；`title/logline/bible/shots` 保存创作成果。每镜继承 ShotPlan，额外提供跨版本稳定的 `id` 和可缺省的 `prompts`；`decisions/open_questions/notes` 保存创作上下文。完整字段取 `GET /api/v1/creation/schema`。包不存模型 Key 或运行时资产身份。
+
+所有路径前缀为 `/api/v1/creation`：
+
+| 路径 | 职责 |
+| --- | --- |
+| `GET/POST /projects` | 项目列表/创建；创建携带 UUID request_id 与 document |
+| `GET /projects/{id}` | 最新文档、版本列表和制作列表 |
+| `GET /projects/{id}/context` | 包、当前制作约束/hash、动态 Bible/提示词 schema |
+| `GET /projects/{id}/export?revision=N` | 导出指定不可变版本，省略 N 为最新 |
+| `POST /projects/{id}/revisions` | document + expected_revision + request_id，原子保存新版本 |
+| `POST /projects/{id}/validate` | 本地校验，返回 valid/issues/revision/constraints_hash |
+| `POST /projects/{id}/submit` | expected_revision + constraints_hash + request_id，创建待确认 Episode |
+| `GET /projects/{id}/productions/{episode_id}` | 状态、镜头、素材链接与作业反馈 |
+| `POST /projects/{id}/productions/{episode_id}/confirm` | expected_version + request_id + confirm=true，确认当前预览并排队 |
+| `POST /projects/{id}/productions/{episode_id}/cancel` | 显式取消此项目的制作 |
+
+request_id 必须为 UUID；同一逻辑请求重试保持 ID 和内容，ID 对应不同内容返回 IDEMPOTENCY_CONFLICT。版本与提交收据在一个 SQLite 事务保存；确认收据与 QUEUED 状态原子保存，启动恢复既有队列。提交只准备预览，不请求 ComfyUI；制作时再执行实时依赖和媒体检查。外部创作拒绝内部“重新生成提示词”，需提交包新版本。

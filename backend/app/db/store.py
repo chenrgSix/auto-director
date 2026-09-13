@@ -1,5 +1,6 @@
 from collections.abc import Callable
-from copy import deepcopy
+from contextlib import contextmanager
+from copy import copy, deepcopy
 from datetime import UTC, datetime
 from pathlib import Path
 from threading import RLock
@@ -26,6 +27,7 @@ class Store:
     """
 
     def __init__(self, root: Path) -> None:
+        self._transaction = None
         root.mkdir(parents=True, exist_ok=True)
         self.root = root
         self.lock = RLock()
@@ -50,12 +52,30 @@ class Store:
         )
         metadata.create_all(self.engine)
 
+    @contextmanager
+    def connection(self, *, write=False):
+        if self._transaction is not None:
+            yield self._transaction
+        elif write:
+            with self.lock, self.engine.begin() as connection:
+                yield connection
+        else:
+            with self.engine.connect() as connection:
+                yield connection
+
+    def atomic(self, operation):
+        """Run synchronous record changes in one transaction; never perform I/O in it."""
+        with self.connection(write=True) as connection:
+            scoped = copy(self)
+            scoped._transaction = connection
+            return operation(scoped)
+
     def create(
         self, kind: str, data: dict, *, id: str | None = None, parent: str | None = None
     ) -> dict:
         record = deepcopy(data)
         record.update(id=id or uid(), created_at=now(), updated_at=now(), version=1)
-        with self.lock, self.engine.begin() as connection:
+        with self.connection(write=True) as connection:
             connection.execute(
                 self.records.insert().values(
                     id=record["id"], kind=kind, parent_id=parent, version=1, data=record
@@ -64,7 +84,7 @@ class Store:
         return deepcopy(record)
 
     def get(self, kind: str, id: str) -> dict:
-        with self.engine.connect() as connection:
+        with self.connection() as connection:
             row = connection.execute(
                 select(self.records.c.data).where(
                     self.records.c.id == id, self.records.c.kind == kind
@@ -78,7 +98,7 @@ class Store:
         query = select(self.records.c.data).where(self.records.c.kind == kind)
         if parent is not None:
             query = query.where(self.records.c.parent_id == parent)
-        with self.engine.connect() as connection:
+        with self.connection() as connection:
             return sorted(
                 [deepcopy(row[0]) for row in connection.execute(query)],
                 key=lambda row: row["created_at"],
@@ -86,7 +106,7 @@ class Store:
             )
 
     def update(self, kind: str, id: str, change: dict | Callable[[dict], None]) -> dict:
-        with self.lock, self.engine.begin() as connection:
+        with self.connection(write=True) as connection:
             row = (
                 connection.execute(
                     select(self.records).where(self.records.c.id == id, self.records.c.kind == kind)
@@ -112,7 +132,7 @@ class Store:
         return deepcopy(record)
 
     def delete(self, kind: str, id: str) -> None:
-        with self.lock, self.engine.begin() as connection:
+        with self.connection(write=True) as connection:
             connection.execute(
                 self.records.delete().where(self.records.c.id == id, self.records.c.kind == kind)
             )

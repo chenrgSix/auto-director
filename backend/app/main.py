@@ -11,6 +11,8 @@ from app.api.routes import router
 from app.core.config import ROOT, Settings
 from app.core.errors import AppError
 from app.core.runtime_settings import RuntimeSettings
+from app.creation.routes import router as creation_router
+from app.creation.service import CreationService
 from app.db.store import Store
 from app.generation.engine import RenderEngine
 from app.generation.pipeline import GenerationService
@@ -36,6 +38,7 @@ def create_app(
         state.generation = GenerationService(
             config, state.store, state.engine, state.assets, provider_factory
         )
+        state.creation = CreationService(state.generation)
         await state.generation.start()
         try:
             yield
@@ -103,6 +106,7 @@ def create_app(
         )
 
     app.include_router(router)
+    app.include_router(creation_router)
     frontend = ROOT / "frontend" / "dist"
     if frontend.is_dir():
         app.mount("/", StaticFiles(directory=frontend, html=True), name="frontend")
