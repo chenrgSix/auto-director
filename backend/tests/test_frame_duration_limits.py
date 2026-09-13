@@ -6,6 +6,7 @@ from app.core.errors import AppError
 from app.generation.parameters import resolve_parameters
 from app.workflows.analyzer import patch, refresh_profile
 from app.workflows.duration import render_maximum
+from tests.media_assertions import assert_full_duration
 from tests.test_api_pipeline import wait_episode
 from tests.test_episode_preview import preview
 
@@ -41,7 +42,7 @@ def test_frame_maximum_limits_planning_before_assets(system, total):
         )
         final = wait_episode(client, episode["id"])
         assert final["status"] == "COMPLETED", final.get("error")
-        assert final["final_duration"] == pytest.approx(10, abs=0.1)
+        assert_full_duration(app, final)
 
 
 @pytest.mark.parametrize("fps,maximum", [(8, 5), (16, 3), (24, 2)])

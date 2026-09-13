@@ -2,6 +2,7 @@ from copy import deepcopy
 
 from app.agents.schemas import QAResult
 from tests.fakes import FakeProvider
+from tests.media_assertions import assert_full_duration
 from tests.test_api_pipeline import wait_episode
 from tests.test_capabilities import image_to_image_graph, image_to_video_graph
 
@@ -133,7 +134,7 @@ def test_i2v_advanced_overrides_fill_owners_and_take_priority(system):
         assert job["profile_snapshot"]["capability"] == "IMAGE_TO_VIDEO"
         assert "end_frame" not in job["profile_snapshot"]["bindings"]
         assert "end_frame" not in job["asset_bindings"]
-    assert abs(episode["final_duration"] - 6) < 0.5
+    assert_full_duration(app, episode)
 
 
 def test_asset_overrides_are_uploaded_real_media_and_reflected_in_shot(system):

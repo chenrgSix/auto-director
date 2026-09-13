@@ -7,6 +7,7 @@ from app.core.errors import AppError
 from app.generation.parameters import duration_seconds, resolve_parameters
 from app.workflows.analyzer import patch
 from app.workflows.schema import Binding
+from tests.media_assertions import assert_full_duration
 from tests.test_api_pipeline import wait_episode
 
 
@@ -82,7 +83,7 @@ def test_preview_and_generation_use_same_fixed_clock(system):
     assert episode["status"] == "COMPLETED", episode.get("error")
     assert episode["budget"]["fps"] == 24
     assert episode["shots"][0]["duration"] == 5
-    assert episode["final_duration"] == pytest.approx(5, abs=0.1)
+    assert_full_duration(app, episode)
     job = next(j for j in app.state.store.list("job", id) if j["type"] == "SHOT_VIDEO")
     binding = profile["bindings"]["duration"]
     assert job["patched_workflow"][binding["node_id"]]["inputs"][binding["input"]] == 124

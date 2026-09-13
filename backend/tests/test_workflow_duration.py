@@ -16,6 +16,7 @@ from app.workflows.analyzer import (
 )
 from app.workflows.duration import fit_duration, render_maximum
 from app.workflows.ownership import canonicalize
+from tests.media_assertions import assert_full_duration
 from tests.test_agents import plan
 from tests.test_api_pipeline import wait_episode
 
@@ -333,7 +334,7 @@ def test_cloud_resume_retains_images_and_exact_timeline_with_real_ffmpeg(system)
     assert sorted(j["input_values"]["timeline_duration"] for j in videos) == sorted(timeline)
     assert all(j["patched_workflow"]["clip"]["inputs"]["model.duration"] == 4 for j in videos)
     assert [s["duration"] for s in completed["shots"]] == timeline
-    assert completed["final_duration"] == pytest.approx(10, abs=0.15)
+    assert_full_duration(app, completed)
 
 
 def test_incompatible_local_duration_fails_before_spending_on_images(system):

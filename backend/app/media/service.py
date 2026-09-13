@@ -1,6 +1,7 @@
 import asyncio
 import hashlib
 import json
+import math
 import shutil
 import tempfile
 from fractions import Fraction
@@ -103,24 +104,34 @@ async def inspect_media(path: Path) -> dict:
     return {"kind": "video" if extension in VIDEO_EXT else "audio", **data}
 
 
-def require_video_duration(metadata: dict, duration: float, fps: float) -> None:
+def video_duration(metadata: dict) -> float:
+    """Use the playable video length; a script estimate is never a cutoff."""
     video = metadata.get("video") or {}
-    actual = metadata.get("duration", 0)
-    if video.get("duration") not in {None, "N/A"}:
-        actual = min(actual, float(video["duration"]))
-    if not video or actual + 1 / fps + 0.002 < duration:
-        raise AppError(
-            "VIDEO_TOO_SHORT",
-            f"生成视频仅 {actual:g} 秒，短于本镜需要的 {duration:g} 秒；请检查工作流时长/FPS 绑定",
-            {"actual": actual, "required": duration, "fps": fps},
-        )
+    value = video.get("duration")
+    try:
+        actual = float(metadata.get("duration", 0) if value in {None, "N/A"} else value)
+    except (ValueError, TypeError):
+        actual = 0
+    if not video or not math.isfinite(actual) or actual <= 0:
+        raise AppError("INVALID_MEDIA", "视频缺少有效画面或时长")
+    return actual
 
 
-async def extract_frame(
-    source: Path, target: Path, fraction: float = 1, *, duration_limit: float | None = None
-) -> Path:
+def media_duration(metadata: dict) -> float:
+    duration = video_duration(metadata)
+    audio = metadata.get("audio") or {}
+    if audio.get("duration") not in {None, "N/A"}:
+        duration = max(duration, float(audio["duration"]))
+    elif audio:
+        duration = max(duration, float(metadata["duration"]))
+    if not math.isfinite(duration):
+        raise AppError("INVALID_MEDIA", "音视频时长无效")
+    return duration
+
+
+async def extract_frame(source: Path, target: Path, fraction: float = 1) -> Path:
     metadata = await probe(source)
-    duration = min(metadata["duration"], duration_limit or metadata["duration"])
+    duration = video_duration(metadata)
     video = metadata["video"] or {}
     if video.get("duration") not in {None, "N/A"}:
         duration = min(duration, float(video["duration"]))
@@ -150,28 +161,33 @@ async def extract_frame(
     return target
 
 
-async def compose(
-    clips: list[tuple[Path, float]], output: Path, width: int, height: int, fps: int
-) -> dict:
+async def compose(clips: list[Path], output: Path, width: int, height: int, fps: int) -> dict:
     if not clips:
         raise AppError("COMPOSE_FAILED", "没有可合成的已启用镜头")
     with tempfile.TemporaryDirectory(prefix="compose-", dir=output.parent) as temporary:
         root = Path(temporary)
         normalized = []
-        elapsed, previous_frame = Fraction(0), 0
-        for index, (path, duration) in enumerate(clips):
+        source_durations = []
+        for index, path in enumerate(clips):
             metadata = await probe(path)
-            require_video_duration(metadata, duration, fps)
-            if not metadata["video"] or metadata["duration"] < duration - max(0.15, 1 / fps):
-                raise AppError(
-                    "COMPOSE_FAILED",
-                    "视频片段短于镜头目标时长",
-                    {"clip": index, "actual": metadata["duration"], "required": duration},
-                )
-            elapsed += Fraction(str(duration))
-            end_frame = round(elapsed * fps)
-            frame_duration = (end_frame - previous_frame) / fps
-            previous_frame = end_frame
+            duration = media_duration(metadata)
+            source_durations.append(duration)
+            visual_duration = video_duration(metadata)
+            # Preserve longer audio with a held final image. Sub-frame codec
+            # rounding does not justify adding a whole extra video frame.
+            audio_tail = duration - visual_duration
+            hold = (
+                f",tpad=stop_mode=clone:stop_duration={audio_tail}" if audio_tail > 1 / fps else ""
+            )
+            audio = metadata.get("audio") or {}
+            # AAC decoders can expose padded samples past the source stream's
+            # declared end. Remove only codec padding, never story content.
+            audio_end = audio.get("duration")
+            decoded_audio = (
+                f",atrim=end_sample={round(float(audio_end) * 48000)}"
+                if audio_end not in {None, "N/A"}
+                else ""
+            )
             target = root / f"clip-{index:03d}.mov"
             args = [
                 "ffmpeg",
@@ -185,18 +201,21 @@ async def compose(
                 str(path),
             ]
             if not metadata["audio"]:
-                args += ["-f", "lavfi", "-i", "anullsrc=r=48000:cl=stereo"]
+                args += [
+                    "-f",
+                    "lavfi",
+                    "-i",
+                    f"anullsrc=r=48000:cl=stereo:d={visual_duration}",
+                ]
             args += [
                 "-map",
                 "0:v:0",
                 "-map",
                 "0:a:0" if metadata["audio"] else "1:a:0",
                 "-vf",
-                f"scale={width}:{height}:force_original_aspect_ratio=decrease,pad={width}:{height}:(ow-iw)/2:(oh-ih)/2,setsar=1,setpts=PTS-STARTPTS,fps={fps},tpad=stop_mode=clone:stop_duration={1 / fps}",
+                f"scale={width}:{height}:force_original_aspect_ratio=decrease,pad={width}:{height}:(ow-iw)/2:(oh-ih)/2,setsar=1,setpts=PTS-STARTPTS{hold},fps={fps}:round=up:eof_action=pass",
                 "-af",
-                "aresample=48000,asetpts=PTS-STARTPTS,apad",
-                "-t",
-                str(frame_duration),
+                f"aresample=48000,asetpts=PTS-STARTPTS{decoded_audio},apad=whole_dur={math.ceil(visual_duration * fps - 0.001) / fps}",
                 "-c:v",
                 "libx264",
                 "-preset",
@@ -216,7 +235,7 @@ async def compose(
                 str(target),
             ]
             await run_process(*args, timeout=600)
-            normalized.append((target, frame_duration))
+            normalized.append((target, media_duration(await probe(target))))
         manifest = root / "concat.txt"
         await asyncio.to_thread(
             manifest.write_text,
@@ -240,17 +259,16 @@ async def compose(
             "copy",
             "-c:a",
             "aac",
-            "-t",
-            str(previous_frame / fps),
             "-movflags",
             "+faststart",
             str(output),
             timeout=600,
         )
     final = await probe(output)
-    if not final["video"] or abs(final["duration"] - sum(duration for _, duration in clips)) > 0.5:
-        raise AppError("COMPOSE_FAILED", "成片时长不满足目标误差 0.5 秒", final)
-    return final
+    expected = sum(duration for _, duration in normalized)
+    if not final["video"] or abs(final["duration"] - expected) > max(0.1, 1 / fps):
+        raise AppError("COMPOSE_FAILED", "成片时长与完整片段总时长不符", final)
+    return {**final, "source_durations": source_durations}
 
 
 class Assets:

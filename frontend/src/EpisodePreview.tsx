@@ -113,7 +113,8 @@ export function EpisodePreview({ episode, busy, setBusy, refresh, notify }: {
   function submit(event: FormEvent) { event.preventDefault(); void save(true); }
   return <section className="preview-panel">
     <div className="preview-heading"><div><span className="eyebrow">STORYBOARD REVIEW</span><h2>先看分镜，再开始拍摄。</h2><p>查看镜头节奏和画面提示词。满意后直接开始，也可以先修改并保存。</p></div><span className="preview-step"><Check size={14} />规划完成 · 等待你的确认</span></div>
-    <div className="preview-summary"><strong>{edits.length} 个镜头 · 合计 {Number.isFinite(total) ? total.toFixed(2) : '—'} / {base.target_duration} 秒</strong><span>单镜 {preview.min_duration}～{preview.max_duration} 秒{preview.fixed_duration != null && ` · 高级设置固定为 ${preview.fixed_duration} 秒`}</span></div>
+    <p className="muted">以下时长用于剧本和生成参考；导出完整保留各片段的画面与声音，不按参考时长裁切。</p>
+    <div className="preview-summary"><strong>{edits.length} 个镜头 · 参考合计 {Number.isFinite(total) ? total.toFixed(2) : '—'} / {base.target_duration} 秒</strong><span>单镜 {preview.min_duration}～{preview.max_duration} 秒{preview.fixed_duration != null && ` · 高级设置固定为 ${preview.fixed_duration} 秒`}</span></div>
     <p className="muted preview-note">当前是文字分镜预览，尚未生成图片或视频。提示词会结合视觉设定和实际连续帧使用；修改时长后，请同步检查动作是否适合新的节奏。</p>
     <ScriptReviewNotice review={base.script_review} selectShot={setSelected} busy={busy} />
     {error && <ErrorNotice>{error}</ErrorNotice>}

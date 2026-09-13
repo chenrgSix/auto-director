@@ -7,6 +7,7 @@ import pytest
 from app.agents.directing import Directors
 from app.agents.schemas import QAResult
 from tests.fakes import FakeProvider
+from tests.media_assertions import assert_full_duration
 from tests.test_api_pipeline import wait_episode
 from tests.test_episode_preview import edits, preview
 from tests.test_episode_workflows import create
@@ -139,7 +140,7 @@ def test_cancelled_high_quality_can_continue_with_standard_budget_and_preserved_
     assert final["plan"] == failed["plan"] and final["bible"] == failed["bible"]
     assert final["references"] == failed["references"]
     assert final["shots"][0]["prompts"] == failed["shots"][0]["prompts"]
-    assert final["final_duration"] == pytest.approx(5, abs=0.1)
+    assert_full_duration(app, final)
     old_ids = {j["id"] for j in old_jobs}
     new = [j for j in app.state.store.list("job", id) if j["id"] not in old_ids]
     assert sorted(j["type"] for j in new) == (

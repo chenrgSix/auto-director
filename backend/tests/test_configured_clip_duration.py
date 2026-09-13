@@ -6,6 +6,7 @@ import pytest
 from app.agents.directing import generation_budget
 from app.core.errors import AppError
 from app.generation.parameters import resolve_parameters
+from tests.media_assertions import assert_full_duration
 from tests.test_api_pipeline import wait_episode
 from tests.test_episode_preview import edits, preview
 from tests.test_rendered_story_rebind import fail_after_frames
@@ -61,7 +62,7 @@ def test_five_second_local_video_reaches_final_json_on_low_memory_gpu(system, bi
     )
     final = wait_episode(client, episode["id"])
     assert final["status"] == "COMPLETED", final.get("error")
-    assert final["final_duration"] == pytest.approx(5, abs=0.1)
+    assert_full_duration(app, final)
     job = next(j for j in app.state.store.list("job", episode["id"]) if j["type"] == "SHOT_VIDEO")
     role = job["profile_snapshot"]["bindings"]["duration"]
     assert job["patched_workflow"][role["node_id"]]["inputs"][role["input"]] == (

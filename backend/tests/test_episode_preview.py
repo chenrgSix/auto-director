@@ -8,6 +8,7 @@ from app.agents.schemas import ShotPrompts
 from app.core.errors import AppError
 from app.generation.parameters import resolve_parameters, usable_ai_values
 from tests.fakes import FakeProvider
+from tests.media_assertions import assert_full_duration
 from tests.test_ai_parameters import CreativeProvider, configure_ai_parameters
 from tests.test_api_pipeline import wait_episode
 from tests.test_episode_workflows import imported, rebind
@@ -127,7 +128,7 @@ def test_preview_is_render_free_edits_reach_patch_and_approval_reuses_plan(syste
     final = wait_episode(client, id)
     assert final["status"] == "COMPLETED", final["error"]
     assert final["metrics"]["llm_calls"] == saved["metrics"]["llm_calls"]
-    assert abs(final["final_duration"] - 5) < 0.1
+    assert_full_duration(app, final)
     assert final["plan"] == saved["plan"]
     jobs = app.state.store.list("job", id)
     first = [job for job in jobs if job["shot_id"] == saved["shots"][0]["id"]]

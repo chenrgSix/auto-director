@@ -6,6 +6,7 @@ import pytest
 from app.core.errors import AppError
 from app.creation.schemas import CreationPackage
 from app.db.store import Store
+from tests.media_assertions import assert_full_duration
 from tests.test_api_pipeline import wait_episode
 from tests.test_episode_workflows import imported
 
@@ -193,7 +194,7 @@ def test_full_package_production_never_calls_text_model_and_replays_requests(sys
     assert client.post(path, json=approval).status_code == 202
     assert len(comfy.prompts) == count
     assert final["metrics"]["llm_calls"] == 0
-    assert abs(final["final_duration"] - 5) < 0.1
+    assert_full_duration(app, final)
     assert all(s["needs_review"] for s in final["shots"])
     feedback = client.get(f"{BASE}/{project}/productions/{id}").json()
     assert feedback["assets"] and "path" not in feedback["assets"][0]

@@ -1,5 +1,11 @@
 # API 与工作流契约
 
+## C56 完整拼接与实际时长
+
+`target_duration` 与 `shots[].duration` 继续用于规划/预览和工作流输入，不是导出裁切点。有效模型视频即使短于参考时长也可使用；损坏或没有有效画面的媒体仍拒绝。导出包含各启用片段的完整视频及原有声音，`final_duration` 以 ffprobe 实测为准，允许偏离参考总时长。
+
+`POST /episodes/{id}/compose` 复用已有视频，无模型调用。成功返回的 Episode 增加可选 `composition_policy="full_clips"`，各已合成 Shot 的 `actual_duration` 为源片段的实际音视频时长；重跑失效时清除该值。原成片和镜头快照归档到 `rerun_history`（scope="compose"），失败/取消保持原成片可用。旧记录缺省不改写，无表结构迁移。
+
 ## C55 视觉复核开关与异步状态
 
 `POST /episodes` 的 `qa_enabled` 不要求高级模式；缺省保持 true。`PATCH /episodes/{id}/qa-policy` 接受 `{expected_version, qa_policy, qa_enabled?}`，省略开关保持原值。advisory 策略不变时可在运行中开关；切换 strict 或其开关仍要求制作空闲、没有未结算作业。版本冲突返回 409，不能借开关绕过 UNKNOWN 保护或变更渲染游标。
@@ -186,7 +192,7 @@ Binding 为 `{node_id, input, transform}`；`transform` 默认 `identity`，可�
 
 参数覆盖用 `node_id.field` 键，例如 `{"sampler.steps": 20}`。单集参数只覆盖其选择的原 profile；低显存替代项使用自身 profile 参数。DynamicCombo 的现有扁平标量（如 `28.model.duration`）读取已选模型分支约束，选择器 enum 返回 key 字符串；依赖检查会更新已保存 schema，生成前再次按实际选择校验。不新增不存在的分支字段或递归编辑器。修改 profile 会清空旧校验结论，已提交 RenderJob 的 JSON 保持不变。
 
-视频秒数输入按 type/min/max/step/enum 自动向上对齐，严格限制在 workflow 与适用显存预算内。Shot 的 `duration` 是时间线时长；视频作业 `input_values.timeline_duration` 记录原值，`input_values.duration` 是实际渲染秒数。例如 MiniMax H3 的 2.86 秒片段请求整数 4 秒，导出裁切回 2.86 秒；不把非法高级覆盖静默取整。无合法交集返回 `WORKFLOW_INVALID`，在生成参考图前拦截。
+视频秒数输入按 type/min/max/step/enum 自动向上对齐，严格限制在 workflow 与适用显存预算内。Shot 的 `duration` 是剧本参考时长；视频作业 `input_values.timeline_duration` 记录原值，`input_values.duration` 是实际渲染秒数。例如 MiniMax H3 的 2.86 秒片段请求整数 4 秒，C56 起完整导出实际生成的时长；不把非法高级覆盖静默取整。无合法交集返回 `WORKFLOW_INVALID`，在生成参考图前拦截。
 
 Episode 预算新增 `render_max_duration`；时长由显式工作流和用户配置决定，模型类型/min/max/step/enum 继续严格校验；`api_node=true` 用于执行方式展示，C20 起本地与远端视频均不按显存猜测时长上限，图片仍按本地资源策略。旧 Episode/Job JSON 缺少新增字段时自动兼容，无数据库迁移或重新导入要求。
 

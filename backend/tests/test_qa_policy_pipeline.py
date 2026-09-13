@@ -13,6 +13,7 @@ from app.core.config import Settings
 from app.core.errors import AppError
 from app.generation.qa_review import video_review_key
 from tests.fakes import FakeProvider
+from tests.media_assertions import assert_full_duration
 from tests.test_api_pipeline import wait_episode
 from tests.test_cancellation import wait_idle
 from tests.test_episode_rerun import rerun
@@ -72,7 +73,8 @@ def test_advisory_finishes_multiple_shots_with_one_render_each_and_visible_revie
         client, create(client, target_duration=6, max_shot_duration=3, quality=quality)
     )
     assert result["status"] == "COMPLETED", result.get("error")
-    assert result["error"] is None and result["final_duration"] == pytest.approx(6, abs=0.1)
+    assert result["error"] is None
+    assert_full_duration(app, result)
     assert len(result["shots"]) == 2
     assert state["stages"] == ["video", "video"]
     jobs = app.state.store.list("job", result["id"])
@@ -148,20 +150,18 @@ def test_explicit_strict_policy_still_stops_semantic_failure_before_video(system
     assert not any(job["type"] == "SHOT_VIDEO" for job in app.state.store.list("job", result["id"]))
 
 
-def test_advisory_short_video_still_fails_technical_validation_before_later_shots(system, tmp_path):
+def test_advisory_accepts_short_valid_outputs_without_regenerating(system, tmp_path):
     client, app, comfy = system
     comfy.video_bytes = short_video(tmp_path).read_bytes()
-    state = install_qa(system, failing=False)
+    install_qa(system, failing=False)
     result = generate(client, create(client, target_duration=10, max_retries=0))
-    assert result["status"] == "FAILED" and result["error"]["code"] == "VIDEO_TOO_SHORT"
-    assert result["shots"][0]["status"] == "FAILED"
-    assert result["shots"][1]["status"] == "PENDING"
-    assert not result["final_video_asset_id"] and not state["stages"]
+    assert result["status"] == "COMPLETED", result.get("error")
+    assert result["final_duration"] == pytest.approx(2, abs=0.1)
+    assert all(s["status"] == "PASSED" for s in result["shots"])
     videos = [
         job for job in app.state.store.list("job", result["id"]) if job["type"] == "SHOT_VIDEO"
     ]
-    assert len(videos) == 1 and videos[0]["status"] == "FAILED"
-    assert videos[0]["output_asset_ids"]  # Keep the rejected short output in history.
+    assert len(videos) == 2 and all(j["status"] == "COMPLETED" for j in videos)
 
 
 def test_advisory_does_not_swallow_media_extraction_failure(system, monkeypatch):

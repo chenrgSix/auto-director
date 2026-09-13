@@ -11,6 +11,7 @@ from app.core.config import Settings
 from app.db.store import Store
 from app.main import create_app
 from tests.fakes import FakeProvider
+from tests.media_assertions import assert_full_duration
 from tests.test_capabilities import image_to_video_graph
 
 
@@ -43,7 +44,7 @@ def test_api_full_generation_and_targeted_video_retry(system):
     assert client.post(f"/api/v1/episodes/{id}/generate").status_code == 409
     episode = wait_episode(client, id)
     assert episode["status"] == "COMPLETED", episode.get("error")
-    assert abs(episode["final_duration"] - 5) < 0.5
+    assert_full_duration(app, episode)
     assert len(episode["shots"]) == 2
     assert len(episode["references"]) == 3
     assert (
@@ -114,8 +115,8 @@ def test_input_errors_secrets_and_cross_origin_protection(system):
 
 
 @pytest.mark.parametrize("duration", [10, 15, 90])
-def test_longer_episode_exports_requested_duration(system, duration):
-    client, _, _ = system
+def test_longer_episode_exports_full_generated_duration(system, duration):
+    client, app, _ = system
     id = client.post(
         "/api/v1/episodes",
         json={"idea": "duration fixture", "target_duration": duration, "width": 256, "height": 256},
@@ -123,7 +124,7 @@ def test_longer_episode_exports_requested_duration(system, duration):
     assert client.post(f"/api/v1/episodes/{id}/generate").status_code == 202
     episode = wait_episode(client, id)
     assert episode["status"] == "COMPLETED", episode.get("error")
-    assert abs(episode["final_duration"] - duration) <= 0.5
+    assert_full_duration(app, episode)
     assert len(episode["shots"]) == duration // 5
     assert all(shot["status"] == "PASSED" for shot in episode["shots"])
 
@@ -239,7 +240,7 @@ def test_restart_marks_active_work_unknown_and_preserves_artifacts(tmp_path):
 def test_oom_fallback_obeys_budget_and_preserves_timeline(
     system, retries, expected, alternative, capability
 ):
-    client, _, comfy = system
+    client, app, comfy = system
     profile_id = "default_video"
     if capability == "IMAGE_TO_VIDEO":
         graph = image_to_video_graph(
@@ -332,7 +333,7 @@ def test_oom_fallback_obeys_budget_and_preserves_timeline(
             assert episode["shots"][0]["end_frame_asset_id"]
     else:
         assert len(videos) == 5  # two failed full clips, three successful shorter segments
-        assert abs(episode["final_duration"] - 5) < 0.5
+        assert_full_duration(app, episode)
         jobs = client.get(f"/api/v1/jobs?episode_id={id}").json()
         segments = sorted(
             [job for job in jobs if job["type"] == "VIDEO_SEGMENT"],

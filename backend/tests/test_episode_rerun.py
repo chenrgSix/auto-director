@@ -272,3 +272,85 @@ def test_rerun_skips_disabled_shots_and_tracks_dependencies_across_them(system, 
         == result["shots"][0]["actual_end_frame_asset_id"]
     )
     assert len(result["rerun_history"][0]["affected_shot_ids"]) == 2
+
+
+def test_recompose_keeps_complete_sources_and_archives_previous_film(system):
+    from tests.media_assertions import assert_full_duration
+
+    client, app, comfy = system
+    old = complete(system, target_duration=5, max_shot_duration=3)
+    before = len(comfy.prompts)
+    old_file = client.get(f"/api/v1/assets/{old['final_video_asset_id']}/file").content
+    for _ in range(2):
+        response = client.post(f"/api/v1/episodes/{old['id']}/compose")
+        assert response.status_code == 202
+        final = wait_episode(client, old["id"])
+        assert final["status"] == "COMPLETED", final.get("error")
+        assert_full_duration(app, final)
+        assert final["final_duration"] > final["target_duration"]
+        for key in ("shots", "plan", "bible", "references"):
+            assert final[key] == old[key]
+        history = final["rerun_history"][-1]
+        assert history["scope"] == "compose"
+        assert history["final_video_asset_id"] == old["final_video_asset_id"]
+        assert history["shots"] == old["shots"]
+        assert final["final_video_asset_id"] != old["final_video_asset_id"]
+        assert client.get(f"/api/v1/assets/{old['final_video_asset_id']}/file").content == old_file
+        assert len(comfy.prompts) == before
+        old = final
+        old_file = client.get(f"/api/v1/assets/{old['final_video_asset_id']}/file").content
+
+
+@pytest.mark.parametrize("cancelled", [False, True])
+def test_failed_or_cancelled_recompose_leaves_current_film_available(
+    system, monkeypatch, cancelled
+):
+    client, app, comfy = system
+    old = complete(system)
+    calls = len(comfy.prompts)
+    original_file = client.get(f"/api/v1/assets/{old['final_video_asset_id']}/file").content
+
+    async def interrupted(*args, **kwargs):
+        if cancelled:
+            await app.state.generation.cancel(old["id"])
+        raise AppError("COMPOSE_FAILED", "Synthetic interruption")
+
+    monkeypatch.setattr("app.generation.pipeline.compose", interrupted)
+    assert client.post(f"/api/v1/episodes/{old['id']}/compose").status_code == 202
+    final = wait_episode(client, old["id"])
+    assert final["status"] == ("CANCELLED" if cancelled else "FAILED")
+    for field in ("final_video_asset_id", "final_duration", "shots", "plan", "bible"):
+        assert final[field] == old[field]
+    assert final.get("rerun_history", []) == old.get("rerun_history", [])
+    assert client.get(f"/api/v1/assets/{old['final_video_asset_id']}/file").content == original_file
+    assert len(comfy.prompts) == calls
+
+
+def test_legacy_continuity_tail_refresh_uses_full_video_without_rerender(system, monkeypatch):
+    import asyncio
+
+    from app.generation import pipeline
+
+    client, app, comfy = system
+    old = complete(system)
+    shot = old["shots"][0]
+    tail = shot["actual_end_frame_asset_id"]
+    shot.pop("full_tail_video_asset_id")
+    app.state.store.update("episode", old["id"], {"shots": [shot]})
+    original = pipeline.extract_frame
+    calls = []
+
+    async def capture(*args, **kwargs):
+        calls.append((args, kwargs))
+        return await original(*args, **kwargs)
+
+    monkeypatch.setattr(pipeline, "extract_frame", capture)
+    submissions = len(comfy.prompts)
+    fresh = asyncio.run(app.state.generation.ensure_full_tail(old["id"], shot))
+    assert fresh["actual_end_frame_asset_id"] != tail
+    assert fresh["full_tail_video_asset_id"] == shot["video_asset_id"]
+    assert fresh["video_asset_id"] == shot["video_asset_id"]
+    assert calls[0][1] == {} and len(calls[0][0]) == 2
+    assert asyncio.run(app.state.generation.ensure_full_tail(old["id"], fresh)) == fresh
+    assert len(calls) == 1 and len(comfy.prompts) == submissions
+    assert client.get(f"/api/v1/assets/{tail}/file").status_code == 200

@@ -12,6 +12,7 @@ from app.agents.provider import LLMProvider
 from app.agents.schemas import EpisodePlan, Transition
 from app.core.config import Settings
 from tests.fakes import FakeProvider
+from tests.media_assertions import assert_full_duration
 from tests.test_api_pipeline import wait_episode
 from tests.test_director_timing import episode, weighted
 from tests.test_episode_preview import edits, preview
@@ -143,7 +144,7 @@ def test_preview_approval_and_render_keep_variable_story_timing(system, monkeypa
     assert finished["status"] == "COMPLETED", finished.get("error")
     assert finished["plan"] == original_plan
     assert [s["duration"] for s in finished["shots"]] == STORY_RHYTHM
-    assert finished["final_duration"] == pytest.approx(30, abs=0.1)
+    assert_full_duration(app, finished)
     jobs = {j["shot_id"]: j for j in app.state.store.list("job", id) if j["type"] == "SHOT_VIDEO"}
     assert len(jobs) == len(STORY_RHYTHM)
     for shot in finished["shots"]:

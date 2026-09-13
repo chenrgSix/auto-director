@@ -62,12 +62,12 @@ export function RerunHistory({ episode }: { episode: Episode }) {
   if (!record) return null;
   return <>{film?.final_video_asset_id && <section className="panel previous-films" aria-label="旧版成片">
     <h2>旧版成片 · {films.length} 个版本</h2>
-    <p className="muted">整片重新生成会保留旧视频。生成期间或失败后，仍可在这里预览和下载。</p>
+    <p className="muted">重新拼接或生成都会保留旧视频。生成期间或失败后，仍可在这里预览和下载。</p>
     <label>选择旧版成片<select value={film.id} onChange={e => setSelectedFilm(e.target.value)}>{[...films].reverse().map(h => <option key={h.id} value={h.id}>版本 {h.number} · {new Date(h.created_at).toLocaleString('zh-CN')}{h.final_duration != null ? ` · ${h.final_duration.toFixed(2)} 秒` : ''}</option>)}</select></label>
     <Media id={film.final_video_asset_id} kind="video" label={`旧版成片 · 版本 ${film.number}`} />
     <a className="button" href={assetUrl(film.final_video_asset_id, true)} download>下载旧版成片</a>
   </section>}<details className="panel details-panel" onToggle={e => setOpen(e.currentTarget.open)}><summary>重跑历史 · {history.length} 个旧版本</summary>{open && <div className="rerun-history-content">
-    <label>重跑前的版本<select value={record.id} onChange={e => setSelected(e.target.value)}>{[...history].reverse().map((h, i) => <option key={h.id} value={h.id}>版本 {history.length - i} · {new Date(h.created_at).toLocaleString('zh-CN')} · {h.scope === 'video' ? '视频重跑前' : h.scope === 'prompts' ? '提示词与关键帧重跑前' : '关键帧重跑前'}</option>)}</select></label>
+    <label>重跑前的版本<select value={record.id} onChange={e => setSelected(e.target.value)}>{[...history].reverse().map((h, i) => <option key={h.id} value={h.id}>版本 {history.length - i} · {new Date(h.created_at).toLocaleString('zh-CN')} · {h.scope === 'compose' ? '重新拼接前' : h.scope === 'video' ? '视频重跑前' : h.scope === 'prompts' ? '提示词与关键帧重跑前' : '关键帧重跑前'}</option>)}</select></label>
     <label>旧版镜头<select value={shot?.id || ''} onChange={e => setSelectedShot(e.target.value)}>{record.shots.map(s => <option key={s.id} value={s.id}>{s.index + 1} · {s.title}</option>)}</select></label>
     {record.prompt_optimization && <div className="notice"><strong>AI 定向优化</strong><p>{record.prompt_optimization.summary}</p></div>}
     {shot?.prompts && <details className="preview-extra"><summary>旧版提示词与 AI 参数</summary><pre>{JSON.stringify(shot.prompts, null, 2)}</pre></details>}

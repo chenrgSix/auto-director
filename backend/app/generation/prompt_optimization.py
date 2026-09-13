@@ -155,7 +155,6 @@ async def propose(service, episode_id, shot_id, request):
                 service.assets.path(shot["video_asset_id"]),
                 path,
                 fraction,
-                duration_limit=shot["duration"],
             )
             paths.append(path)
             context["frame_order"].append(f"video_{round(fraction * 100)}_percent")

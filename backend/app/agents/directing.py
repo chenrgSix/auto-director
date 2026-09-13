@@ -471,6 +471,7 @@ def qa_shot_context(shot: dict) -> dict:
             "index",
             "title",
             "duration",
+            "actual_duration",
             "purpose",
             "action",
             "camera",
@@ -480,6 +481,10 @@ def qa_shot_context(shot: dict) -> dict:
         )
         if key in shot
     }
+    target["timing_policy"] = (
+        "Script duration and action timestamps are generation guidance. Review the full generated "
+        "video; a different actual duration alone is not a quality failure."
+    )
     prompts = shot.get("prompts") or {}
     target["prompts"] = {
         key: prompts[key]

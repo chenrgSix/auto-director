@@ -89,12 +89,21 @@ def test_disabled_review_makes_no_visual_model_requests_or_qa_samples(system, po
     )
 
 
-def test_disabled_review_still_rejects_too_short_video(system, tmp_path):
+def test_disabled_review_accepts_short_valid_video(system, tmp_path):
     client, _, comfy = system
     comfy.video_bytes = short_video(tmp_path).read_bytes()
     result = generate(client, create(client, qa_enabled=False, target_duration=10, max_retries=0))
+    assert result["status"] == "COMPLETED", result.get("error")
+    assert result["final_duration"] == pytest.approx(2, abs=0.1)
+
+
+def test_disabled_review_still_rejects_corrupt_video(system):
+    client, _, comfy = system
+    comfy.video_bytes = b"not a playable video"
+    result = generate(client, create(client, qa_enabled=False, target_duration=5, max_retries=0))
     assert result["status"] == "FAILED"
-    assert result["error"]["code"] == "VIDEO_TOO_SHORT"
+    assert result["error"]["code"] == "COMPOSE_FAILED"
+    assert not result["final_video_asset_id"]
 
 
 def test_live_switch_cancels_review_without_interrupting_render_or_changing_story(
@@ -235,3 +244,21 @@ def test_background_timeout_is_visible_without_failing_completed_film(system):
         assert shot["needs_review"] and result["status"] == "COMPLETED" and result["error"] is None
     finally:
         release.set()
+
+
+def test_legacy_ready_video_populates_actual_timing_before_background_review(system):
+    client, app, comfy = system
+    old = generate(client, create(client, qa_enabled=False, target_duration=5))
+    submissions = len(comfy.prompts)
+    shot = old["shots"][0]
+    shot.pop("actual_duration")
+    shot["status"] = "VIDEO_READY"
+    app.state.store.update(
+        "episode", old["id"], {"status": "FAILED", "shots": [shot], "qa_enabled": True}
+    )
+    result = generate(client, old)
+    result = settled(client, result["id"])
+    assert result["status"] == "COMPLETED"
+    assert result["shots"][0]["actual_duration"] > 5
+    assert result["shots"][0]["visual_review"]["status"] == "completed"
+    assert len(comfy.prompts) == submissions

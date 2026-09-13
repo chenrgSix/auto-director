@@ -109,6 +109,10 @@ async def test_prior_verdicts_do_not_change_current_qa_context(
     assert clean_result == polluted_result
     assert provider.calls[0] == provider.calls[1]
     _, context, supplied_images = provider.calls[1]
+    context = deepcopy(context)
+    timing_policy = context["shot"].pop("timing_policy")
+    assert "generation guidance" in timing_policy
+    assert "different actual duration alone is not a quality failure" in timing_policy
     assert context == {"shot": clean, "stage": stage, "frame_order": roles}
     assert supplied_images == paths
     assert polluted == polluted_before

@@ -37,7 +37,7 @@ export type ScriptReview = {
 };
 export type QA = { stage: string; character_consistency: number; scene_consistency: number; style_consistency: number; action_accuracy: number; transition_quality: number; artifact_score: number; explanation: string; retry_scope: string | null; disposition?: 'warning' | 'passed' | 'retry' };
 export type Shot = {
-  id: string; title: string; index: number; duration: number; enabled: boolean; status: string; action: string; camera: string;
+  id: string; title: string; index: number; duration: number; actual_duration?: number; enabled: boolean; status: string; action: string; camera: string;
   transition_from_previous: string; start_frame_asset_id: string | null; end_frame_asset_id: string | null; video_asset_id: string | null;
   prompts: { allow_static_end_frame?: boolean; start_frame_prompt: string; end_frame_prompt: string; video_prompt: string; negative_prompt: string; narration_text?: string; camera_motion?: string; motion_strength?: number; ai_parameters?: Record<string, Record<string, Value>> } | null;
   preview_prompt_view?: { values: Record<PreviewPromptField, string>; locked: Partial<Record<PreviewPromptField, string>>; hints?: Partial<Record<PreviewPromptField, string>> };
@@ -63,6 +63,7 @@ export type Episode = {
   refresh_workflow_budget?: boolean;
   id: string; idea: string; title: string | null; target_duration: number; aspect_ratio: string; style: string; quality: string; qa_policy?: QAPolicy;
   status: string; shots: Shot[]; references: Record<string, string>; warnings: string[]; error: Problem | null;
+  composition_policy?: 'full_clips';
   final_video_asset_id: string | null; final_duration?: number; created_at: string; metrics: Record<string, number>;
   bible: unknown; plan: unknown;
   script_review?: ScriptReview | null;

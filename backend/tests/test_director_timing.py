@@ -12,6 +12,7 @@ from app.agents.provider import LLMProvider
 from app.core.config import Settings
 from app.core.errors import AppError
 from tests.fakes import FakeProvider
+from tests.media_assertions import assert_full_duration
 from tests.test_agents import plan
 from tests.test_api_pipeline import wait_episode
 
@@ -185,7 +186,7 @@ def test_low_memory_pipeline_uses_configured_five_second_shots_and_composes_ten_
     finished = wait_episode(client, id)
     assert finished["status"] == "COMPLETED", finished.get("error")
     assert [s["duration"] for s in finished["shots"]] == [5] * 2
-    assert finished["final_duration"] == pytest.approx(10, abs=0.1)
+    assert_full_duration(app, finished)
     jobs = [j for j in app.state.store.list("job", id) if j["type"] == "SHOT_VIDEO"]
     assert len(jobs) == 2
     assert all(j["input_values"]["timeline_duration"] == 5 for j in jobs)
@@ -231,4 +232,4 @@ def test_existing_short_plan_is_resumed_without_replanning(system, monkeypatch):
     assert [(s["id"], s["duration"]) for s in finished["shots"]] == [
         (s["id"], s["duration"]) for s in shots
     ]
-    assert finished["final_duration"] == pytest.approx(10, abs=0.1)
+    assert_full_duration(app, finished)

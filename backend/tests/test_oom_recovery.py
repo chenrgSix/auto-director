@@ -4,6 +4,7 @@ import httpx
 import pytest
 
 from app.core.errors import AppError
+from tests.media_assertions import assert_full_duration
 from tests.test_api_pipeline import wait_episode
 
 
@@ -113,7 +114,7 @@ def test_recover_oom_steps_without_resubmitting_known_work(
     assert recovered["plan"] == failed["plan"] and recovered["references"] == failed["references"]
     for role in ("start_frame_asset_id", "end_frame_asset_id"):
         assert recovered["shots"][0][role] == failed["shots"][0][role]
-    assert recovered["final_duration"] == pytest.approx(5, abs=0.1)
+    assert_full_duration(app, recovered)
     assert not recovered.get("render_recovery") and not recovered["shots"][0].get("render_cursor")
 
 

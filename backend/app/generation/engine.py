@@ -9,7 +9,7 @@ from app.db.store import Store, now
 from app.generation.parameters import resolve_parameters
 from app.generation.preflight import check_graph
 from app.generation.resolvers import AssetResolver
-from app.media.service import Assets, require_video_duration
+from app.media.service import Assets, video_duration
 from app.workflows.analyzer import patch, refresh_profile, validate_dependencies, workflow_hash
 from app.workflows.ownership import canonicalize
 
@@ -30,15 +30,12 @@ class RenderEngine:
         return [job for job in self.store.list("job") if job["status"] == "UNKNOWN"]
 
     def validate_outputs(self, job, records):
-        values = job["input_values"]
         if (
             job["profile_snapshot"].get("media_type", job["profile_snapshot"].get("type"))
             == "video"
         ):
-            duration = values.get("timeline_duration", values.get("duration"))
-            if duration is not None:
-                for record in records:
-                    require_video_duration(record["metadata"], duration, values.get("fps", 16))
+            for record in records:
+                video_duration(record["metadata"])
 
     def create_job(
         self,

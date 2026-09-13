@@ -72,7 +72,7 @@ from app.generation.workflow_state import (
     story_snapshot,
 )
 from app.media.keyframes import inspect_keyframes
-from app.media.service import Assets, compose, extract_frame, require_video_duration
+from app.media.service import Assets, compose, extract_frame, media_duration
 from app.workflows.analyzer import refresh_profile, validate_bindings
 from app.workflows.duration import render_maximum
 from app.workflows.frame_timing import generation_fps
@@ -672,7 +672,6 @@ class GenerationService:
                 self.assets.path(shot["video_asset_id"]),
                 frame,
                 fraction,
-                duration_limit=shot["duration"],
             )
             sample = await self.assets.register(frame, id, "QA_SAMPLE_FRAME", sid)
             samples.append(sample["id"])
@@ -724,6 +723,8 @@ class GenerationService:
 
     @staticmethod
     def invalidate(shot: dict, scope="keyframes", *, frames=None) -> None:
+        shot.pop("actual_duration", None)
+        shot.pop("full_tail_video_asset_id", None)
         shot.pop("render_cursor", None)
         shot.pop("keyframe_comparison", None)
         shot.pop("qa_retry", None)
@@ -925,54 +926,6 @@ class GenerationService:
 
         return self.store.update("episode", id, change)
 
-    def repair_short_videos(self, id, fps):
-        if self.engine.unresolved():
-            return  # Settle accepted work before changing any step identities.
-        episode = self.store.get("episode", id)
-        invalid = set()
-        for shot in episode["shots"]:
-            if not shot["enabled"] or not shot.get("video_asset_id"):
-                continue
-            asset = self.store.get("asset", shot["video_asset_id"])
-            try:
-                require_video_duration(asset["metadata"], shot["duration"], fps)
-            except AppError as exc:
-                if exc.code != "VIDEO_TOO_SHORT":
-                    raise
-                invalid.add(shot["id"])
-        if not invalid:
-            return
-
-        def change(current):
-            scopes, previous_changed = {}, False
-            for shot in current["shots"]:
-                if not shot["enabled"]:
-                    continue
-                dependent = previous_changed and shot["transition_from_previous"] in CONTINUOUS
-                if dependent or shot["id"] in invalid:
-                    scopes[shot["id"]] = "keyframes" if dependent else "video"
-                previous_changed = shot["id"] in scopes
-            current.setdefault("rerun_history", []).append(
-                {
-                    "id": uid(),
-                    "created_at": now(),
-                    "scope": "video",
-                    "reason": "VIDEO_TOO_SHORT",
-                    "shot_ids": sorted(invalid),
-                    "affected_shot_ids": list(scopes),
-                    "new_seed": False,
-                    "final_video_asset_id": current.get("final_video_asset_id"),
-                    "final_duration": current.get("final_duration"),
-                    "shots": [deepcopy(s) for s in current["shots"] if s["id"] in scopes],
-                }
-            )
-            for shot in current["shots"]:
-                if shot["id"] in scopes:
-                    self.invalidate(shot, scopes[shot["id"]])
-            current.update(final_video_asset_id=None, final_duration=None)
-
-        self.store.update("episode", id, change)
-
     async def render(
         self,
         episode: dict,
@@ -1102,8 +1055,6 @@ class GenerationService:
             if "duration" in override_roles:
                 fixed_duration = duration_seconds(video, override_roles["duration"], budget["fps"])
                 validate_strategy({"duration": fixed_duration}, budget["max_duration"])
-            if not preview_only:
-                self.repair_short_videos(id, budget["fps"])
             episode = self.stage(
                 id,
                 "PLANNING",
@@ -1252,6 +1203,8 @@ class GenerationService:
                     continuity = shot.get("continuity_after", {})
                     continue
                 try:
+                    if previous and shot["transition_from_previous"] in CONTINUOUS:
+                        previous = await self.ensure_full_tail(id, previous)
                     await self.generate_shot(
                         episode,
                         shot,
@@ -1607,7 +1560,16 @@ class GenerationService:
                         episode, shot, image, video, base, ref_inputs, video_inputs, stamp, retries
                     )
                     shot = self.update_shot(
-                        id, sid, video_asset_id=result["id"], status="VIDEO_READY"
+                        id,
+                        sid,
+                        video_asset_id=result["id"],
+                        actual_duration=media_duration(result["metadata"]),
+                        status="VIDEO_READY",
+                    )
+                if shot.get("actual_duration") is None:
+                    cached = self.store.get("asset", shot["video_asset_id"])
+                    shot = self.update_shot(
+                        id, sid, actual_duration=media_duration(cached["metadata"])
                     )
                 current = self.store.get("episode", id)
                 if visual_qa_enabled(current, self.settings):
@@ -1621,11 +1583,7 @@ class GenerationService:
                         "视频仅通过媒体技术检查，请人工复核画面。",
                         [shot["video_asset_id"]],
                     )
-                last = self.assets.allocate(id, ".png")
-                await extract_frame(
-                    self.assets.path(shot["video_asset_id"]), last, duration_limit=shot["duration"]
-                )
-                end = await self.assets.register(last, id, "ACTUAL_END_FRAME", sid)
+                shot = await self.ensure_full_tail(id, shot)
                 notes = current_review_notes(self.shot(id, sid))
                 self.update_shot(
                     id,
@@ -1633,7 +1591,7 @@ class GenerationService:
                     status="PASSED",
                     needs_review=bool(notes),
                     review_notes=notes,
-                    actual_end_frame_asset_id=end["id"],
+                    actual_end_frame_asset_id=shot["actual_end_frame_asset_id"],
                     continuity_after={**continuity, **prompts["continuity_state"]},
                     error=None,
                     qa_retry=None,
@@ -1872,15 +1830,31 @@ class GenerationService:
                 stamp + f":segment:{index}",
                 sid,
             )
-            segments.append((self.assets.path(result["id"]), length))
+            segments.append(self.assets.path(result["id"]))
             if index < count - 1:
                 tail = self.assets.allocate(id, ".png")
-                await extract_frame(self.assets.path(result["id"]), tail, duration_limit=length)
+                await extract_frame(self.assets.path(result["id"]), tail)
                 actual = await self.assets.register(tail, id, "SEGMENT_END_FRAME", sid)
                 start = actual["id"]
         output = self.assets.allocate(id, ".mp4")
         await compose(segments, output, base["width"], base["height"], base["fps"])
         return await self.assets.register(output, id, "SHOT_VIDEO", sid)
+
+    async def ensure_full_tail(self, id: str, shot: dict) -> dict:
+        if (
+            shot.get("actual_end_frame_asset_id")
+            and shot.get("full_tail_video_asset_id") == shot["video_asset_id"]
+        ):
+            return shot
+        last = self.assets.allocate(id, ".png")
+        await extract_frame(self.assets.path(shot["video_asset_id"]), last)
+        end = await self.assets.register(last, id, "ACTUAL_END_FRAME", shot["id"])
+        return self.update_shot(
+            id,
+            shot["id"],
+            actual_end_frame_asset_id=end["id"],
+            full_tail_video_asset_id=shot["video_asset_id"],
+        )
 
     async def compose_episode(self, id: str) -> None:
         episode = self.store.get("episode", id)
@@ -1895,7 +1869,7 @@ class GenerationService:
         output = self.assets.allocate(id, ".mp4")
         budget = episode["budget"]
         metadata = await compose(
-            [(self.assets.path(shot["video_asset_id"]), shot["duration"]) for shot in shots],
+            [self.assets.path(shot["video_asset_id"]) for shot in shots],
             output,
             budget["width"],
             budget["height"],
@@ -1903,11 +1877,38 @@ class GenerationService:
         )
         self.check_cancel(id)
         asset = await self.assets.register(output, id, "FINAL_VIDEO")
-        self.stage(
-            id,
-            "COMPLETED",
-            final_video_asset_id=asset["id"],
-            completed_at=now(),
-            final_duration=metadata["duration"],
-            error=None,
-        )
+
+        def finish(current):
+            if current["status"] == "CANCELLED":
+                raise AppError("CANCELLED", "单集已取消")
+            old = current.get("final_video_asset_id")
+            if old:
+                current.setdefault("rerun_history", []).append(
+                    {
+                        "id": uid(),
+                        "created_at": now(),
+                        "scope": "compose",
+                        "shot_ids": [s["id"] for s in shots],
+                        "affected_shot_ids": [],
+                        "new_seed": False,
+                        "final_video_asset_id": old,
+                        "final_duration": current.get("final_duration"),
+                        "shots": deepcopy(current["shots"]),
+                    }
+                )
+            durations = dict(
+                zip((s["id"] for s in shots), metadata["source_durations"], strict=True)
+            )
+            for shot in current["shots"]:
+                if shot["id"] in durations:
+                    shot["actual_duration"] = durations[shot["id"]]
+            current.update(
+                status="COMPLETED",
+                final_video_asset_id=asset["id"],
+                completed_at=now(),
+                final_duration=metadata["duration"],
+                composition_policy="full_clips",
+                error=None,
+            )
+
+        self.store.update("episode", id, finish)

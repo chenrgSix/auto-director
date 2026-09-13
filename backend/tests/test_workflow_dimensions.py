@@ -6,6 +6,7 @@ from app.core.errors import AppError
 from app.generation.parameters import fit_budget_dimensions, resolve_parameters
 from app.workflows.analyzer import check_value, patch
 from app.workflows.dimensions import fit_dimensions
+from tests.media_assertions import assert_full_duration
 from tests.test_api_pipeline import wait_episode
 from tests.test_episode_preview import preview
 from tests.test_episode_rerun import complete
@@ -119,7 +120,7 @@ def test_preview_approval_and_ffmpeg_use_aligned_dimensions(system):
     assert job["patched_workflow"][b["node_id"]]["inputs"][b["input"]] == 672
     asset = app.state.store.get("asset", final["final_video_asset_id"])
     assert (asset["metadata"]["video"]["width"], asset["metadata"]["video"]["height"]) == (384, 672)
-    assert abs(final["final_duration"] - 5) < 0.1
+    assert_full_duration(app, final)
 
 
 @pytest.mark.parametrize("explicit", [False, True])
