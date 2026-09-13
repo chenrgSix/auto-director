@@ -1,5 +1,16 @@
 # 验收记录
 
+## 2026-09-13 · C54 常驻启动与原任务恢复
+
+- 故障证据：原 Python 78636 在 14:42:58 退出，应用日志没有 traceback 或正常 shutdown，系统日志仅证实进程退出与连接关闭，无法确定终止原因。临时启动没有进程托管，所以未自动恢复；这与每镜串行视觉 QA 的慢等待是两个问题。
+- 新增 macOS 用户 LaunchAgent，固定当前仓库虚拟环境与数据目录，模型密钥不写入 plist；安装/启停/状态、所有权、端口与依赖保护有隔离回归。针对性测试 **41 passed**（其中常驻入口 17 项），包含原任务断线恢复与重启保留资产。
+- 正式服务已加载当前代码。确认本地无运行/排队任务、ComfyUI 队列空闲后，对本项目进程做一次受控 SIGKILL：launchd 从 PID 99288 自动拉起 PID 837，runs 1 → 2，约 1.06 秒恢复健康检查；新进程 PPID 为 1。该 SIGKILL 是本轮验收动作，不是先前故障的原因。未验证机器注销、睡眠或系统重启。
+- 重启前备份 **1,625 条记录 / 1,079 个素材文件**；跨两次启动只改变目标 Episode 与其未完成 Job 的中断状态。全部故事、20 镜提示词、前 11 镜完整记录、所有原素材散列与在线配置保持，其余工作流/旧片/作业没有改变。
+- 短片 `5806a88e-a718-41ed-9726-2b9a4fcf8a8c` 已通过原 generate 恢复入口续跑。第 12 镜沿用 Job `317f9c92-5d84-4630-a570-71883f602d65`、prompt `a3543e9d-df5d-41ff-969b-d80be6b9e810`，取回远端已完成视频；该镜 SHOT_VIDEO 作业仍只有 1 个，没有重新渲染。恢复后完成既有视觉复核并进入第 13 镜生成，未调整故事、工作流或 QA 策略。
+- 首页、健康检查与构建后的 JS/CSS 均返回 200；旧视频 Range 请求返回 206。完整 `make check` 通过 Ruff、格式、ESLint、TypeScript、构建和 **913 项测试**（249.77 秒，2 条既有依赖弃用警告）。尚未宣称整片完成、质量验收或远端 CI 通过。
+
+本机证据位于 ignored `data/repairs/c54-service-recovery/`：SQLite 备份、记录/素材摘要、`restart-verification.json`、`restart-preservation-verified.json`、原远端结果、恢复后作业、HTTP 验证与门禁日志。原始 preservation-result 的严格全记录比较为 false，是目标 Episode / Job 两项预期状态变化；独立白名单验证已断言仅这两项变化。
+
 ## 2026-09-13 · C51 中文人物对白与画外旁白实测
 
 使用现有 codex 文生图生成独立虚构成年女性首帧，再用 `codex-H3-首帧视频-Turbo8-8GB` 生成两段 5 秒样例。两次均为 640×384、24 FPS、124 帧、8 步及 C50 原生音频输出，复用同一首帧，seed 分别为 51002 / 51003。按 [MiniMax 官方基础模式提示词指南](https://huggingface.co/MiniMaxAI/MiniMax-H3/blob/main/docs/VIDEO_PROMPT_WRITING_GUIDE_base_en.md) 使用说话人 `(S1)`、`<d>[Chinese]…</d>` 和画外旁白的 `says in an off-screen voiceover` / 闭嘴约束；实际 patched JSON 与试跑请求完全一致。

@@ -20,6 +20,25 @@ KEYFRAMES_TOO_SIMILAR 表示视频提交前检测到首尾帧近重复。检查�
 
 ## 本地启动
 
+### macOS 常驻运行（C54）
+
+制作时建议使用用户级 launchd 服务，避免服务依赖临时终端或工具会话：
+
+```sh
+make install
+make build
+make service-install    # 首次安装并启动；已加载时不重启
+make service-status     # 查看进程、启动次数及最近退出情况
+make service-stop       # 明确停止，禁用下次登录自动启动
+make service-start      # 重新启用并启动
+```
+
+入口仍为 `http://127.0.0.1:8000`。服务配置是当前用户的 `~/Library/LaunchAgents/local.autodirector.plist`，日志为数据目录下 `logs/service.stdout.log` 与 `logs/service.stderr.log`。使用仓库虚拟环境、单进程、无 reload，固定数据目录并显式提供 FFmpeg PATH；模型密钥仍从在线配置或 `.env` 读取，不复制到 plist。仅在制作空闲时执行 stop/start 更新代码；8000 已被其他进程占用或同名服务属于其他目录时拒绝覆盖，不强杀原进程。
+
+关闭终端或 Codex 不影响已启动的服务；登录期间进程退出后由 launchd 拉起，连续失败至少间隔 10 秒。用户注销、关机或睡眠不属于进程崩溃恢复。系统常驻不等于任务自动重发：启动仍将中断作业标记 UNKNOWN，保留 prompt_id、剧本和媒体；在短片页点击「重新连接并恢复」读取原远端结果，继续缺失镜头。没有 prompt_id 时仍需核对历史，不改变原保护。
+
+### 前台与开发模式
+
 要求 Python 3.12、uv、Node 22、npm，以及 PATH 中可用的 FFmpeg/ffprobe。当前验证环境为 macOS arm64、Python 3.12.11、Node 22.23.1、FFmpeg 8.1.1。依赖分别锁定在 `backend/uv.lock` 和 `frontend/package-lock.json`。
 
 在仓库根目录执行：

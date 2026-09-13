@@ -1,5 +1,11 @@
 # 模块设计
 
+## C54 本地服务生命周期
+
+`app.service` 是 macOS 运维入口，通过参数数组调用用户级 launchctl，不参与生成编排。安装原子写入私有 plist，固定仓库虚拟环境、数据目录和媒体工具 PATH；不保存模型凭据。RunAtLoad / KeepAlive 与 10 秒启动节流提供独立于终端的进程存活，持久日志启用 Python fault handler。重复 install/start 不中断现有进程；同名外部配置、符号链接与端口占用拒绝处理。显式 stop 先卸载再禁用，避免系统立即重启；start 重新启用。
+
+进程重启继续使用既有 GenerationService.start 与 UNKNOWN 恢复契约，不自动重写剧本、不重新提交未知作业，不修改串行 QA 策略。常驻管理解决缺少自动拉起的问题，不能据此断言先前进程退出的具体原因。
+
 ## C53 创作包与 MCP
 
 独立创作包业务服务接收外部持续创作成果。网页 API 与本地 MCP 为同一服务的适配层，后端不持有 Codex 会话。交付产生独立 Episode，复用预览/执行/恢复边界；完整包不得回退内部文字 Agent。见 [C53](CREATION_PACKAGES.md)。
