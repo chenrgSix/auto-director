@@ -108,6 +108,11 @@ def include_unbound_negative(profile: dict, values: dict, overrides: dict) -> No
     """
     if "negative" in profile["bindings"] or "prompt" in overrides:
         return
+    if profile.get("capabilities", {}).get("audio_prompt_format") == H3:
+        # Native H3 has a structured positive multimodal prompt. Appending an
+        # unbound negative catalog can introduce exactly those unwanted subjects.
+        # Keep the saved exclusions for review; dedicated negative inputs still bind.
+        return
     binding = profile["bindings"].get("prompt")
     prompt, negative = values.get("prompt"), values.get("negative")
     if not binding or not isinstance(prompt, str) or not negative:

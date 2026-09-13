@@ -14,6 +14,8 @@
 
 新增 MCP：`inspect_shot_continuity` 返回相同来源和实际图像；`record_shot_continuity_review` 复用写入契约；`rerun_production_shots` 要求项目归属、显式 shot_ids、scope=video|keyframes、expected_version、request_id、confirm=true。复用已有局部重跑/连续链失效/UNKNOWN 保护；重复 UUID 不重复排队。剧情和参考契约调整仍保存创作包新版本。
 
+C59 视频提交保留结构化约束供校验/复核，不再将其 JSON 重复拼入模型画面描述。`audio_prompt_format=minimax_h3` 且没有 negative 绑定时，原负向词表只保留在数据中，不追加到正向声画提示；有独立绑定时照常传入。显式用户提示仍保持原文，自动编译不改已写好的声音段。
+
 ## C56 完整拼接与实际时长
 
 `target_duration` 与 `shots[].duration` 继续用于规划/预览和工作流输入，不是导出裁切点。有效模型视频即使短于参考时长也可使用；损坏或没有有效画面的媒体仍拒绝。导出包含各启用片段的完整视频及原有声音，`final_duration` 以 ffprobe 实测为准，允许偏离参考总时长。

@@ -5,7 +5,7 @@ from fractions import Fraction
 
 from pydantic import Field, create_model
 
-from app.agents.audio import PERFORMANCE, VISUAL, audio_output
+from app.agents.audio import VISUAL, audio_output
 from app.agents.parameters import constrained_output
 from app.agents.provider import LLMProvider
 from app.agents.schemas import (
@@ -521,26 +521,28 @@ def anchored_prompt(
             if stage == "video"
             else ["state_in"]
         )
-        constraint = "\n\nVisible shot constraints: " + json.dumps(
-            {key: visual_continuity[key] for key in fields}, ensure_ascii=False
-        )
         if stage == "video":
-            constraint += (
-                "\nONE SINGLE CONTINUOUS SHOT for the entire clip. Follow the requested camera "
-                "motion and action continuously. No editorial cuts, inserted shots, alternate "
-                "scenes or unrelated cast inside this clip. Start and end references constrain "
-                "the whole continuous scene, not just the first and last pictures."
+            # Stable IDs and state dictionaries are validation/QA metadata, not a
+            # second scene description for the video model to interpret.
+            constraint = (
+                "ONE SINGLE CONTINUOUS SHOT for the entire clip. Follow the requested camera "
+                "motion and action continuously within this same scene. The reference pictures "
+                "bound one uninterrupted take, with continuous framing and subject identity. "
             )
             if not visual_continuity["visible_character_ids"]:
                 constraint += (
-                    " This is an unoccupied environment or object shot throughout: "
-                    "no person, face, hand or other human body part enters any frame."
+                    "The picture contains only the requested environment and objects throughout. "
+                    "Keep empty areas of the frame empty. "
                 )
-        if stage == "video" and prompt.startswith(VISUAL):
-            # Keep native speech/music and their exact text untouched.
-            prompt = prompt.replace(PERFORMANCE, constraint + "\n\n" + PERFORMANCE, 1)
+            if prompt.startswith(VISUAL) and "[Shot 1]" in prompt:
+                # Lead with the visual scope; preserve every authored audio byte.
+                prompt = prompt.replace("[Shot 1]", "[Shot 1] " + constraint, 1)
+            else:
+                prompt = constraint + "\n\n" + prompt
         else:
-            prompt += constraint
+            prompt += "\n\nVisible shot constraints: " + json.dumps(
+                {key: visual_continuity[key] for key in fields}, ensure_ascii=False
+            )
     if stage == "video" and prompt.startswith(VISUAL):
         return prompt  # Keep the native three-field prompt directly after the frame header.
     # The Shot Agent already selects Bible identity, lifecycle and style for the

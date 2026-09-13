@@ -4,11 +4,13 @@ from copy import deepcopy
 
 import pytest
 
+from app.agents.audio import H3, audio_section
 from app.core.errors import AppError
 from app.generation.parameters import resolve_parameters
 from app.workflows.analyzer import patch
 from app.workflows.ownership import canonicalize
 from tests.test_generation_preflight import uploaded_frame
+from tests.test_native_audio_prompts import PROMPT
 from tests.test_workflows import profile
 
 
@@ -110,6 +112,21 @@ def test_dedicated_negative_binding_keeps_both_resolved_user_overrides_exact():
     assert graph["5"]["inputs"]["edit_instruction"] == "AI target"
     assert graph["exclude"]["inputs"]["text"] == "User exclusions"
     assert sources["exclude.text"] == "user"
+
+
+@pytest.mark.parametrize("bound_negative", [False, True])
+def test_native_h3_does_not_turn_negative_catalog_into_positive_scene(system, bound_negative):
+    workflow = deepcopy(system[1].state.store.get("workflow", "default_video"))
+    workflow["capabilities"]["audio_prompt_format"] = H3
+    if not bound_negative:
+        workflow["bindings"].pop("negative", None)
+    automatic = {"prompt": PROMPT, "negative": "extra people, deformed hands", "duration": 2}
+    values, *_ = resolve_parameters(workflow, automatic, {}, {}, False)
+    assert "extra people" not in values["prompt"]
+    assert "Visual exclusions" not in values["prompt"]
+    assert audio_section(values["prompt"]) == audio_section(PROMPT)
+    assert values["negative"] == automatic["negative"]
+    assert automatic["prompt"] == PROMPT
 
 
 def test_combined_prompt_constraints_reject_overflow_without_truncation():

@@ -13,7 +13,9 @@ def test_unoccupied_video_remains_one_take_without_rewriting_native_audio():
     assert result.startswith(VISUAL)
     assert result.endswith(tail)
     assert "ONE SINGLE CONTINUOUS SHOT" in result
-    assert "no person, face, hand" in result
+    assert "only the requested environment and objects" in result
+    assert "visible_character_ids" not in result and "state_out" not in result
+    assert result.index("ONE SINGLE") < result.index("A stationary bowl")
     assert result.index("ONE SINGLE") < result.index(PERFORMANCE)
 
 
@@ -27,7 +29,7 @@ def test_continuous_camera_motion_and_requested_departures_are_not_locked():
     )
     assert "Camera follows the officer out of the room." in result
     assert "Follow the requested camera motion and action continuously" in result
-    assert "no person, face, hand" not in result
+    assert "only the requested environment and objects" not in result
     assert "locked" not in result.lower()
     image = anchored_prompt({}, "Reference portrait", {}, stage="image")
     assert "CONTINUOUS SHOT" not in image
