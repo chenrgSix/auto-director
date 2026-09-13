@@ -2,7 +2,7 @@ from typing import Any, Literal
 
 from pydantic import Field, model_validator
 
-from app.agents.schemas import StrictModel, VisualContinuity
+from app.agents.schemas import StrictModel, Transition, VisualContinuity
 from app.core.limits import (
     LEGACY_MAX_SHOTS,
     MAX_DIMENSION,
@@ -81,7 +81,7 @@ class PromptOptimizationRequest(StrictModel):
 
 class EpisodeWorkflowsUpdate(StrictModel):
     expected_version: int = Field(ge=1)
-    image_workflow_id: str = Field(min_length=1)
+    image_workflow_id: str | None = Field(default=None, min_length=1)
     video_workflow_id: str = Field(min_length=1)
     reference_workflow_id: str = Field(min_length=1)
 
@@ -101,13 +101,14 @@ class EpisodeRerun(StrictModel):
 
 
 class PreviewShotUpdate(StrictModel):
+    transition_from_previous: Transition | None = None
     visual_continuity: VisualContinuity | None = None
     id: str = Field(min_length=1)
     title: str = Field(min_length=1, max_length=200)
     duration: float = Field(ge=1, le=MAX_SHOT_SECONDS)
     # Whether a prompt is required depends on capability, continuity and explicit inputs.
-    start_frame_prompt: str = Field(max_length=6000)
-    end_frame_prompt: str = Field(max_length=6000)
+    start_frame_prompt: str = Field(default="", max_length=6000)
+    end_frame_prompt: str = Field(default="", max_length=6000)
     video_prompt: str = Field(max_length=6000)
     allow_static_end_frame: bool | None = Field(default=None, strict=True)
 

@@ -3,7 +3,7 @@ from uuid import UUID
 
 from pydantic import Field, field_validator
 
-from app.agents.schemas import ShotPlan, ShotPrompts, StrictModel, VisualBible
+from app.agents.schemas import SequenceShotPrompts, ShotPlan, ShotPrompts, StrictModel, VisualBible
 from app.core.limits import MAX_EPISODE_SECONDS, MAX_EPISODE_SHOTS, MAX_SHOT_SECONDS
 from app.generation.schemas import EpisodeCreate, EpisodeRerun
 
@@ -41,7 +41,7 @@ class CreationBrief(StrictModel):
 
 class CreationShot(ShotPlan):
     id: str = Field(pattern=r"^[a-zA-Z0-9_-]{1,64}$")
-    prompts: ShotPrompts | None = None
+    prompts: ShotPrompts | SequenceShotPrompts | None = None
 
 
 class CreationPackage(StrictModel):

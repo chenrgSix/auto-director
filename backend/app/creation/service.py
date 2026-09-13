@@ -9,7 +9,8 @@ from pydantic import ValidationError
 
 from app.agents.audio import audio_output
 from app.agents.parameters import constrained_output
-from app.agents.schemas import ShotPlan, ShotPrompts, VisualBible
+from app.agents.schemas import ShotPlan, VisualBible
+from app.agents.shot_batch import prompt_model
 from app.agents.timing import read_timing
 from app.core.errors import AppError
 from app.creation.schemas import CreationPackage
@@ -17,6 +18,7 @@ from app.generation.continuity import continuity_report, require_continuity
 from app.generation.parameters import ai_parameters
 from app.generation.preview import rebind_story
 from app.generation.schemas import EpisodeRerun
+from app.workflows.sequence import is_sequence
 
 
 def digest(value):
@@ -177,6 +179,15 @@ class CreationService:
         episode, profiles = self._profiles(document)
         rebind_story(episode, *profiles)
         return {
+            "production_mode": episode.get("production_mode", "keyframes"),
+            "sequence_limits": {
+                "max_segments": 8,
+                "max_references_per_segment": 9,
+                "rerun_scope": "whole_group",
+                "keyframes_required": False,
+            }
+            if is_sequence(profiles[1])
+            else None,
             "workflow_configuration": [
                 {
                     "id": profile["id"],
@@ -201,12 +212,23 @@ class CreationService:
                 "ai_parameters 只填写导出的 AI owner 字段，prompt 由阶段提示词提供。",
                 "H3 声音格式由 audio_prompt_format 明确指定；视频提示词是实际声音执行来源。",
                 "校验是制作技术检查，不代表剧情或画面质量已经通过人工审核。",
+                *(
+                    [
+                        "当前为多参考连续镜头：image_prompt/start_frame_prompt/end_frame_prompt 可省略；不生成逐镜首尾图。",
+                        "CUT 等开始新组，CONTINUE_FRAME/CONTINUE_VIDEO 在组内继承 AV 运动与声音上下文；每组最多 8 段，每段 1–9 张有序参考。连续动作不要每段重新开场或停顿。",
+                        "Picture 编号从 1 开始，对应本段 reference_roles 顺序。参考是外观和构图条件，不是指定时间点的首尾帧。",
+                    ]
+                    if is_sequence(profiles[1])
+                    else []
+                ),
             ],
             "bible_schema": constrained_output(
                 VisualBible, ai_parameters(profiles[2])
             ).model_json_schema(),
             "shot_prompts_schema": audio_output(
-                constrained_output(ShotPrompts, ai_parameters(*profiles[:2])),
+                constrained_output(
+                    prompt_model(ai_parameters(*profiles[:2])), ai_parameters(*profiles[:2])
+                ),
                 ai_parameters(*profiles[:2]),
             ).model_json_schema(),
         }
@@ -268,7 +290,9 @@ class CreationService:
             document.bible.model_dump()
         )
         shot_schema = audio_output(
-            constrained_output(ShotPrompts, ai_parameters(*profiles[:2])),
+            constrained_output(
+                prompt_model(ai_parameters(*profiles[:2])), ai_parameters(*profiles[:2])
+            ),
             ai_parameters(*profiles[:2]),
         )
         shots = []
@@ -330,7 +354,7 @@ class CreationService:
             rebind_story(episode, *profiles)
         except AppError as exc:
             raise AppError("PACKAGE_INVALID", exc.message, exc.details, status=422) from exc
-        require_continuity(episode, profiles[0])
+        require_continuity(episode, profiles[1] if is_sequence(profiles[1]) else profiles[0])
         return episode
 
     def validate(self, project_id, revision=None):
@@ -340,7 +364,10 @@ class CreationService:
         try:
             constraints_hash = digest(self._constraints(document))
             episode = self._snapshot(document)
-            report = continuity_report(episode, self._profiles(document)[1][0])
+            profiles = self._profiles(document)[1]
+            report = continuity_report(
+                episode, profiles[1] if is_sequence(profiles[1]) else profiles[0]
+            )
             issues = []
         except AppError as exc:
             issues = [exc.as_dict()]
@@ -426,6 +453,8 @@ class CreationService:
             "version": episode["version"],
             "status": episode["status"],
             "image_review_required": episode.get("image_review_required", False),
+            "production_mode": episode.get("production_mode", "keyframes"),
+            "sequence_groups": episode.get("sequence_groups", []),
             "preproduction_pending": episode.get("preproduction_pending"),
             "continuity_report": episode.get("continuity_report"),
             "source": episode["creation_source"],
@@ -439,6 +468,10 @@ class CreationService:
                         "creation_shot_id",
                         "title",
                         "duration",
+                        "actual_duration",
+                        "sequence_group_id",
+                        "sequence_members",
+                        "sequence_job_id",
                         "status",
                         "prompts",
                         "error",

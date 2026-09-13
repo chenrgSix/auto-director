@@ -45,6 +45,9 @@ INSTRUCTIONS = (
     "新项目推荐 brief.image_review_required=true：先 inspect_preproduction_images 查看参考及首尾帧，再 decide_preproduction_images 确认或修订。确认会继续制作，须在用户授权内并记录实际观察；等待时用户可从网页接管。"
     "每镜声明 visual_continuity 并按主体选择参考；制作后调用 inspect_shot_continuity 对照真实边界帧，"
     "记录观察依据。用户授权局部重跑时调用 rerun_production_shots；修改剧情/参考契约先保存新包版本。"
+    "REFERENCE_SEQUENCE_TO_VIDEO 模式不生成逐镜首尾帧：确认参考图后直接制作连续组。"
+    "从 get_creation_context 读取分组与素材约束；CONTINUE_FRAME/VIDEO 在该模式表示 AV 上下文接续。"
+    "重跑任一片段会扩大到整个连续组，请先从反馈的 sequence_groups 查看受影响范围，并向用户说明。"
 )
 READ = ToolAnnotations(
     readOnlyHint=True, destructiveHint=False, idempotentHint=True, openWorldHint=False
@@ -240,7 +243,7 @@ def create_mcp(app, config):
     async def rerun_production_shots(
         project_id: str, episode_id: str, request: RerunProduction
     ) -> CallToolResult:
-        """Rerun explicitly selected shots only with user authorization (confirm=true). Reuses existing production protections and preserves old media. Keep UUID for retries."""
+        """Rerun selected shots and continuity dependencies with authorization. Reference-sequence mode reruns each selected shot's WHOLE group; inspect sequence_groups first. Preserves old media. Keep UUID for retries."""
 
         async def rerun():
             episode = app.state.creation.rerun(project_id, episode_id, request)
@@ -248,6 +251,10 @@ def create_mcp(app, config):
                 "episode_id": episode_id,
                 "status": episode["status"],
                 "version": episode["version"],
+                "affected_shot_ids": episode["rerun_history"][-1]["affected_shot_ids"],
+                "rerun_scope": "whole_group"
+                if episode.get("production_mode") == "reference_sequence"
+                else "shots_and_dependencies",
             }
 
         return await invoke(rerun)

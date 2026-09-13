@@ -165,6 +165,21 @@ class ShotPrompts(StrictModel):
         return value
 
 
+class SequenceShotPrompts(ShotPrompts):
+    """Reference-driven segments retain story states without requiring endpoint images."""
+
+    image_prompt: str = Field(default="", max_length=6000)
+    start_frame_prompt: str = Field(default="", max_length=6000)
+    end_frame_prompt: str = Field(default="", max_length=6000)
+
+    @field_validator("image_prompt", "start_frame_prompt", "end_frame_prompt", "video_prompt")
+    @classmethod
+    def nonblank_visual_prompt(cls, value, info):
+        if info.field_name == "video_prompt" and not value.strip():
+            raise ValueError("Video prompt must not be blank")
+        return value
+
+
 class QAResult(StrictModel):
     character_consistency: float = Field(ge=0, le=1)
     scene_consistency: float = Field(ge=0, le=1)

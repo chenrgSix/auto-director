@@ -5,7 +5,7 @@ from decimal import ROUND_HALF_UP, Decimal
 
 from pydantic import Field, create_model, field_validator, model_validator
 
-from app.agents.schemas import ShotPrompts, StrictModel
+from app.agents.schemas import SequenceShotPrompts, ShotPrompts, StrictModel
 
 TIMING_HEADER = "Shot timing (seconds):"
 TIMING_REQUIRED_SECONDS = 4
@@ -112,7 +112,8 @@ def compile_timing(result):
             data["video_prompt"], [ActionBeat.model_validate(b) for b in beats]
         )
     # Enforce the same final 6000-character prompt limit, including the timing section.
-    return ShotPrompts.model_validate(data)
+    model = SequenceShotPrompts if isinstance(result, SequenceShotPrompts) else ShotPrompts
+    return model.model_validate(data)
 
 
 def read_timing(prompt, duration=None):

@@ -5,6 +5,7 @@ import re
 
 from app.agents.visual import visual_prose
 from app.core.errors import AppError
+from app.workflows.sequence import MAX_REFERENCES, is_sequence
 
 CONTINUOUS = {"CONTINUE_FRAME", "CONTINUE_VIDEO"}
 
@@ -65,7 +66,7 @@ def reference_slots(profile):
 
 def continuity_report(episode, image):
     issues, warnings, selections, scenes = [], [], [], {}
-    capacity = len(reference_slots(image))
+    capacity = MAX_REFERENCES if is_sequence(image) else len(reference_slots(image))
     previous = None
     for shot in episode.get("shots", []):
         if not shot.get("enabled", True) or not shot.get("prompts"):
@@ -149,7 +150,7 @@ def continuity_report(episode, image):
                 and prior_contract
                 and (
                     contract["scene_id"] != prior_contract["scene_id"]
-                    or contract["framing"] != prior_contract["framing"]
+                    or (not is_sequence(image) and contract["framing"] != prior_contract["framing"])
                     or contract["intentional_jump"]
                 )
             ):
@@ -179,6 +180,10 @@ def continuity_report(episode, image):
 
 
 def require_continuity(episode, image):
+    if is_sequence(image):
+        from app.generation.sequence import validate_groups
+
+        validate_groups(episode)
     report = continuity_report(episode, image)
     if report["issues"]:
         first = report["issues"][0]

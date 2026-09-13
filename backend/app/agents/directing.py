@@ -17,7 +17,13 @@ from app.agents.schemas import (
     Transition,
     VisualBible,
 )
-from app.agents.shot_batch import batch_context, prompt_batch_schema, shot_instruction, shot_output
+from app.agents.shot_batch import (
+    batch_context,
+    prompt_batch_schema,
+    prompt_model,
+    shot_instruction,
+    shot_output,
+)
 from app.agents.timing import TIMING_REQUIRED_SECONDS, compile_timing, timed_output
 from app.agents.visual import visual_prose
 from app.core.cancellation import run_cancellable
@@ -273,6 +279,10 @@ class Directors:
             available_shots=segment["available_shots"],
         )
         context.update(**timing, **segment)
+        sequence = episode.get("production_mode") == "reference_sequence"
+        if sequence:
+            context["production_mode"] = "reference_sequence"
+            context["max_continuous_group_segments"] = 8
         schema = planning_schema(PlanBatch if segment["segment_count"] > 1 else EpisodePlan, timing)
         pacing = (
             "The user explicitly fixed every shot's duration; honor that exact duration. "
@@ -303,6 +313,15 @@ class Directors:
                 f"their durations must sum to {episode['target_duration']:g} seconds. "
                 "These are timeline seconds, not frames or milliseconds. Use at most two decimal places. "
                 + pacing
+                + (
+                    "This production uses reference-driven continuous segment groups. "
+                    "CONTINUE_FRAME/CONTINUE_VIDEO joins the previous camera take using AV motion context, "
+                    "not a new endpoint image. Keep sustained actions flowing across segment boundaries. "
+                    "CUT transitions begin new groups for real editorial changes, not mechanical resets. "
+                    "At most 8 consecutive segments per group, including previous_shots. "
+                    if sequence
+                    else ""
+                )
                 + "Simplify actions to fit the available time; never lower the minimum or raise the maximum.",
                 context,
                 schema,
@@ -370,7 +389,8 @@ class Directors:
         try:
             # Check timing even when a custom provider returns a plain ShotPrompts instance.
             checked = timed_output(
-                audio_output(ShotPrompts, workflow_parameters or []), duration
+                audio_output(prompt_model(workflow_parameters or []), workflow_parameters or []),
+                duration,
             ).model_validate(result.model_dump())
             return compile_timing(checked)
         except ValueError as exc:

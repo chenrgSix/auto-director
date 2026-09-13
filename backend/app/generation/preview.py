@@ -22,6 +22,7 @@ from app.generation.workflow_state import scope_ai_parameters
 from app.workflows.analyzer import check_value
 from app.workflows.duration import duration_limits, render_maximum, uses_remote_video
 from app.workflows.frame_timing import generation_fps
+from app.workflows.sequence import is_sequence
 from app.workflows.versions import version_matches, versions_match
 
 PROMPT_FIELDS = ("start_frame_prompt", "end_frame_prompt", "video_prompt")
@@ -58,6 +59,10 @@ def prompt_view(episode, shot, image, video):
         generated = shot["prompts"].get("ai_parameters", {}).get(profile["id"], {})
         usable_ai_values(profile, generated, stage_prompt=True)
         value = shot["prompts"][field]
+        if is_sequence(video) and field != "video_prompt":
+            values[field] = value
+            locked[field] = "连续镜头模式不生成逐镜首尾帧"
+            continue
         duplicates = [generated[p["key"]] for p in parameters if p["key"] in generated]
         if duplicates:
             reason = (
@@ -152,7 +157,13 @@ def validate_timing(episode, video):
 
 
 def prepare_review(episode, image, video, reference):
-    episode["continuity_report"] = continuity_report(episode, image)
+    if is_sequence(video):
+        from app.generation.sequence import validate_groups
+
+        validate_groups(episode, video)
+    episode["continuity_report"] = continuity_report(
+        episode, video if is_sequence(video) else image
+    )
     for shot in episode["shots"]:
         shot["preview_prompt_view"] = prompt_view(episode, shot, image, video)
     episode["preview"] = {
@@ -173,6 +184,10 @@ def apply_edits(episode, request, image, video):
     if [item.id for item in request.shots] != [shot["id"] for shot in episode["shots"]]:
         raise AppError("PREVIEW_INVALID", "请保留当前全部镜头及顺序")
     for shot, item in zip(episode["shots"], request.shots, strict=True):
+        if item.transition_from_previous is not None:
+            if not is_sequence(video):
+                raise AppError("PREVIEW_INVALID", "仅连续镜头模式支持在此修改片段衔接")
+            shot["transition_from_previous"] = item.transition_from_previous.value
         view = prompt_view(episode, shot, image, video)
         edited = set(shot.get("preview_edited_fields", []))
         for field in PROMPT_FIELDS:
@@ -219,7 +234,13 @@ def apply_edits(episode, request, image, video):
         shot["preview_prompt_view"] = prompt_view(episode, shot, image, video)
     validate_timing(episode, video)
     validate_review_prompts(episode, image, video)
-    episode["continuity_report"] = continuity_report(episode, image)
+    if is_sequence(video):
+        from app.generation.sequence import validate_groups
+
+        validate_groups(episode, video)
+    episode["continuity_report"] = continuity_report(
+        episode, video if is_sequence(video) else image
+    )
     episode["plan"]["shots"] = [
         {key: deepcopy(shot[key]) for key in ShotPlan.model_fields} for shot in episode["shots"]
     ]

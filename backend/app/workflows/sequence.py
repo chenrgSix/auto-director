@@ -22,7 +22,7 @@ def is_sequence(profile):
 
 class SequenceSegment(StrictModel):
     shot_id: str = Field(min_length=1, max_length=64)
-    prompt: str = Field(min_length=1, max_length=6000)
+    prompt: str = Field(min_length=1, max_length=12000)
     duration: float = Field(ge=1, le=5)
     references: list[str] = Field(min_length=1, max_length=MAX_REFERENCES)
 

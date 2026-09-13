@@ -20,7 +20,16 @@ def prepare_recovery(store, episode, unresolved):
     binding = f"binding:{revision}:" if revision else ""
     step = pending["step_key"]
     cursor = None
-    if pending.get("shot_id"):
+    if pending["type"] == "SEQUENCE_VIDEO":
+        from app.generation.sequence import shot_groups
+
+        members = [s["shot_id"] for s in pending["input_values"]["_sequence"]["segments"]]
+        group = next((g for g in shot_groups(episode) if [s["id"] for s in g] == members), None)
+        versions = {s["id"]: s["retry_version"] for s in (group or [])}
+        if not group or versions != pending["input_values"].get("_sequence_versions"):
+            raise AppError("UNRESOLVED_JOB", "原连续组与当前片段版本不匹配，请先核对", status=409)
+        jobs = [pending]
+    elif pending.get("shot_id"):
         shot = next(
             (s for s in episode["shots"] if s["id"] == pending["shot_id"] and s["enabled"]), None
         )
@@ -98,7 +107,7 @@ def prepare_recovery(store, episode, unresolved):
                 "cursor": deepcopy(cursor),
                 "jobs": replay,
                 "skip_keyframe_qa": pending["type"]
-                in {"SHOT_VIDEO", "VIDEO_SEGMENT", "SHOT_INTERMEDIATE_FRAME"},
+                in {"SHOT_VIDEO", "VIDEO_SEGMENT", "SHOT_INTERMEDIATE_FRAME", "SEQUENCE_VIDEO"},
             }
         },
     )

@@ -70,6 +70,7 @@ from app.generation.schemas import (
     TimelineUpdate,
 )
 from app.generation.script_review import audit_new_script, require_review_acknowledgement
+from app.generation.sequence import group_views, sequence_mode
 from app.generation.workflow_state import (
     REFERENCE_INPUT_WARNING,
     media_ids,
@@ -86,6 +87,7 @@ from app.workflows.frame_timing import generation_fps
 from app.workflows.ownership import is_asset_role
 from app.workflows.router import CapabilityRouter
 from app.workflows.schema import WorkflowCapability
+from app.workflows.sequence import is_sequence
 from app.workflows.versions import versions_match
 
 logger = logging.getLogger(__name__)
@@ -220,14 +222,19 @@ class GenerationService:
     def draft(self, request: EpisodeCreate) -> dict:
         """Resolve a new episode without persisting it or invoking a model."""
         data = request.model_dump()
-        for kind in ("image", "video"):
-            profile = self.router.select(kind, data[f"{kind}_workflow_id"])
-            data[f"{kind}_workflow_id"] = profile["id"]
+        video = self.router.select("video", data["video_workflow_id"])
+        data["video_workflow_id"] = video["id"]
         reference_profile = self.router.resolve(
             WorkflowCapability.TEXT_TO_IMAGE, data["reference_workflow_id"]
         )
         reference_id = reference_profile["id"]
         data["reference_workflow_id"] = reference_id
+        data["production_mode"] = "reference_sequence" if is_sequence(video) else "keyframes"
+        data["image_workflow_id"] = (
+            reference_id
+            if is_sequence(video)
+            else self.router.select("image", data["image_workflow_id"])["id"]
+        )
         selected_ids = {data["image_workflow_id"], data["video_workflow_id"], reference_id}
         if data["workflow_overrides"].keys() - selected_ids:
             raise AppError("WORKFLOW_INVALID", "只能覆盖当前选定工作流的参数")
@@ -274,20 +281,29 @@ class GenerationService:
             if all(episode.get(key) == value for key, value in selection.items()):
                 return
             rendered = self.has_rendered_content(episode)
-            profiles = [
-                self.router.select("image", request.image_workflow_id),
-                self.router.select("video", request.video_workflow_id),
-                self.router.resolve(
-                    WorkflowCapability.TEXT_TO_IMAGE, request.reference_workflow_id
-                ),
-            ]
+            video = self.router.select("video", request.video_workflow_id)
+            reference = self.router.resolve(
+                WorkflowCapability.TEXT_TO_IMAGE, request.reference_workflow_id
+            )
+            image = (
+                reference
+                if is_sequence(video)
+                else self.router.select("image", request.image_workflow_id)
+            )
+            profiles = [image, video, reference]
+            selection["image_workflow_id"] = image["id"]
+            candidate_mode = "reference_sequence" if is_sequence(video) else "keyframes"
+            if rendered and candidate_mode != episode.get("production_mode", "keyframes"):
+                raise AppError(
+                    "CONFLICT", "已有产物的短片更换制作模式需另建制作版本，原视频保持", status=409
+                )
             for profile in profiles:
                 issues = validate_bindings(profile)
                 if issues:
                     raise AppError(
                         "WORKFLOW_INVALID", f"{profile['name']} 的输入输出绑定不完整", issues
                     )
-            candidate = {**episode, **selection}
+            candidate = {**episode, **selection, "production_mode": candidate_mode}
             candidate["workflow_overrides"] = {
                 key: value
                 for key, value in episode.get("workflow_overrides", {}).items()
@@ -308,6 +324,7 @@ class GenerationService:
                         allowed.add(value)
             configuration = {
                 **selection,
+                "production_mode": candidate_mode,
                 "workflow_overrides": candidate["workflow_overrides"],
                 "image_parameters": candidate.get("image_parameters", {}),
                 "video_parameters": candidate.get("video_parameters", {}),
@@ -392,16 +409,26 @@ class GenerationService:
         return self.store.update("episode", id, change)
 
     def preview_profiles(self, episode):
-        return [
-            self.router.select("image", episode.get("image_workflow_id")),
-            preview_video(episode, self.router.select("video", episode.get("video_workflow_id"))),
-            self.router.resolve(
-                WorkflowCapability.TEXT_TO_IMAGE, episode.get("reference_workflow_id")
-            ),
-        ]
+        video = preview_video(
+            episode, self.router.select("video", episode.get("video_workflow_id"))
+        )
+        reference = self.router.resolve(
+            WorkflowCapability.TEXT_TO_IMAGE, episode.get("reference_workflow_id")
+        )
+        image = (
+            reference
+            if is_sequence(video)
+            else self.router.select("image", episode.get("image_workflow_id"))
+        )
+        return [image, video, reference]
 
     def detail(self, id: str) -> dict:
         episode = self.store.get("episode", id)
+        if sequence_mode(episode):
+            try:
+                episode["sequence_groups"] = group_views(episode)
+            except AppError as exc:
+                episode["sequence_group_error"] = exc.as_dict()
         if REFERENCE_INPUT_WARNING in episode.get("warnings", []):
             try:
                 image = self.router.select("image", episode.get("image_workflow_id"))
@@ -421,7 +448,7 @@ class GenerationService:
         if episode["status"] == "AWAITING_REVIEW" and episode.get("bible") and episode.get("shots"):
             try:
                 episode["continuity_report"] = continuity_report(
-                    episode, self.preview_profiles(episode)[0]
+                    episode, self.preview_profiles(episode)[1 if sequence_mode(episode) else 0]
                 )
             except AppError:
                 pass  # Historical media stays readable when its workflow has been removed.
@@ -537,7 +564,9 @@ class GenerationService:
                 require_current_preview(episode, profiles)
                 validate_timing(episode, profiles[1])
                 validate_review_prompts(episode, *profiles[:2])
-                require_continuity(episode, profiles[0])
+                require_continuity(
+                    episode, profiles[1] if is_sequence(profiles[1]) else profiles[0]
+                )
                 require_review_acknowledgement(episode, accept_script_review)
                 if episode.get("creation_source"):
                     self.validate_external_prompts(episode, profiles)
@@ -580,11 +609,13 @@ class GenerationService:
 
         from app.agents.audio import audio_output
         from app.agents.parameters import constrained_output
-        from app.agents.schemas import ShotPrompts
+        from app.agents.shot_batch import prompt_model
 
         self.require_creation_review_model(episode)
         schema = audio_output(
-            constrained_output(ShotPrompts, ai_parameters(*profiles[:2])),
+            constrained_output(
+                prompt_model(ai_parameters(*profiles[:2])), ai_parameters(*profiles[:2])
+            ),
             ai_parameters(*profiles[:2]),
         )
         try:
@@ -853,6 +884,15 @@ class GenerationService:
                 elif dependent:
                     scopes[shot["id"]] = "keyframes"
                 previous_changed = shot["id"] in scopes
+            if sequence_mode(current):
+                from app.generation.sequence import expand_groups
+
+                if request.scope == "keyframes" or request.allow_static_end_frame is not None:
+                    raise AppError(
+                        "SEQUENCE_INVALID", "连续镜头不生成首尾帧，请选择整组视频重跑", status=422
+                    )
+                affected = expand_groups(current, selected)
+                scopes = {s["id"]: request.scope for s in current["shots"] if s["id"] in affected}
             snapshot = {
                 "id": uid(),
                 "created_at": now(),
@@ -951,6 +991,21 @@ class GenerationService:
                 for i, item in enumerate(request.shots)
             ]
             after = predecessors(episode["shots"])
+            if sequence_mode(episode):
+                from app.generation.sequence import shot_groups
+
+                # Membership/order is part of every member's motion-context dependency.
+                for group in shot_groups(episode):
+                    members = [s["id"] for s in group]
+                    if any(
+                        s.get("sequence_members") and s["sequence_members"] != members
+                        for s in group
+                    ):
+                        for shot in group:
+                            self.invalidate(shot, "video")
+                episode.update(final_video_asset_id=None, status="DRAFT", error=None)
+                episode.pop("render_recovery", None)
+                return
             invalidated = set()
             for shot in episode["shots"]:
                 if (
@@ -1033,11 +1088,7 @@ class GenerationService:
         episode = self.store.get("episode", id)
         if not preview_only:
             episode = prepare_recovery(self.store, episode, self.engine.unresolved())
-        image = self.router.select("image", episode.get("image_workflow_id"))
-        video = self.router.select("video", episode.get("video_workflow_id"))
-        reference_profile = self.router.resolve(
-            WorkflowCapability.TEXT_TO_IMAGE, episode.get("reference_workflow_id")
-        )
+        image, video, reference_profile = self.preview_profiles(episode)
         image, video, reference_profile = recovery_profiles(
             self.store, episode, (image, video, reference_profile)
         )
@@ -1185,7 +1236,7 @@ class GenerationService:
                 )
                 preview_complete = True
                 return
-            require_continuity(episode, image)
+            require_continuity(episode, video if is_sequence(video) else image)
             visual_qa = visual_qa_enabled(episode, self.settings)
             if episode["qa_enabled"] and not visual_qa:
                 self.warn(
@@ -1194,7 +1245,7 @@ class GenerationService:
                     if episode.get("creation_source")
                     else "未配置 VLM，视觉 QA 已跳过；仅执行媒体技术校验。",
                 )
-            if "reference_image" not in image["bindings"]:
+            if not is_sequence(video) and "reference_image" not in image["bindings"]:
                 self.warn(id, REFERENCE_INPUT_WARNING)
             elif REFERENCE_INPUT_WARNING in episode.get("warnings", []):
                 self.store.update(
@@ -1279,6 +1330,12 @@ class GenerationService:
                     self.clear_recovery(id)
             gate(self, id, "references")
             episode = self.store.get("episode", id)
+            if is_sequence(video):
+                from app.generation.sequence import generate_groups
+
+                await generate_groups(self, episode, video, budget, agents)
+                await self.compose_episode(id)
+                return
             previous = None
             continuity = {}
             for listed in episode["shots"]:

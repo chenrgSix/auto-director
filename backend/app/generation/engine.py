@@ -9,10 +9,12 @@ from app.db.store import Store, now
 from app.generation.parameters import resolve_parameters
 from app.generation.preflight import check_graph
 from app.generation.resolvers import AssetResolver
+from app.media.sequence import split_sequence_output
 from app.media.service import Assets, video_duration
 from app.workflows.analyzer import patch, refresh_profile, validate_dependencies, workflow_hash
 from app.workflows.optional_references import select_optional_references
 from app.workflows.ownership import canonicalize
+from app.workflows.sequence import compile_sequence, is_sequence, sequence_input
 
 
 class RenderEngine:
@@ -66,6 +68,19 @@ class RenderEngine:
             recovery=bool(values.get("_oom_recovery")),
             ai_values=ai_values,
         )
+        if is_sequence(profile):
+            if "_sequence" not in values:
+                values["_sequence"] = {
+                    "segments": [
+                        {
+                            "shot_id": shot_id or "test-segment",
+                            "prompt": values.get("prompt", ""),
+                            "duration": values.get("duration", 5),
+                            "references": list(asset_bindings),
+                        }
+                    ]
+                }
+            sequence_input(values)
         signature = workflow_hash(
             {
                 "workflow": profile["workflow_hash"],
@@ -83,7 +98,13 @@ class RenderEngine:
             }
         )
         for old in self.store.list("job", episode_id):
-            if old.get("signature") == signature and old["status"] in {"COMPLETED", "UNKNOWN"}:
+            reusable = old["status"] in {"COMPLETED", "UNKNOWN"} or (
+                is_sequence(profile)
+                and old["status"] == "FAILED"
+                and old.get("source_output_asset_ids")
+                and old.get("comfy_prompt_id")
+            )
+            if old.get("signature") == signature and reusable:
                 return old
         return self.store.create(
             "job",
@@ -182,16 +203,37 @@ class RenderEngine:
                                 if p.get("owner") == "asset_resolver"
                             },
                         )
-                        values.update(
-                            await AssetResolver(self.store, self.assets).resolve(
-                                profile,
-                                bound_assets,
-                                client,
-                                job["episode_id"],
-                                job.get("allowed_asset_ids", []),
-                                test=job["type"] == "WORKFLOW_TEST",
+                        if is_sequence(profile):
+                            source = sequence_input(values)
+                            needed = {r for segment in source.segments for r in segment.references}
+                            if needed != set(bound_assets):
+                                raise AppError(
+                                    "ASSET_REQUIRED", "连续组参考素材与实际片段选择不一致"
+                                )
+                            resolver = AssetResolver(self.store, self.assets)
+                            for role, asset_id in bound_assets.items():
+                                resolver.validate(
+                                    role,
+                                    asset_id,
+                                    job["episode_id"],
+                                    job.get("allowed_asset_ids", []),
+                                    test=job["type"] == "WORKFLOW_TEST",
+                                )
+                            uploaded = {
+                                role: await client.upload(self.assets.path(asset_id))
+                                for role, asset_id in bound_assets.items()
+                            }
+                        else:
+                            values.update(
+                                await AssetResolver(self.store, self.assets).resolve(
+                                    profile,
+                                    bound_assets,
+                                    client,
+                                    job["episode_id"],
+                                    job.get("allowed_asset_ids", []),
+                                    test=job["type"] == "WORKFLOW_TEST",
+                                )
                             )
-                        )
                         graph = patch(
                             checked,
                             values,
@@ -199,6 +241,8 @@ class RenderEngine:
                             advanced=job.get("advanced_mode", True),
                             ai_values=job.get("ai_parameter_values", {}),
                         )
+                        if is_sequence(profile):
+                            graph = compile_sequence(checked, graph, values, uploaded)
                         report = validate_dependencies(
                             {**checked, "workflow": graph, "parameter_values": {}}, info
                         )
@@ -272,6 +316,26 @@ class RenderEngine:
                     self.store.update(
                         "job", job_id, {"output_asset_ids": [r["id"] for r in records]}
                     )
+                    if is_sequence(profile):
+
+                        def check_cancel():
+                            if cancelled():
+                                raise AppError("CANCELLED", "连续组已取消")
+
+                        self.store.update(
+                            "job",
+                            job_id,
+                            {
+                                "source_output_asset_ids": [r["id"] for r in records],
+                                "sequence_history": history.get("outputs", {}).get(
+                                    profile["outputs"]["sequence_report"], {}
+                                ),
+                            },
+                        )
+                        records, evidence = await split_sequence_output(
+                            self.assets, job, records, history, check_cancel
+                        )
+                        self.store.update("job", job_id, {"sequence_output": evidence})
                     self.validate_outputs(job, records)
                     self.store.update(
                         "job",

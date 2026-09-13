@@ -9,6 +9,7 @@ from app.generation.parameters import (
 )
 from app.workflows.analyzer import patch, validate_dependencies
 from app.workflows.ownership import is_asset_role
+from app.workflows.sequence import is_sequence
 
 
 def check_graph(profile, info, values, raw, *, advanced, ai_values=None, deferred_inputs=()):
@@ -114,7 +115,7 @@ def check_episode(episode, image, video, reference, budget, info):
                 and not roles.get("end_frame")
             )
         previous = True
-    if needs_image:
+    if needs_image and not is_sequence(video):
         check_profile(episode, image, budget, info)
     bible = episode.get("bible")
     expected_refs = {"environment", "style"} | {

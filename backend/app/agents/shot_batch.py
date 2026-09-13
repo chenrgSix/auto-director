@@ -7,7 +7,13 @@ from pydantic import Field, create_model
 
 from app.agents.audio import H3_INSTRUCTION, audio_output, uses_h3_audio
 from app.agents.parameters import constrained_output
-from app.agents.schemas import ShotPlan, ShotPrompts, StrictModel, VisualContinuity
+from app.agents.schemas import (
+    SequenceShotPrompts,
+    ShotPlan,
+    ShotPrompts,
+    StrictModel,
+    VisualContinuity,
+)
 from app.agents.timing import timed_output
 
 # Planning estimates, not provider token limits. Oversized requests use the legacy single call.
@@ -86,10 +92,18 @@ def select_prompt_batch(bible, pending, continuity, specifications, idea, maximu
     return selected
 
 
+def prompt_model(specifications):
+    return (
+        SequenceShotPrompts
+        if any(item.get("capability") == "REFERENCE_SEQUENCE_TO_VIDEO" for item in specifications)
+        else ShotPrompts
+    )
+
+
 def shot_output(specifications, duration):
     base = create_model(
         "ContinuousShotPrompts",
-        __base__=ShotPrompts,
+        __base__=prompt_model(specifications),
         visual_continuity=(VisualContinuity, Field()),
     )
     return timed_output(
@@ -98,7 +112,34 @@ def shot_output(specifications, duration):
 
 
 def shot_instruction(specifications):
+    if prompt_model(specifications) is SequenceShotPrompts:
+        return SEQUENCE_INSTRUCTION + (
+            " " + H3_INSTRUCTION if uses_h3_audio(specifications) else ""
+        )
     return SHOT_INSTRUCTION + (" " + H3_INSTRUCTION if uses_h3_audio(specifications) else "")
+
+
+SEQUENCE_INSTRUCTION = (
+    "Create reference-driven video segments for a continuous camera take. "
+    "No generated endpoint images are required: omit image_prompt, start_frame_prompt and end_frame_prompt. "
+    "Write a complete English video_prompt with action, camera, lighting and sound. "
+    "CONTINUE_FRAME/CONTINUE_VIDEO inherits the preceding segment's visual AND audio motion context; "
+    "continue the same action phase without a forced pause, pose reset, repeated opening or ending. "
+    "A CUT starts a new take. Never insert an editorial cut or unrelated subject inside a segment. "
+    "Use only the visible characters and objects. Declare visual_continuity with scene_id, "
+    "visible_character_ids, ordered reference_roles (character:<id>, prop:<id>, environment, style; "
+    "at most 9), framing, state_in/state_out and intentional_jump only for a deliberate discontinuity. "
+    "Maintain the same canonical state keys and values until an action changes them. "
+    "Picture numbering follows this segment's reference_roles order, starting at 1. "
+    "References specify identity, environment or objects, not mandatory start or end frames. "
+    "Do not use absent characters as reference images. An empty scene must remain unoccupied. "
+    "For segments of at least 4 seconds, provide 2-4 action_beats in local seconds, covering the "
+    "entire planned duration without gaps or overlaps. Shorter segments may omit beats. "
+    "Keep timestamps out of video_prompt; the compiler appends the action beats. "
+    "Match the planned action and start/end states without inventing additional plot. "
+    "Set continuity_state to the expected action phase, positions and directions at the end. "
+    "Only fill the declared AI-owned parameters, never duplicate source=stage_prompt inputs. "
+)
 
 
 SHOT_INSTRUCTION = (

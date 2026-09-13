@@ -17,6 +17,7 @@ def reconcile_reference_warning(episode, image):
 
 
 STORY_FIELDS = (
+    "production_mode",
     "title",
     "status",
     "plan",

@@ -72,7 +72,7 @@ def preserve_audio(original, changed):
 def reference_header(prompt, capability, duration, *, reference_mode=False):
     """Computed after frame fitting; never prepend to an explicit user override."""
     prompt = FRAME_HEADER.sub("", prompt, count=1)
-    if reference_mode:
+    if reference_mode or capability == "REFERENCE_SEQUENCE_TO_VIDEO":
         # R2V Picture N denotes an appearance reference, not a temporal keyframe.
         # A separate AddGuide may anchor the start without changing that numbering.
         return prompt

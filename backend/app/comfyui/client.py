@@ -252,6 +252,7 @@ class ComfyUIClient:
     ) -> dict:
         websocket = None
         next_socket_attempt = 0
+        active_node = None
 
         async def open_socket():
             nonlocal next_socket_attempt
@@ -335,7 +336,31 @@ class ComfyUIClient:
                                 "executing",
                                 "execution_start",
                             }:
+                                if event["type"] == "executing":
+                                    active_node = str(data.get("node"))
                                 await on_progress({"event": event["type"], **data})
+                            elif (
+                                event.get("type") == "minimax_director_progress"
+                                and str(data.get("node_id")) == active_node
+                                and graph.get(active_node, {}).get("class_type")
+                                == "MiniMaxH3Director"
+                            ):
+                                await on_progress(
+                                    {
+                                        "event": "sequence_progress",
+                                        **{
+                                            key: data[key]
+                                            for key in (
+                                                "segment",
+                                                "segment_total",
+                                                "phase_label",
+                                                "overall_value",
+                                                "overall_max",
+                                            )
+                                            if key in data
+                                        },
+                                    }
+                                )
                     except TimeoutError:
                         pass
                     except Exception:
