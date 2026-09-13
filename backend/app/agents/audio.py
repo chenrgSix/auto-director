@@ -69,9 +69,13 @@ def preserve_audio(original, changed):
         raise ValueError("视觉优化不能修改或删除已有的台词、声音表演、环境声和音乐说明")
 
 
-def reference_header(prompt, capability, duration):
+def reference_header(prompt, capability, duration, *, reference_mode=False):
     """Computed after frame fitting; never prepend to an explicit user override."""
     prompt = FRAME_HEADER.sub("", prompt, count=1)
+    if reference_mode:
+        # R2V Picture N denotes an appearance reference, not a temporal keyframe.
+        # A separate AddGuide may anchor the start without changing that numbering.
+        return prompt
     if capability == "FIRST_LAST_TO_VIDEO":
         return (
             "How the reference pictures align with the target video — Picture 1 (from Shot 1) "

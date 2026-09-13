@@ -75,6 +75,19 @@ def test_ref2va_three_refs_keep_start_guide_and_native_audio(ref2va):
     assert profile == original
 
 
+def test_ref2va_prompt_does_not_label_identity_reference_as_first_frame(ref2va):
+    profile, _ = ref2va
+    prompt = (
+        "integrated_multimodal_description: [Shot 1] Person from <Picture 1> "
+        "in the room from <Picture 2>.\nSpeech performance: No speech.\n"
+        "overall_soundscape: Rain.\nnon_diegetic_music: N/A"
+    )
+    values, _, _, _ = resolve_parameters(
+        profile, {"duration": 5, "prompt": prompt}, {}, {}, False, None
+    )
+    assert values["prompt"] == prompt
+
+
 @pytest.mark.parametrize("minimum,kind", [(2, "IMAGE"), (0, "AUDIO")])
 def test_optional_autogrow_rejects_required_or_wrong_media_slot(ref2va, minimum, kind):
     profile, info = ref2va

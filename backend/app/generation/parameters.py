@@ -261,8 +261,14 @@ def resolve_parameters(
             header_duration = values["duration"]
             if binding.get("transform") == "duration_to_frames":
                 header_duration = frame_count(binding, header_duration, fps) / fps
+            prompt_node = profile["workflow"].get(
+                profile.get("bindings", {}).get("prompt", {}).get("node_id"), {}
+            )
             values["prompt"] = reference_header(
-                values["prompt"], profile["capability"], header_duration
+                values["prompt"],
+                profile["capability"],
+                header_duration,
+                reference_mode=prompt_node.get("class_type") == "MiniMaxH3ReferenceToVideo",
             )
     sources = {}
     for item in profile["parameters"]:
