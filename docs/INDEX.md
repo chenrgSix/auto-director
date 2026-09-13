@@ -4,6 +4,7 @@
 
 | 文档 | 职责 |
 | --- | --- |
+| [创作包与 MCP](CREATION_PACKAGES.md) | C53 外部持续创作、版本交付、MCP 和验收目标 |
 | [开发任务](DEVELOPMENT_TASKS.md) | 冻结目标、任务、状态、验收门禁与后续范围 |
 | [模块设计](MODULE_DESIGN.md) | 模块边界、数据、运行时与失败恢复 |
 | [工作流能力与参数归属](WORKFLOW_CAPABILITIES.md) | C03–C06 能力分支、AI 参数、快速导入、实际字段配置与验收门禁 |

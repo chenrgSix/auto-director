@@ -1,5 +1,9 @@
 # 模块设计
 
+## C53 创作包与 MCP（实施中）
+
+独立创作包业务服务接收外部持续创作成果。网页 API 与本地 MCP 为同一服务的适配层，后端不持有 Codex 会话。交付产生独立 Episode，复用预览/执行/恢复边界；完整包不得回退内部文字 Agent。见 [C53](CREATION_PACKAGES.md)。
+
 ## C50 视频工作流原生音频
 
 两套可选 `codex-H3` 视频图复用单次联合采样结果：视频分支保持分块解码，音频分支经现有官方 `VAEDecodeAudio` 与 H3 音频 VAE 解码，连接 `CreateVideo.audio` 后由同一个 `SaveVideo` 输出 MP4。不增加采样、独立音频作业或 TTS；I2V/首尾帧能力、时长时钟、参数 owner 和用户覆盖保持原契约。
