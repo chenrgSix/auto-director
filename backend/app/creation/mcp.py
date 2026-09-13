@@ -28,6 +28,9 @@ from app.generation.continuity_review import (
     review_context,
     save_review,
 )
+from app.generation.preproduction import ImageReviewDecision
+from app.generation.preproduction import context as image_review_context
+from app.generation.preproduction import decide as decide_image_review
 from app.media.service import extract_frame
 
 logger = logging.getLogger(__name__)
@@ -39,6 +42,7 @@ INSTRUCTIONS = (
     "响应丢失时使用完全相同的 ID 和参数重试，冲突时读取最新版本并合并。"
     "任务受理后独立运行，关闭会话不会取消；查询反馈或显式取消。"
     "不需要 API Key，不要修改 Codex 会话库或配置，不要将本地校验宣称为画质验收。"
+    "新项目推荐 brief.image_review_required=true：先 inspect_preproduction_images 查看参考及首尾帧，再 decide_preproduction_images 确认或修订。确认会继续制作，须在用户授权内并记录实际观察；等待时用户可从网页接管。"
     "每镜声明 visual_continuity 并按主体选择参考；制作后调用 inspect_shot_continuity 对照真实边界帧，"
     "记录观察依据。用户授权局部重跑时调用 rerun_production_shots；修改剧情/参考契约先保存新包版本。"
 )
@@ -247,5 +251,48 @@ def create_mcp(app, config):
             }
 
         return await invoke(rerun)
+
+    @server.tool(annotations=READ)
+    async def inspect_preproduction_images(
+        project_id: str, episode_id: str, targets: list[str] | None = None
+    ) -> CallToolResult:
+        """View pending references or shot endpoint images before video. At most 8 images per call; use targets for remaining images. Do not approve unseen images."""
+
+        async def read():
+            app.state.creation.feedback(project_id, episode_id)
+            current = image_review_context(
+                app.state.generation, app.state.store.get("episode", episode_id)
+            )
+            frames = [f for f in current["frames"] if targets is None or f["target"] in targets][:8]
+            current["shown_targets"] = [f["target"] for f in frames]
+            content = [TextContent(type="text", text=json.dumps(current, ensure_ascii=False))]
+            for frame in frames:
+                content.append(TextContent(type="text", text=frame["target"]))
+                encoded = await asyncio.to_thread(
+                    vision_data, app.state.assets.path(frame["asset_id"])
+                )
+                content.append(
+                    ImageContent(type="image", mimeType="image/jpeg", data=encoded.split(",", 1)[1])
+                )
+            return CallToolResult(content=content, structuredContent=current)
+
+        return await invoke(read)
+
+    @server.tool(annotations=WRITE)
+    async def decide_preproduction_images(
+        project_id: str, episode_id: str, request: ImageReviewDecision
+    ) -> CallToolResult:
+        """Approve the inspected image stage or revise one image with a complete visual prompt. Continues rendering only within user authorization; exact UUID retries are idempotent. Package revisions and old media are preserved."""
+
+        def save():
+            app.state.creation.feedback(project_id, episode_id)
+            episode = decide_image_review(app.state.generation, episode_id, request)
+            return {
+                "episode_id": episode_id,
+                "version": episode["version"],
+                "status": episode["status"],
+            }
+
+        return await invoke(save)
 
     return server

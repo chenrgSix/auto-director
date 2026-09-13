@@ -104,9 +104,9 @@ def shot_instruction(specifications):
 SHOT_INSTRUCTION = (
     "Declare visual_continuity for every shot: stable scene_id, visible_character_ids from the Bible "
     "(empty for unoccupied environment or object inserts), reference_roles in priority order using "
-    "character:<id>, environment or style, framing, state_in and state_out. The FIRST reference is "
+    "character:<id>, prop:<bible.props id>, environment or style, framing, state_in and state_out. The FIRST reference is "
     "the actual source for a single-reference workflow, so never select an unrelated character. "
-    "Use environment first for an object insert; exclude faces and irrelevant furniture from its "
+    "Use its stable prop reference first for a recurring object insert; use environment only when no prop exists; exclude faces and irrelevant furniture from its "
     "image prompts. Keep canonical state keys and values identical across shots in the same scene "
     "until an action changes them: positions, screen directions, prop holders and camera axis. "
     "Read continuity.scene_states across reverse shots; an offscreen character's state persists. "

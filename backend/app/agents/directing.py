@@ -330,6 +330,8 @@ class Directors:
     async def bible(self, episode: dict, plan: dict, workflow_parameters=None) -> VisualBible:
         return await self.generate_json(
             "Act as Bible Agent. Specify distinct, stable character identities, environment, visual style, "
+            "Create props entries with stable IDs and precise shape, material and color for objects recurring across shots. "
+            "Keep environment and style entries purely visual: no field headings, sound or performance directions. "
             "lighting and continuity rules for this episode only. Preserve the exact subject count in the idea. "
             "Fill ai_parameters[workflow_id][parameter_key] for the listed AI-owned parameters, "
             "respecting their types, bounds, enums and steps, including every downstream constraint. "

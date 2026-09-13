@@ -22,6 +22,7 @@ class EpisodeCreate(StrictModel):
     style: str = Field(default="自然纪录片", max_length=200)
     quality: Literal["fast", "standard", "high"] = "standard"
     preview_required: bool = False  # Legacy API clients keep direct generation.
+    image_review_required: bool = False  # Existing API documents retain automatic production.
     image_workflow_id: str | None = None
     video_workflow_id: str | None = None
     reference_workflow_id: str | None = None

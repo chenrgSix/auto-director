@@ -97,3 +97,11 @@ codex mcp add autodirector --url http://127.0.0.1:8000/mcp/
 C57 新创作需声明每镜 `visual_continuity`，先确定出场角色和参考顺序，再编写符合相同空间/动作状态的提示词。单参考只使用第一项，多角色或道具不能默认套用 Bible 第一个角色。读取上下文中的最新 schema/能力限制，检查跨反打状态；规则和实际画面分别复核。详见 [镜头参考与连续性](SHOT_CONTINUITY.md)。
 
 读写工具调用同一 CreationService；工具失败返回 `isError` 与结构化错误，冲突后先读取并合并。协议层采用官方 Python SDK v1 维护线、无状态 HTTP；业务版本和幂等收据存于 SQLite，既有 GenerationService 持有后台任务。断开或重连 MCP 不持有、不释放 Codex 会话锁，也不取消制作。视频抽帧不能证明完整运动、对白或口型质量；声音仍需实际播放复核。
+
+## C58：在持续会话中确认画面
+
+新包推荐 `brief.image_review_required=true`。制作在共享参考图、逐镜首尾关键帧准备好时进入 `AWAITING_IMAGE_REVIEW`，网页和 Codex 任何一方均可接管，不需要读取或锁定 Codex 会话。
+
+新增 MCP 工具（共 17 个）：`inspect_preproduction_images(project_id, episode_id, targets?)` 返回当前摘要和带标签的图片；每次最多八张，使用 targets 读取其余参考，不能确认未看过的图。`decide_preproduction_images(project_id, episode_id, request)` 复用 [HTTP 决策契约](API_CONTRACT.md#c58制作前画面确认)，按用户既有授权确认继续或单图修订，必须记录实际观察，保持 UUID 重试、版本和素材摘要保护。
+
+确认图像只授权下一制作阶段，不表示视频动作/边界/音频已通过。制作后的实际连续性复核仍使用 C57 工具。修订保留源包与旧资产，新的剧情/参考身份变更另存创作包版本。

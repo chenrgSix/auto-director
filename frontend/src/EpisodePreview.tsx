@@ -108,7 +108,7 @@ export function EpisodePreview({ episode, busy, setBusy, refresh, notify }: {
         await api(`/creation/projects/${saved.creation_source.project_id}/productions/${saved.id}/confirm`, 'POST', pendingApproval.current);
         pendingApproval.current = null;
       } else if (start) await api(`/episodes/${base.id}/approve`, 'POST', { expected_version: saved.version, accept_script_review: reviewAccepted });
-      refresh(); notify(start ? '分镜已确认，开始生成视频' : '分镜修改已保存');
+      refresh(); notify(start ? (episode.image_review_required ? '分镜已确认，正在生成参考图' : '分镜已确认，开始生成视频') : '分镜修改已保存');
     } catch (problem) { setError((problem as Error).message); refresh(); }
     finally { setBusy(false); }
   }
@@ -137,7 +137,7 @@ export function EpisodePreview({ episode, busy, setBusy, refresh, notify }: {
         </div>
       </div>
       {needsReview && <label className="check script-review-ack"><input type="checkbox" checked={reviewAccepted} disabled={busy || stale} onChange={event => setReviewAccepted(event.target.checked)} />我已检查 AI 提出的剧本问题，确认按当前分镜生成</label>}
-      <div className="preview-footer"><div><strong>{dirty ? '有未保存的修改' : '分镜已保存'}</strong><small>{issues[0]?.message ?? (needsReview && !reviewAccepted ? '请先检查并确认 AI 提出的剧本问题。' : '开始生成会自动保存当前修改。')}</small></div><div className="actions"><button type="button" disabled={busy || !dirty || !valid || stale} onClick={() => void save()}><Save size={15} />保存分镜</button><button className="primary" type="submit" disabled={busy || !canStart || stale}><Play size={15} />{busy ? '正在处理…' : '开始视频生成'}</button></div></div>
+      <div className="preview-footer"><div><strong>{dirty ? '有未保存的修改' : '分镜已保存'}</strong><small>{issues[0]?.message ?? (needsReview && !reviewAccepted ? '请先检查并确认 AI 提出的剧本问题。' : '开始生成会自动保存当前修改。')}</small></div><div className="actions"><button type="button" disabled={busy || !dirty || !valid || stale} onClick={() => void save()}><Save size={15} />保存分镜</button><button className="primary" type="submit" disabled={busy || !canStart || stale}><Play size={15} />{busy ? '正在处理…' : episode.image_review_required ? '生成参考图并确认' : '开始视频生成'}</button></div></div>
     </form>
   </section>;
 }

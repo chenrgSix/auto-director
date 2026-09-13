@@ -14,6 +14,7 @@ class CreationBrief(StrictModel):
     aspect_ratio: Literal["9:16", "16:9", "1:1"] = "9:16"
     style: str = Field(default="自然纪录片", max_length=200)
     quality: Literal["fast", "standard", "high"] = "standard"
+    image_review_required: bool = False  # Existing API documents retain automatic production.
     image_workflow_id: str | None = None
     video_workflow_id: str | None = None
     reference_workflow_id: str | None = None

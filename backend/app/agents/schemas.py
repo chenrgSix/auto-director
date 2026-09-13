@@ -80,6 +80,13 @@ class VisualBible(StrictModel):
     camera_motion: str = Field(min_length=1, max_length=300)
     motion_strength: float = Field(ge=0, le=1)
 
+    @model_validator(mode="after")
+    def unique_reference_ids(self):
+        for entries in (self.characters, self.props):
+            if len({item.id for item in entries}) != len(entries):
+                raise ValueError("人物或道具参考 ID 不能重复")
+        return self
+
 
 StateText = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=300)]
 ReferenceRole = Annotated[
@@ -104,7 +111,9 @@ class VisualContinuity(StrictModel):
             raise ValueError("参考角色不能重复")
         selected = {role[10:] for role in self.reference_roles if role.startswith("character:")}
         if selected - set(self.visible_character_ids):
-            raise ValueError("角色参考必须属于本镜出场角色；无人插入镜头使用 environment 或 style")
+            raise ValueError(
+                "角色参考必须属于本镜出场角色；无人插入镜头使用 prop、environment 或 style"
+            )
         return self
 
 

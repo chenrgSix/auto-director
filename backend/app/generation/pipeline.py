@@ -30,6 +30,7 @@ from app.generation.parameters import (
     validate_strategy,
 )
 from app.generation.preflight import check_episode
+from app.generation.preproduction import WAITING, ImageReviewPause, gate
 from app.generation.preview import (
     apply_edits,
     prepare_review,
@@ -170,6 +171,8 @@ class GenerationService:
                         await self.compose_episode(id)
                     else:
                         await self.generate(id, preview_only=kind == "preview")
+            except ImageReviewPause:
+                pass
             except AppError as exc:
                 if kind == "job":
                     job = self.store.get("job", id)
@@ -515,6 +518,10 @@ class GenerationService:
             raise AppError("CONFLICT", "上一任务尚未结束，请等待取消完成后重试", status=409)
 
         def change(episode):
+            if episode["status"] == WAITING:
+                raise AppError(
+                    "IMAGE_REVIEW_REQUIRED", "请先查看并确认当前参考图或关键帧", status=409
+                )
             if episode.get("creation_source") and operation == "preview":
                 raise AppError(
                     "CREATION_PACKAGE_REQUIRED", "请在创作项目中校验并提交新版本", status=409
@@ -909,8 +916,8 @@ class GenerationService:
             raise AppError("CONFLICT", "请先恢复或核对未结束作业，再编辑时间线", status=409)
 
         def change(episode):
-            if episode["status"] in ACTIVE:
-                raise AppError("CONFLICT", "运行时不能编辑时间线", status=409)
+            if episode["status"] in ACTIVE or episode["status"] == WAITING:
+                raise AppError("CONFLICT", "运行或待确认画面时不能编辑时间线", status=409)
             if episode.get("preview_required") and not episode.get("preview_approved_at"):
                 raise AppError("PREVIEW_REQUIRED", "请使用分镜预览编辑时长与提示词", status=409)
             if (
@@ -1214,7 +1221,11 @@ class GenerationService:
                     {
                         **budget,
                         "prompt": anchored_prompt(
-                            episode["bible"], reference_description(key, prompt), {}
+                            episode["bible"],
+                            reference_description(
+                                key, current.get("reference_corrections", {}).get(key, prompt)
+                            ),
+                            {},
                         ),
                         "negative": episode["bible"].get(
                             "negative_prompt", "text, watermark, artifacts"
@@ -1225,10 +1236,21 @@ class GenerationService:
                             "camera_motion", "static reference view"
                         ),
                         "motion_strength": episode["bible"].get("motion_strength", 0.2),
-                        "seed": episode["seed"] + len(current["references"]),
+                        "seed": (
+                            episode["seed"]
+                            + len(current["references"])
+                            + 10000 * current.get("reference_revisions", {}).get(key, 0)
+                        )
+                        % 2147483648,
                     },
                     {},
-                    "reference:" + key,
+                    "reference:"
+                    + key
+                    + (
+                        f":r{current['reference_revisions'][key]}"
+                        if current.get("reference_revisions", {}).get(key)
+                        else ""
+                    ),
                 )
                 references = {**current["references"], key: result["id"]}
                 self.store.update("episode", id, {"references": references})
@@ -1236,6 +1258,7 @@ class GenerationService:
                     "shot_id"
                 ) is None:
                     self.clear_recovery(id)
+            gate(self, id, "references")
             episode = self.store.get("episode", id)
             previous = None
             continuity = {}
@@ -1644,6 +1667,7 @@ class GenerationService:
                             },
                         )
                 if not shot["video_asset_id"]:
+                    gate(self, id, "keyframes", sid)
                     self.stage(id, "RENDERING_VIDEO")
                     self.update_shot(id, sid, status="RENDERING_VIDEO")
                     result = await self.render_video(

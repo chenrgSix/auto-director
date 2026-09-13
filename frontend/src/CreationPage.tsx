@@ -7,6 +7,7 @@ import { ErrorNotice, Loading } from './ui';
 
 type Brief = {
   idea: string; target_duration: number; aspect_ratio: string; style: string;
+  image_review_required?: boolean;
   quality: string; visual_review: string; seed: number;
   image_workflow_id: string | null; video_workflow_id: string | null;
   reference_workflow_id: string | null; max_shot_duration: number | null;
@@ -30,7 +31,7 @@ function emptyDocument(idea: string, duration: number): Document {
   return {
     format: 'autodirector.creation/v1',
     brief: { idea, target_duration: duration, aspect_ratio: '9:16', style: '自然纪录片', quality: 'standard',
-      visual_review: 'manual', seed: 42, image_workflow_id: null, video_workflow_id: null,
+      image_review_required: true, visual_review: 'manual', seed: 42, image_workflow_id: null, video_workflow_id: null,
       reference_workflow_id: null, max_shot_duration: null },
     title: '', logline: '', bible: null, shots: [], decisions: [], open_questions: [], notes: '',
   };
@@ -180,6 +181,7 @@ function ProjectEditor({ project, notify, refresh, disconnected }: { project: Pr
     </fieldset></section><section className="panel">
       <div className="panel-title">制作与交付</div><p className="muted">可以先保存草稿。设定与提示词完整、通过当前工作流校验后，再提交分镜预览。</p>
       <fieldset disabled={busy || jsonText !== undefined}>{(['image', 'video', 'reference'] as const).map(kind => <div className="field" key={kind}><label htmlFor={`package-${kind}`}>{kind === 'image' ? '关键帧工作流' : kind === 'video' ? '视频工作流' : '参考图工作流'}</label><select id={`package-${kind}`} value={draft.brief[`${kind}_workflow_id`] ?? ''} onChange={e => editBrief({ [`${kind}_workflow_id`]: e.target.value || null })}><option value="">使用当前默认工作流</option>{workflows.data?.filter(item => kind === 'reference' ? item.capability === 'TEXT_TO_IMAGE' : item.media_type === kind).map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select></div>)}
+      <label className="checkbox"><input type="checkbox" checked={draft.brief.image_review_required ?? false} onChange={e => editBrief({ image_review_required: e.target.checked })} />生成视频前确认参考图和关键帧</label>
       <div className="field"><label htmlFor="package-review">画面复核</label><select id="package-review" value={draft.brief.visual_review ?? 'manual'} onChange={e => editBrief({ visual_review: e.target.value })}><option value="manual">由我和 Codex 查看实际画面</option><option value="model">使用已配置的视觉模型</option></select><small>媒体完整性和时长始终检查；制作技术校验不代表剧情或画面质量已通过。</small></div></fieldset>
       <div className="actions creation-action-stack"><button className="primary" disabled={busy || !dirty || jsonText !== undefined || stale || disconnected} onClick={() => void run(() => save())}><Save size={15} />保存新版本</button><button disabled={busy || dirty || jsonText !== undefined || stale || disconnected} onClick={() => void run(validate)}>校验创作包</button><button disabled={busy || dirty || jsonText !== undefined || stale || disconnected || !report?.valid} onClick={() => void run(submitPreview)}>提交分镜预览</button></div>
       {report && <div className={`notice ${report.valid ? 'creation-valid' : ''}`} role="status"><strong>{report.valid ? `版本 ${report.revision} 制作技术校验通过` : '请补充或修正以下内容'}</strong>{!!report.warnings?.length && <details><summary>参考素材与连续性提示 · {report.warnings.length}</summary>{report.warnings.map((warning, index) => <p key={index}>第 {warning.shot_index + 1} 镜：{warning.message}</p>)}</details>}{report.issues.map((issue, index) => <div key={index}><p>{issue.message}</p>{issue.details != null && <details><summary>查看具体位置与约束</summary><pre>{JSON.stringify(issue.details, null, 2)}</pre></details>}</div>)}</div>}

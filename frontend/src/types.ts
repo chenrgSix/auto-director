@@ -1,6 +1,6 @@
 export type Value = string | number | boolean;
 export type Problem = { code: string; message: string; details?: unknown };
-export type Binding = { node_id: string; input: string; transform?: string; frame_multiple?: number; frame_offset?: number; frame_fps?: number | null };
+export type Binding = { optional?: boolean; node_id: string; input: string; transform?: string; frame_multiple?: number; frame_offset?: number; frame_fps?: number | null };
 export type Capabilities = { audio_prompt_format?: 'none' | 'minimax_h3'; supports_start_frame: boolean; supports_end_frame: boolean; supports_video_reference: boolean; supports_multi_reference: boolean; max_duration: number; low_memory_workflow_id: string | null };
 export type WorkflowCapability = 'TEXT_TO_IMAGE' | 'IMAGE_TO_IMAGE' | 'FIRST_LAST_TO_VIDEO' | 'IMAGE_TO_VIDEO';
 export const CAPABILITY_LABELS: Record<WorkflowCapability, string> = { TEXT_TO_IMAGE: '文生图', IMAGE_TO_IMAGE: '图生图', FIRST_LAST_TO_VIDEO: '首尾帧生成视频', IMAGE_TO_VIDEO: '首帧生成视频' };
@@ -70,6 +70,7 @@ export type Episode = {
   final_video_asset_id: string | null; final_duration?: number; created_at: string; metrics: Record<string, number>;
   bible: unknown; plan: unknown;
   script_review?: ScriptReview | null;
+  image_review_required?: boolean;
   preview_required?: boolean; preview_approved_at?: string | null;
   prompt_preparation?: {
     run_id: string; status: 'running' | 'completed' | 'failed' | 'cancelled'; batch_size: number;
@@ -84,7 +85,7 @@ export type Job = { id: string; type: string; status: string; comfy_prompt_id: s
 export const ACTIVE = new Set(['QUEUED', 'PLANNING', 'REVIEWING_SCRIPT', 'BUILDING_BIBLE', 'PREPARING_PROMPTS', 'GENERATING_REFERENCES', 'GENERATING_KEYFRAMES', 'RENDERING_VIDEO', 'QA', 'COMPOSING']);
 export const STATUS: Record<string, string> = {
   DRAFT: '草稿', QUEUED: '等待开始', PLANNING: '规划故事', BUILDING_BIBLE: '建立视觉设定', GENERATING_REFERENCES: '生成参考图',
-  PREPARING_PROMPTS: '编写镜头提示词', AWAITING_REVIEW: '待确认分镜',
+  PREPARING_PROMPTS: '编写镜头提示词', AWAITING_REVIEW: '待确认分镜', AWAITING_IMAGE_REVIEW: '待确认画面',
   REVIEWING_SCRIPT: 'AI 审查剧本',
   GENERATING_KEYFRAMES: '生成关键帧', RENDERING_VIDEO: '渲染视频', QA: '质量检查', COMPOSING: '合成短片', COMPLETED: '已完成', FAILED: '待处理', CANCELLED: '已取消',
   PENDING: '待生成', GENERATING_START_FRAME: '生成首帧', START_FRAME_READY: '首帧就绪', GENERATING_END_FRAME: '生成尾帧', KEYFRAMES_READY: '关键帧就绪',

@@ -357,3 +357,9 @@ ComfyUI AUTOGROW 容器的必需输入检查识别其 template.names / prefix �
 `Capabilities.audio_prompt_format` 为显式可选契约：`none`（兼容旧配置）或 `minimax_h3`，后者仅用于视频。`ai_parameters()` 把声明传给视频 prompt role；单镜/批次共用 `audio_output` 和动作时间约束。三个 H3 区块与其中 `Speech performance` 段校验后进入唯一可编辑的 `video_prompt`，旁白副本必须原文入标签，图片不允许台词标签。无新持久字段、无故事迁移。
 
 ParameterResolver 在时长帧数适配后补 Picture 时间引用，重复解析幂等，用户高级 prompt override 保持原值。视觉优化原样保留声音段；有声对白 OOM 降分辨率后只允许整镜原生声音 fallback，避免盲目短分段重复台词。旧提示词和旧素材保持，只有新的提示词生成采用此契约。
+
+## C58 制作前画面确认
+
+`generation/preproduction.py` 编译当前素材与目标摘要，管理确认/修订幂等操作；普通 API、MCP、前端共用。流水线产生参考和关键帧后调用 gate，正常抛出 ImageReviewPause 并释放 Worker；等待存储于 Episode，不依赖 HTTP/MCP 连接。批准后继续原流水线，连续镜仍在前镜视频完成后取得实际尾帧。`image_review_history` 保留修订前资产，创作包仍不可变。
+
+`agents/visual.py` 提取视觉设定值；`workflows/optional_references.py` 检查可选辅助图片独立分支、真实 IMAGE 端口及连续编号，在执行图中移除空分支，原 Profile/Job 快照保留。

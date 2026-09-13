@@ -86,3 +86,64 @@ def test_optional_reference_rejects_holes_and_required_consumer():
     broken = deepcopy(p)
     broken["bindings"]["reference_image"]["optional"] = True
     assert validate_bindings(broken)
+
+
+def test_engine_submits_only_selected_optional_images(system):
+    from uuid import uuid4
+
+    from tests.test_api_pipeline import wait_episode
+    from tests.test_capabilities import image_to_image_graph
+    from tests.test_creation_packages import BASE, create, document, submit
+    from tests.test_shot_continuity import contract
+
+    client, app, comfy = system
+    graph = image_to_image_graph(app.state.store.get("workflow", "default_image")["workflow"])
+    graph["extra"] = {"class_type": "LoadImage", "inputs": {"image": "UNUSED-PLACEHOLDER.png"}}
+    graph["encode"]["inputs"]["other"] = ["extra", 0]
+    comfy.info["VAEEncode"] = {
+        "input": {
+            "required": {"pixels": ["IMAGE", {}], "vae": ["VAE", {}]},
+            "optional": {"other": ["IMAGE", {}]},
+        }
+    }
+    bindings = analyze(graph)["bindings"]
+    bindings["reference_image"] = {"node_id": "reference", "input": "image"}
+    bindings["reference_image_2"] = {"node_id": "extra", "input": "image", "optional": True}
+    p = app.state.workflows.import_workflow(
+        WorkflowImport(
+            name="Optional input fixture",
+            capability="IMAGE_TO_IMAGE",
+            workflow=graph,
+            bindings=bindings,
+            capabilities={"supports_multi_reference": True},
+        )
+    )
+    package = document()
+    package["brief"]["image_workflow_id"] = p["id"]
+    for i, s in enumerate(package["shots"]):
+        s["transition_from_previous"] = "CUT"
+        s["prompts"]["visual_continuity"] = contract(
+            "lion", reference_roles=["character:lion"] + (["environment"] if i else [])
+        )
+    project, _ = create(client, package)
+    delivered, _ = submit(client, project)
+    id = delivered["episode_id"]
+    version = client.get(f"/api/v1/episodes/{id}").json()["version"]
+    assert (
+        client.post(
+            f"{BASE}/{project}/productions/{id}/confirm",
+            json={"request_id": str(uuid4()), "expected_version": version, "confirm": True},
+        ).status_code
+        == 202
+    )
+    final = wait_episode(client, id)
+    assert final["status"] == "COMPLETED", final.get("error")
+    starts = sorted(
+        [j for j in app.state.store.list("job", id) if j["type"] == "SHOT_START_FRAME"],
+        key=lambda j: j["created_at"],
+    )
+    assert "extra" not in starts[0]["patched_workflow"]
+    assert "other" not in starts[0]["patched_workflow"]["encode"]["inputs"]
+    assert starts[1]["asset_bindings"]["reference_image_2"] == final["references"]["environment"]
+    assert "UNUSED-PLACEHOLDER" not in json.dumps(starts[1]["patched_workflow"])
+    assert "<Picture 2> supplies environment" in starts[1]["input_values"]["prompt"]

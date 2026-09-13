@@ -425,6 +425,8 @@ class CreationService:
             "episode_id": episode_id,
             "version": episode["version"],
             "status": episode["status"],
+            "image_review_required": episode.get("image_review_required", False),
+            "preproduction_pending": episode.get("preproduction_pending"),
             "continuity_report": episode.get("continuity_report"),
             "source": episode["creation_source"],
             "error": episode["error"],

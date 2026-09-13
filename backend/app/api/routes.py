@@ -13,6 +13,9 @@ from app.core.errors import AppError
 from app.core.limits import DURATION_POLICY, LIMITS
 from app.core.runtime_settings import SettingsPatch
 from app.db.store import uid
+from app.generation.preproduction import ImageReviewDecision
+from app.generation.preproduction import context as image_review_context
+from app.generation.preproduction import decide as decide_image_review
 from app.generation.prompt_optimization import apply_proposal, find_shot, propose
 from app.generation.prompt_preparation import preparation_progress
 from app.generation.qa_policy import change_qa_policy
@@ -526,7 +529,13 @@ async def events(request: Request, id: str):
         while not await request.is_disconnected():
             data = progress(request, id)
             yield "event: progress\ndata: " + json.dumps(data, ensure_ascii=False) + "\n\n"
-            if data["status"] in {"COMPLETED", "FAILED", "CANCELLED", "AWAITING_REVIEW"}:
+            if data["status"] in {
+                "COMPLETED",
+                "FAILED",
+                "CANCELLED",
+                "AWAITING_REVIEW",
+                "AWAITING_IMAGE_REVIEW",
+            }:
                 break
             await asyncio.sleep(1)
 
@@ -589,3 +598,14 @@ def asset_file(request: Request, id: str, download: bool = Query(False)):
         media_type=mimetypes.guess_type(path.name)[0],
         filename=path.name if download else None,
     )
+
+
+@router.get("/episodes/{id}/image-review")
+def get_image_review(request: Request, id: str):
+    pipeline = request.app.state.generation
+    return image_review_context(pipeline, pipeline.store.get("episode", id))
+
+
+@router.post("/episodes/{id}/image-review", status_code=202)
+async def post_image_review(request: Request, id: str, body: ImageReviewDecision):
+    return decide_image_review(request.app.state.generation, id, body)

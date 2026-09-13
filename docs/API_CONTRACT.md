@@ -293,3 +293,18 @@ AI 建议经用户确认后，通过普通 import/PATCH 保存；依赖检查仍
 WorkflowImport / WorkflowPatch 的 `capabilities.audio_prompt_format` 接受 `none`（默认）或 `minimax_h3`，图像 workflow 不可启用后者。保留原字段即可通过现有 PATCH 更新，修改计入配置版本；不依据节点名自动识别，也不修改已有 Episode。H3 必须自行具备音频解码及保存链路。
 
 新 Shot Agent 输出仍保存为 `ShotPrompts.video_prompt`；`narration_text` 是展示副本。默认/高级参数优先级、预览编辑 API 与素材输出协议不变，无强制数据迁移。
+
+## C58：制作前画面确认
+
+`EpisodeCreate.image_review_required` 与 `CreationBrief.image_review_required` 为可选 bool，兼容默认 false；新建网页默认选中 true，创作包工作台可编辑。普通 API 与创作包/MCP 共用流水线。
+
+状态 `AWAITING_IMAGE_REVIEW` 为持久空闲状态，不占用 Worker。`preproduction_pending` 包含 stage=references|keyframes、shot_id；重启不转成 FAILED。通用 generate/approve/compose 入口不能绕过等待，确认操作通过专用接口推进；连续镜按前镜实际尾帧生成。
+
+- `GET /api/v1/episodes/{id}/image-review`：返回 version、review_key、stage、shot_id、frames（target/asset_id/url/editable/prompt）、references 和 limitations。
+- `POST /api/v1/episodes/{id}/image-review`：`request_id` UUID、`expected_version`、`review_key`、`decision=approve|revise`、非空 `notes`；修订额外要求 `target` 及完整视觉 `prompt`。成功 202 并继续下一阶段；冲突 409，响应不确定时原样重试原 UUID。
+- references 修订 target 为 `character:<id>` / `prop:<id>` / environment / style，已用于制作的参考需从新创作版本变更。keyframes 修订 target 为 start_frame 或 end_frame；修改首帧同时重做尾帧，继承的连续首帧不可单独重画。高级固定提示/帧输入须先移除覆盖。
+- 确认摘要覆盖工作流配置版本、预算/用户覆盖、参考素材、视觉设定、本镜目标/端点和前镜尾帧。修改保存 `image_review_history`，只改制作副本，不改创作包版本、不删除旧资产。通用素材检查与 UNKNOWN 作业保护继续生效。
+
+`VisualBible.props` 为可选列表，每项包含稳定 `id`、`description`、`distinguishing_features`；`visual_continuity.reference_roles` 新增 `prop:<id>`。人物、道具各自的 ID 不重复。
+
+工作流 `Binding.optional` 默认 false；仅支持 reference_image_2～9 的独立 LoadImage -> 单一可选 IMAGE 输入，实际提交去掉未绑定分支，主图仍必需。显式资产覆盖仍受归属检查，不能用占位文件或有缺口的参考编号提交。
