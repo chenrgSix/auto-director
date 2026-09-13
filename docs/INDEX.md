@@ -4,6 +4,7 @@
 
 | 文档 | 职责 |
 | --- | --- |
+| [连续镜头制作](CONTINUOUS_PRODUCTION.md) | C63 多参考分组、可选关键帧、整组生成与验收目标 |
 | [制作前画面确认](PREPRODUCTION_REVIEW.md) | C58 参考/关键帧确认、共享道具与多图输入 |
 | [H3 多图工作流](../workflow_examples/h3_multi_reference/README.md) | 用户画布转换、可选辅助图片与实测边界 |
 | [H3 Ref2VA 视频](../workflow_examples/h3_ref2va/README.md) | 首帧锚定、多参考视频与段间运动实测 |
