@@ -524,6 +524,18 @@ def anchored_prompt(
         constraint = "\n\nVisible shot constraints: " + json.dumps(
             {key: visual_continuity[key] for key in fields}, ensure_ascii=False
         )
+        if stage == "video":
+            constraint += (
+                "\nONE SINGLE CONTINUOUS SHOT for the entire clip. Follow the requested camera "
+                "motion and action continuously. No editorial cuts, inserted shots, alternate "
+                "scenes or unrelated cast inside this clip. Start and end references constrain "
+                "the whole continuous scene, not just the first and last pictures."
+            )
+            if not visual_continuity["visible_character_ids"]:
+                constraint += (
+                    " This is an unoccupied environment or object shot throughout: "
+                    "no person, face, hand or other human body part enters any frame."
+                )
         if stage == "video" and prompt.startswith(VISUAL):
             # Keep native speech/music and their exact text untouched.
             prompt = prompt.replace(PERFORMANCE, constraint + "\n\n" + PERFORMANCE, 1)

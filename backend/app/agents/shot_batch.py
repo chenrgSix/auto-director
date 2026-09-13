@@ -102,6 +102,8 @@ def shot_instruction(specifications):
 
 
 SHOT_INSTRUCTION = (
+    "Each shot is one continuous camera take for its entire clip. Put editorial cuts and new viewpoints in separate shots, never inside one video prompt. "
+    "For an unoccupied insert, explicitly keep people and hands out for the entire duration. "
     "Declare visual_continuity for every shot: stable scene_id, visible_character_ids from the Bible "
     "(empty for unoccupied environment or object inserts), reference_roles in priority order using "
     "character:<id>, prop:<bible.props id>, environment or style, framing, state_in and state_out. The FIRST reference is "
