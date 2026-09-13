@@ -121,7 +121,7 @@ def test_versions_roundtrip_cas_and_idempotent_writes(system):
 
 @pytest.mark.parametrize(
     "case",
-    ["draft", "total", "duplicate", "order", "first", "characters", "precision", "ai", "shot_ai"],
+    ["draft", "total", "duplicate", "order", "first", "precision", "ai", "shot_ai"],
 )
 def test_invalid_delivery_keeps_draft_and_creates_nothing(system, case):
     client, app, _ = system
@@ -136,8 +136,6 @@ def test_invalid_delivery_keeps_draft_and_creates_nothing(system, case):
         package["shots"][0]["index"] = 1
     if case == "first":
         package["shots"][0]["transition_from_previous"] = "CONTINUE_FRAME"
-    if case == "characters":
-        package["bible"]["characters"] *= 2
     if case == "precision":
         package["shots"][0]["duration"] = 2.501
     if case == "ai":
@@ -160,6 +158,30 @@ def test_invalid_delivery_keeps_draft_and_creates_nothing(system, case):
     assert response.status_code == 422, response.text
     assert app.state.creation.detail(project) == before
     assert not app.state.store.list("episode")
+
+
+@pytest.mark.parametrize("role", ["characters", "props"])
+def test_duplicate_reference_ids_are_rejected_before_creating_or_saving_a_draft(system, role):
+    client, app, comfy = system
+    project, _ = create(client)
+    before = app.state.creation.detail(project)
+    package = document()
+    reference = deepcopy(package["bible"]["characters"][0])
+    package["bible"][role] = [reference, deepcopy(reference)]
+    for path, body in (
+        (BASE, {"request_id": str(uuid4()), "document": package}),
+        (
+            f"{BASE}/{project}/revisions",
+            {"request_id": str(uuid4()), "expected_revision": 1, "document": package},
+        ),
+    ):
+        response = client.post(path, json=body)
+        assert response.status_code == 422, response.text
+        assert "参考 ID 不能重复" in response.text
+    assert app.state.creation.detail(project) == before
+    assert len(app.state.store.list("creation_project")) == 1
+    assert len(app.state.store.list("creation_revision", project)) == 1
+    assert not app.state.store.list("episode") and not comfy.calls
 
 
 @pytest.mark.parametrize("i2v", [False, True])
