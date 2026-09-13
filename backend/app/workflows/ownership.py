@@ -12,7 +12,7 @@ ASSET_ROLES = {
     "reference_audio",
 }
 AI_ROLES = {"prompt", "negative", "camera_motion", "motion_strength"}
-SYSTEM_ROLES = {"width", "height", "fps", "batch", "seed"}
+SYSTEM_ROLES = {"width", "height", "fps", "batch", "seed", "sequence"}
 
 
 def is_asset_role(role: str | None) -> bool:
@@ -59,7 +59,8 @@ def canonicalize(profile: dict) -> dict:
     if media != "video" and caps.get("audio_prompt_format", "none") != "none":
         raise AppError("WORKFLOW_INVALID", "原生声画提示词仅适用于视频工作流")
     caps.update(
-        supports_start_frame=media == "video",
+        supports_start_frame=capability
+        in {WorkflowCapability.IMAGE_TO_VIDEO, WorkflowCapability.FIRST_LAST_TO_VIDEO},
         supports_end_frame=capability == WorkflowCapability.FIRST_LAST_TO_VIDEO,
     )
     profile["capabilities"] = caps
@@ -110,7 +111,7 @@ def required_asset_roles(profile: dict) -> set[str]:
     required = set()
     if capability == WorkflowCapability.IMAGE_TO_IMAGE:
         required.add("reference_image")
-    if capability.media_type == "video":
+    if capability in {WorkflowCapability.IMAGE_TO_VIDEO, WorkflowCapability.FIRST_LAST_TO_VIDEO}:
         required.add("start_frame")
     if capability == WorkflowCapability.FIRST_LAST_TO_VIDEO:
         required.add("end_frame")

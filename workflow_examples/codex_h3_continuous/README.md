@@ -4,6 +4,10 @@
 
 保存文件：`codex-H3-Ref2VA-连续镜头.json`。ComfyUI 工作流列表中的同名文件可直接打开，也可把仓库这份 JSON 拖入 ComfyUI。新画布 ID 为 `20484113-0eed-52ac-9901-ab786732ebaf`；原 `60秒.json` 保留。
 
+## 项目适配模板（C63）
+
+`continuous.profile.json` / `continuous.api.json` 从这一份画布生成，供 AutoDirector 的 `REFERENCE_SEQUENCE_TO_VIDEO` 适配使用；不是新的独立 ComfyUI 画布。生成命令：`backend/.venv/bin/python scripts/build_continuous_workflow.py`。模板移除了示例故事和素材，由项目填入每组实际内容，并读取导演台报告验证参考数量与帧数。制作接入进度见 [C63](../../docs/CONTINUOUS_PRODUCTION.md)。
+
 ## 本次调整
 
 - R2V 模式配套 `minimax_h3_ref2va_pruned_int8_convrot.safetensors` 与 `minimax_h3_ref2v_turbo_4step_v0.1_comfyui_bf16.safetensors`，强度 1，4 步 Euler/simple，CFG 1，video/audio shift 为 12/3。

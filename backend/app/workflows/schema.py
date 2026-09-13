@@ -11,6 +11,7 @@ class WorkflowCapability(StrEnum):
     IMAGE_TO_IMAGE = "IMAGE_TO_IMAGE"
     FIRST_LAST_TO_VIDEO = "FIRST_LAST_TO_VIDEO"
     IMAGE_TO_VIDEO = "IMAGE_TO_VIDEO"
+    REFERENCE_SEQUENCE_TO_VIDEO = "REFERENCE_SEQUENCE_TO_VIDEO"
 
     @property
     def media_type(self) -> str:

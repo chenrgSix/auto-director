@@ -1,0 +1,126 @@
+{
+  "2": {
+    "class_type": "CLIPLoader",
+    "inputs": {
+      "clip_name": "qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors",
+      "type": "minimax",
+      "device": "default"
+    }
+  },
+  "3": {
+    "class_type": "VAELoader",
+    "inputs": {
+      "vae_name": "minimax_h3_video_vae_fp16.safetensors"
+    }
+  },
+  "4": {
+    "class_type": "VAELoader",
+    "inputs": {
+      "vae_name": "minimax_h3_audio_vae_fp32.safetensors"
+    }
+  },
+  "14": {
+    "class_type": "ModelAttentionBackend",
+    "inputs": {
+      "attention": "comfy kitchen attention",
+      "model": [
+        "24",
+        0
+      ]
+    }
+  },
+  "1": {
+    "class_type": "UNETLoader",
+    "inputs": {
+      "unet_name": "minimax_h3_ref2va_pruned_int8_convrot.safetensors",
+      "weight_dtype": "default"
+    }
+  },
+  "25": {
+    "class_type": "VHS_VideoCombine",
+    "inputs": {
+      "frame_rate": [
+        "12",
+        2
+      ],
+      "loop_count": 0,
+      "filename_prefix": "autodirector/continuous",
+      "format": "video/h264-mp4",
+      "pix_fmt": "yuv420p",
+      "crf": 18,
+      "save_metadata": true,
+      "trim_to_audio": false,
+      "pingpong": false,
+      "save_output": true,
+      "images": [
+        "12",
+        0
+      ],
+      "audio": [
+        "12",
+        1
+      ]
+    }
+  },
+  "24": {
+    "class_type": "LoraLoaderModelOnly",
+    "inputs": {
+      "lora_name": "minimax_h3_ref2v_turbo_4step_v0.1_comfyui_bf16.safetensors",
+      "strength_model": 1.0,
+      "model": [
+        "1",
+        0
+      ]
+    }
+  },
+  "12": {
+    "class_type": "MiniMaxH3Director",
+    "inputs": {
+      "task_type": "r2v — 参考主体生视频(Reference to Video)",
+      "global_prompt": "Video segment prompt",
+      "bd_grp_sample": "采样设置",
+      "cfg": 1.0,
+      "seed": 614091401,
+      "frame_rate": 24.0,
+      "width": 768,
+      "height": 448,
+      "ref_max_size": 768,
+      "total_frames": 124,
+      "timeline_data": "{}",
+      "bd_grp_advanced": "高级采样",
+      "steps": 4,
+      "sampler": "euler",
+      "scheduler": "simple",
+      "shift_video": 12.0,
+      "shift_audio": 3.0,
+      "bd_grp_perf": "性能",
+      "clear_vram_between_segments": true,
+      "export_source_images": false,
+      "model": [
+        "14",
+        0
+      ],
+      "video_vae": [
+        "3",
+        0
+      ],
+      "audio_vae": [
+        "4",
+        0
+      ],
+      "clip": [
+        "2",
+        0
+      ]
+    }
+  },
+  "26": {
+    "class_type": "PreviewAny",
+    "inputs": {
+      "source": [
+        "12",
+        5
+      ]
+    }
+  }
+}

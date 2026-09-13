@@ -34,6 +34,7 @@ ALIASES = {
     "batch": ["batch_size"],
     "camera_motion": ["camera_motion"],
     "motion_strength": ["motion_strength"],
+    "sequence": ["timeline_data"],
 }
 
 
@@ -290,6 +291,10 @@ def validate_bindings(profile: dict) -> list[dict]:
     issues = []
     graph = profile["workflow"]
     caps = Capabilities.model_validate(profile["capabilities"])
+    if profile["capability"] == "REFERENCE_SEQUENCE_TO_VIDEO":
+        from app.workflows.sequence import validate_sequence_profile
+
+        issues.extend(validate_sequence_profile(profile))
     if profile["capability"] == "TEXT_TO_IMAGE" and any(
         is_asset_role(role) for role in profile["bindings"]
     ):
@@ -390,7 +395,12 @@ def check_value(item: dict, value: Any) -> None:
     elif kind == "boolean":
         valid = type(value) is bool
     elif kind in {"text", "textarea"}:
-        valid = isinstance(value, str) and len(value) <= 20000
+        maximum = (
+            512000
+            if item.get("class_type") == "MiniMaxH3Director" and item["field"] == "timeline_data"
+            else 20000
+        )
+        valid = isinstance(value, str) and len(value) <= maximum
     elif kind == "select":
         valid = type(value) in {str, int, float, bool} and (
             type(value) is not float or math.isfinite(value)
