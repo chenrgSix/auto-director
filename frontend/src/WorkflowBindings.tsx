@@ -1,18 +1,20 @@
 import type { Binding, Parameter, ParameterOwner, Workflow, WorkflowCapability } from './types';
 
 export const ROLE_LABELS: Record<string, string> = {
-  prompt: '画面描述', negative: '避免出现的内容', start_frame: '起始画面', end_frame: '结束画面',
+  sequence: '连续镜头编排（自动）', prompt: '画面描述', negative: '避免出现的内容', start_frame: '起始画面', end_frame: '结束画面',
   reference_image: '参考图片', style_reference: '风格参考', reference_video: '参考视频',
   reference_audio: '参考音频', duration: '视频长度（秒或帧）', fps: '视频帧率', width: '画面宽度',
   height: '画面高度', batch: '生成数量', seed: '随机种子', camera_motion: '镜头运动', motion_strength: '运动幅度',
 };
 export function roleLabel(role: string) { return ROLE_LABELS[role] || (role.startsWith('reference_image_') ? `参考图片 ${role.split('_').at(-1)}` : role); }
 export function requiredRoles(capability: WorkflowCapability) {
+  if (capability === 'REFERENCE_SEQUENCE_TO_VIDEO') return ['prompt', 'duration', 'sequence', 'fps', 'width', 'height', 'seed'];
   return ['prompt', ...(capability === 'IMAGE_TO_IMAGE' ? ['reference_image'] : []),
     ...(capability.endsWith('TO_VIDEO') ? ['start_frame', 'duration'] : []),
     ...(capability === 'FIRST_LAST_TO_VIDEO' ? ['end_frame'] : [])];
 }
 export function availableRoles(capability: WorkflowCapability) {
+  if (capability === 'REFERENCE_SEQUENCE_TO_VIDEO') return ['sequence', 'prompt', 'negative', 'width', 'height', 'seed', 'duration', 'fps'];
   return ['prompt', 'negative', 'camera_motion', 'motion_strength', 'width', 'height', 'batch', 'seed',
     ...(capability === 'IMAGE_TO_IMAGE' ? ['reference_image', 'style_reference', 'reference_image_1', 'reference_image_2'] : []),
     ...(capability.endsWith('TO_VIDEO') ? ['start_frame', 'duration', 'fps', 'reference_video', 'style_reference'] : []),
@@ -66,7 +68,7 @@ export function BindingEditor({ workflow, bindings, outputs, onBind, onOutput, e
           {choices.map(p => { const occupied = Object.entries(bindings).find(([r, b]) => r !== role && bindingKey(b) === p.key)?.[0]; return <option key={p.key} value={p.key} disabled={!!occupied}>{parameterLabel(workflow, p.key)} · {String(workflow.parameter_values[p.key] ?? p.default).replace(/\s+/g, ' ').slice(0, 65)}{occupied ? `（已用于${roleLabel(occupied)}）` : ''}</option>; })}
         </select><small className="muted">{HELP[role] || '只绑定此工作流实际使用的字段；可选用途可留空。'}</small>
         {!choices.length && <p className="notice">没有符合类型的可写字段。请在 ComfyUI 把对应输入暴露为值，再导出 API JSON。</p>}
-        {role === 'duration' && bindings[role] && <div className="transform-fields"><label>时长单位<select aria-label="时长转换" value={bindings[role].transform || 'identity'} onChange={event => onBind(role, {...bindings[role], transform: event.target.value, ...(event.target.value === 'identity' ? {frame_fps: null} : {})})}><option value="identity">秒 · 直接使用</option><option value="duration_to_frames">帧 · 按 FPS 转换</option></select></label>{bindings[role].transform === 'duration_to_frames' && <><label>帧数倍数<input aria-label="帧数倍数" type="number" min={1} max={32} step={1} required value={bindings[role].frame_multiple ?? 4} onChange={event => onBind(role, {...bindings[role], frame_multiple: Number(event.target.value)})} /></label><label>帧数偏移<input aria-label="帧数偏移" type="number" min={0} max={31} step={1} required value={bindings[role].frame_offset ?? 1} onChange={event => onBind(role, {...bindings[role], frame_offset: Number(event.target.value)})} /></label><label>固定生成帧率（可选）<input aria-label="固定生成帧率" type="number" min={1} max={120} step={1} placeholder="留空跟随系统 FPS" value={bindings[role].frame_fps ?? ''} onChange={event => onBind(role, {...bindings[role], frame_fps: event.target.value ? Number(event.target.value) : null})} /></label><small className="muted">普通帧数用倍数 1、偏移 0；4n+1 用 4、1；17n+5 用 17、5。仅在模型规定固定帧率时填写，例如 MiniMax H3 为 24 FPS。帧数会向上对齐，成片再按分镜秒数裁剪。</small></>}</div>}
+        {role === 'duration' && bindings[role] && <div className="transform-fields"><label>时长单位<select aria-label="时长转换" value={bindings[role].transform || 'identity'} onChange={event => onBind(role, {...bindings[role], transform: event.target.value, ...(event.target.value === 'identity' ? {frame_fps: null} : {})})}><option value="identity">秒 · 直接使用</option><option value="duration_to_frames">帧 · 按 FPS 转换</option></select></label>{bindings[role].transform === 'duration_to_frames' && <><label>帧数倍数<input aria-label="帧数倍数" type="number" min={1} max={32} step={1} required value={bindings[role].frame_multiple ?? 4} onChange={event => onBind(role, {...bindings[role], frame_multiple: Number(event.target.value)})} /></label><label>帧数偏移<input aria-label="帧数偏移" type="number" min={0} max={31} step={1} required value={bindings[role].frame_offset ?? 1} onChange={event => onBind(role, {...bindings[role], frame_offset: Number(event.target.value)})} /></label><label>固定生成帧率（可选）<input aria-label="固定生成帧率" type="number" min={1} max={120} step={1} placeholder="留空跟随系统 FPS" value={bindings[role].frame_fps ?? ''} onChange={event => onBind(role, {...bindings[role], frame_fps: event.target.value ? Number(event.target.value) : null})} /></label><small className="muted">普通帧数用倍数 1、偏移 0；4n+1 用 4、1；17n+5 用 17、5。仅在模型规定固定帧率时填写，例如 MiniMax H3 为 24 FPS。帧数会向上对齐，成片保留实际输出时长。</small></>}</div>}
       </div>;
     })}
     {!!optional.length && <div className="field"><label htmlFor="add-binding">添加其他用途（可选）</label><select id="add-binding" value="" onChange={event => onAddRole(event.target.value)}><option value="">例如负面提示词、尺寸、随机种子…</option>{optional.map(role => <option key={role} value={role}>{roleLabel(role)}</option>)}</select></div>}

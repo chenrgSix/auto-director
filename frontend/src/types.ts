@@ -2,8 +2,8 @@ export type Value = string | number | boolean;
 export type Problem = { code: string; message: string; details?: unknown };
 export type Binding = { optional?: boolean; node_id: string; input: string; transform?: string; frame_multiple?: number; frame_offset?: number; frame_fps?: number | null };
 export type Capabilities = { audio_prompt_format?: 'none' | 'minimax_h3'; supports_start_frame: boolean; supports_end_frame: boolean; supports_video_reference: boolean; supports_multi_reference: boolean; max_duration: number; low_memory_workflow_id: string | null };
-export type WorkflowCapability = 'TEXT_TO_IMAGE' | 'IMAGE_TO_IMAGE' | 'FIRST_LAST_TO_VIDEO' | 'IMAGE_TO_VIDEO';
-export const CAPABILITY_LABELS: Record<WorkflowCapability, string> = { TEXT_TO_IMAGE: '文生图', IMAGE_TO_IMAGE: '图生图', FIRST_LAST_TO_VIDEO: '首尾帧生成视频', IMAGE_TO_VIDEO: '首帧生成视频' };
+export type WorkflowCapability = 'TEXT_TO_IMAGE' | 'IMAGE_TO_IMAGE' | 'FIRST_LAST_TO_VIDEO' | 'IMAGE_TO_VIDEO' | 'REFERENCE_SEQUENCE_TO_VIDEO';
+export const CAPABILITY_LABELS: Record<WorkflowCapability, string> = { TEXT_TO_IMAGE: '文生图', IMAGE_TO_IMAGE: '图生图', FIRST_LAST_TO_VIDEO: '首尾帧生成视频', IMAGE_TO_VIDEO: '首帧生成视频', REFERENCE_SEQUENCE_TO_VIDEO: '多参考连续镜头' };
 export type ParameterOwner = 'ai' | 'director' | 'asset_resolver' | 'system' | 'workflow' | 'user';
 export const OWNER_LABELS: Record<ParameterOwner, string> = {ai:'AI 自动生成',director:'导演规划',asset_resolver:'自动绑定素材',system:'系统策略',workflow:'工作流默认',user:'用户填写'};
 export type ParameterRule = {owner?: ParameterOwner; editable: boolean; override_policy: 'advanced' | 'never'};
@@ -37,6 +37,7 @@ export type ScriptReview = {
 };
 export type QA = { stage: string; character_consistency: number; scene_consistency: number; style_consistency: number; action_accuracy: number; transition_quality: number; artifact_score: number; explanation: string; retry_scope: string | null; disposition?: 'warning' | 'passed' | 'retry' };
 export type Shot = {
+  sequence_group_id?: string; sequence_members?: string[]; sequence_job_id?: string;
   continuity_review_status?: { status: string; notes?: string };
   id: string; title: string; index: number; duration: number; actual_duration?: number; enabled: boolean; status: string; action: string; camera: string;
   transition_from_previous: string; start_frame_asset_id: string | null; end_frame_asset_id: string | null; video_asset_id: string | null;
@@ -53,8 +54,11 @@ export type PromptOptimizationProposal = {
   frames: ('start_frame' | 'end_frame')[]; affected_shot_ids: string[];
 };
 export type VisualContinuity = { scene_id: string; visible_character_ids: string[]; reference_roles: string[]; framing: 'wide' | 'medium' | 'close_up' | 'insert'; state_in: Record<string, string>; state_out: Record<string, string>; intentional_jump: string };
-export type PreviewShotEdit = Pick<Shot, 'id' | 'title' | 'duration'> & Record<PreviewPromptField, string> & { allow_static_end_frame: boolean; visual_continuity: VisualContinuity | null };
+export type PreviewShotEdit = Pick<Shot, 'id' | 'title' | 'duration'> & Record<PreviewPromptField, string> & { transition_from_previous?: string; allow_static_end_frame: boolean; visual_continuity: VisualContinuity | null };
 export type Episode = {
+  production_mode?: 'keyframes' | 'reference_sequence';
+  sequence_groups?: {id: string; shot_ids: string[]; title: string; planned_duration: number; status: string}[];
+  sequence_group_error?: Problem;
   continuity_report?: { valid: boolean; issues: { shot_index: number; message: string }[]; warnings: { shot_index: number; message: string }[]; selections: { shot_id: string; roles: string[]; capacity: number; inherited: boolean }[] };
   creation_source?: { project_id: string; revision: number; content_hash: string; constraints_hash: string };
   qa_enabled?: boolean;
@@ -81,7 +85,7 @@ export type Episode = {
   preview?: { capability: WorkflowCapability; min_duration: number; max_duration: number; render_max_duration: number; fixed_duration: number | null } | null;
 };
 export type Asset = { id: string; type: string; episode_id: string; path: string; metadata: { kind: string }; size: number };
-export type Job = { id: string; type: string; status: string; comfy_prompt_id: string | null; error: Problem | null; output_asset_ids: string[]; progress: { value?: number; max?: number; node?: string; connection?: 'connected' | 'reconnecting'; reconnect_attempt?: number; retry_in?: number; message?: string } | null; input_values: Record<string, unknown> };
+export type Job = { id: string; type: string; status: string; comfy_prompt_id: string | null; error: Problem | null; output_asset_ids: string[]; progress: { segment?: number; segment_total?: number; phase_label?: string; overall_value?: number; overall_max?: number; value?: number; max?: number; node?: string; connection?: 'connected' | 'reconnecting'; reconnect_attempt?: number; retry_in?: number; message?: string } | null; input_values: Record<string, unknown> };
 export const ACTIVE = new Set(['QUEUED', 'PLANNING', 'REVIEWING_SCRIPT', 'BUILDING_BIBLE', 'PREPARING_PROMPTS', 'GENERATING_REFERENCES', 'GENERATING_KEYFRAMES', 'RENDERING_VIDEO', 'QA', 'COMPOSING']);
 export const STATUS: Record<string, string> = {
   DRAFT: '草稿', QUEUED: '等待开始', PLANNING: '规划故事', BUILDING_BIBLE: '建立视觉设定', GENERATING_REFERENCES: '生成参考图',

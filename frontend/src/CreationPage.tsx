@@ -2,7 +2,7 @@ import { useRef, useState, type ChangeEvent, type FormEvent } from 'react';
 import { ArrowLeft, Download, FileText, Plus, Save, Upload } from 'lucide-react';
 import { api, useResource } from './api';
 import { navigate, type Notify } from './App';
-import { STATUS, type Workflow } from './types';
+import { STATUS, type Settings, type Workflow } from './types';
 import { ErrorNotice, Loading } from './ui';
 
 type Brief = {
@@ -117,6 +117,8 @@ function ProjectEditor({ project, notify, refresh, disconnected }: { project: Pr
   const [jsonText, setJsonText] = useState<string>();
   const [discard, setDiscard] = useState<'reload' | 'json'>();
   const workflows = useResource<Workflow[]>('/workflows');
+  const config = useResource<Settings>('/settings');
+  const sequence = workflows.data?.find(item => item.id === (draft.brief.video_workflow_id || config.data?.default_video))?.capability === 'REFERENCE_SEQUENCE_TO_VIDEO';
   const pendingSave = useRef<{ serialized: string; request_id: string } | null>(null);
   const pendingSubmit = useRef<{ expected_revision: number; constraints_hash: string; request_id: string } | null>(null);
   if (project.revision > base.revision && !dirty && jsonText === undefined) {
@@ -180,8 +182,9 @@ function ProjectEditor({ project, notify, refresh, disconnected }: { project: Pr
       {!!draft.open_questions?.length && <details open><summary>待讨论问题</summary><ul>{draft.open_questions.map((text, index) => <li key={index}>{text}</li>)}</ul></details>}
     </fieldset></section><section className="panel">
       <div className="panel-title">制作与交付</div><p className="muted">可以先保存草稿。设定与提示词完整、通过当前工作流校验后，再提交分镜预览。</p>
-      <fieldset disabled={busy || jsonText !== undefined}>{(['image', 'video', 'reference'] as const).map(kind => <div className="field" key={kind}><label htmlFor={`package-${kind}`}>{kind === 'image' ? '关键帧工作流' : kind === 'video' ? '视频工作流' : '参考图工作流'}</label><select id={`package-${kind}`} value={draft.brief[`${kind}_workflow_id`] ?? ''} onChange={e => editBrief({ [`${kind}_workflow_id`]: e.target.value || null })}><option value="">使用当前默认工作流</option>{workflows.data?.filter(item => kind === 'reference' ? item.capability === 'TEXT_TO_IMAGE' : item.media_type === kind).map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select></div>)}
-      <label className="checkbox"><input type="checkbox" checked={draft.brief.image_review_required ?? false} onChange={e => editBrief({ image_review_required: e.target.checked })} />生成视频前确认参考图和关键帧</label>
+      <fieldset disabled={busy || jsonText !== undefined}>{(['video', 'reference', 'image'] as const).filter(kind => !sequence || kind !== 'image').map(kind => <div className="field" key={kind}><label htmlFor={`package-${kind}`}>{kind === 'image' ? '关键帧工作流' : kind === 'video' ? '视频工作流' : '参考图工作流'}</label><select id={`package-${kind}`} value={draft.brief[`${kind}_workflow_id`] ?? ''} onChange={e => editBrief({ [`${kind}_workflow_id`]: e.target.value || null })}><option value="">使用当前默认工作流</option>{workflows.data?.filter(item => kind === 'reference' ? item.capability === 'TEXT_TO_IMAGE' : item.media_type === kind).map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select></div>)}
+      <label className="checkbox"><input type="checkbox" checked={draft.brief.image_review_required ?? false} onChange={e => editBrief({ image_review_required: e.target.checked })} />{sequence ? '生成视频前确认参考图' : '生成视频前确认参考图和关键帧'}</label>
+      {sequence && <p className="notice">多参考连续镜头：无需逐镜首尾帧；相邻片段选择连续衔接，整组生成和重跑。每组最多 8 段，每段 1～5 秒、1～9 张参考图。分镜预览中可以调整分组。</p>}
       <div className="field"><label htmlFor="package-review">画面复核</label><select id="package-review" value={draft.brief.visual_review ?? 'manual'} onChange={e => editBrief({ visual_review: e.target.value })}><option value="manual">由我和 Codex 查看实际画面</option><option value="model">使用已配置的视觉模型</option></select><small>媒体完整性和时长始终检查；制作技术校验不代表剧情或画面质量已通过。</small></div></fieldset>
       <div className="actions creation-action-stack"><button className="primary" disabled={busy || !dirty || jsonText !== undefined || stale || disconnected} onClick={() => void run(() => save())}><Save size={15} />保存新版本</button><button disabled={busy || dirty || jsonText !== undefined || stale || disconnected} onClick={() => void run(validate)}>校验创作包</button><button disabled={busy || dirty || jsonText !== undefined || stale || disconnected || !report?.valid} onClick={() => void run(submitPreview)}>提交分镜预览</button></div>
       {report && <div className={`notice ${report.valid ? 'creation-valid' : ''}`} role="status"><strong>{report.valid ? `版本 ${report.revision} 制作技术校验通过` : '请补充或修正以下内容'}</strong>{!!report.warnings?.length && <details><summary>参考素材与连续性提示 · {report.warnings.length}</summary>{report.warnings.map((warning, index) => <p key={index}>第 {warning.shot_index + 1} 镜：{warning.message}</p>)}</details>}{report.issues.map((issue, index) => <div key={index}><p>{issue.message}</p>{issue.details != null && <details><summary>查看具体位置与约束</summary><pre>{JSON.stringify(issue.details, null, 2)}</pre></details>}</div>)}</div>}

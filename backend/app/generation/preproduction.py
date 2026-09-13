@@ -135,7 +135,9 @@ def context(pipeline, episode, stage=None, shot_id=None):
         "review_key": key,
         "frames": frames,
         "references": episode["references"],
-        "limitations": "参考图和关键帧确认只授权下一制作阶段；视频动作、衔接及声音仍需成片复核。",
+        "limitations": "参考图确认后直接生成连续组，视频动作、衔接及声音仍需成片复核。"
+        if episode.get("production_mode") == "reference_sequence"
+        else "参考图和关键帧确认只授权下一制作阶段；视频动作、衔接及声音仍需成片复核。",
     }
 
 

@@ -24,6 +24,7 @@ function previewIssues(episode: Episode, edits: PreviewShotEdit[], total: number
     else if (preview.fixed_duration != null && Math.abs(shot.duration - preview.fixed_duration) > 0.011) add('duration', `高级设置要求固定 ${preview.fixed_duration} 秒。`);
     if (!shot.title.trim()) add('title', '镜头标题不能为空。');
     for (const field of Object.keys(promptLabels) as PreviewPromptField[]) {
+      if (episode.production_mode === 'reference_sequence' && field !== 'video_prompt') continue;
       if (episode.shots[index].preview_prompt_view?.locked[field] || (field === 'end_frame_prompt' && preview.capability === 'IMAGE_TO_VIDEO')) continue;
       if (!shot[field].trim()) add(field, `${promptLabels[field]}不能为空。`);
       else if (shot[field].length > 6000) add(field, `${promptLabels[field]}不能超过 6000 字符。`);
@@ -39,6 +40,7 @@ function previewIssues(episode: Episode, edits: PreviewShotEdit[], total: number
 function editableShots(episode: Episode): PreviewShotEdit[] {
   return episode.shots.map(shot => ({
     id: shot.id, title: shot.title, duration: shot.duration,
+    ...(episode.production_mode === 'reference_sequence' ? { transition_from_previous: shot.transition_from_previous } : {}),
     start_frame_prompt: shot.preview_prompt_view?.values.start_frame_prompt ?? shot.prompts?.start_frame_prompt ?? '',
     end_frame_prompt: shot.preview_prompt_view?.values.end_frame_prompt ?? shot.prompts?.end_frame_prompt ?? '',
     video_prompt: shot.preview_prompt_view?.values.video_prompt ?? shot.prompts?.video_prompt ?? '',
@@ -70,6 +72,9 @@ export function EpisodePreview({ episode, busy, setBusy, refresh, notify }: {
   }
   const stale = episode.version > base.version;
   const preview = base.preview!;
+  const sequence = base.production_mode === 'reference_sequence';
+  let groupIndex = 0;
+  const groupNumbers = edits.map(item => { if (!['CONTINUE_FRAME', 'CONTINUE_VIDEO'].includes(item.transition_from_previous ?? 'CUT')) groupIndex++; return groupIndex; });
   const total = edits.reduce((sum, shot) => sum + shot.duration, 0);
   const issues = previewIssues(base, edits, total);
   const valid = issues.length === 0;
@@ -80,7 +85,7 @@ export function EpisodePreview({ episode, busy, setBusy, refresh, notify }: {
   const shot = base.shots[selected];
   const timing = readShotTiming(edit.video_prompt);
   const fields: { field: PreviewPromptField; label: string }[] = [
-    { field: 'start_frame_prompt', label: '首帧提示词' },
+    ...(!sequence ? [{ field: 'start_frame_prompt' as const, label: '首帧提示词' }] : []),
     ...(preview.capability === 'FIRST_LAST_TO_VIDEO' ? [{ field: 'end_frame_prompt' as const, label: '尾帧提示词' }] : []),
     { field: 'video_prompt', label: '视频提示词' },
   ];
@@ -116,6 +121,7 @@ export function EpisodePreview({ episode, busy, setBusy, refresh, notify }: {
   return <section className="preview-panel">
     <div className="preview-heading"><div><span className="eyebrow">STORYBOARD REVIEW</span><h2>先看分镜，再开始拍摄。</h2><p>查看镜头节奏和画面提示词。满意后直接开始，也可以先修改并保存。</p></div><span className="preview-step"><Check size={14} />规划完成 · 等待你的确认</span></div>
     <p className="muted">以下时长用于剧本和生成参考；导出完整保留各片段的画面与声音，不按参考时长裁切。</p>
+    {sequence && <div className="notice"><strong>多参考连续镜头 · {groupIndex} 组</strong><p>参考图确认后直接生成视频。同组内延续前段的动作和声音，不需要逐镜首尾帧。切镜会开始新组；每组最多 8 段，重跑以整组为单位。</p></div>}
     <div className="preview-summary"><strong>{edits.length} 个镜头 · 参考合计 {Number.isFinite(total) ? total.toFixed(2) : '—'} / {base.target_duration} 秒</strong><span>单镜 {preview.min_duration}～{preview.max_duration} 秒{preview.fixed_duration != null && ` · 高级设置固定为 ${preview.fixed_duration} 秒`}</span></div>
     <p className="muted preview-note">当前是文字分镜预览，尚未生成图片或视频。提示词会结合视觉设定和实际连续帧使用；修改时长后，请同步检查动作是否适合新的节奏。</p>
     <ScriptReviewNotice review={base.script_review} selectShot={setSelected} busy={busy} />
@@ -124,11 +130,12 @@ export function EpisodePreview({ episode, busy, setBusy, refresh, notify }: {
     {!!issues.length && <div className="notice preview-validation" role="alert"><strong>开始前请处理以下问题</strong><ul>{issues.map((issue, index) => <li key={index}>{issue.index == null ? issue.message : <button className="text-button" type="button" onClick={() => setSelected(issue.index!)}>{issue.message} 查看此镜</button>}</li>)}</ul></div>}
     {stale && <div className="notice">分镜已在其他页面更新。当前编辑仍保留，请重新载入后确认。<button disabled={busy} onClick={reload}>放弃本页修改并载入最新分镜</button></div>}
     <form onSubmit={submit}>
-      <div className="preview-grid"><aside className="panel preview-shot-list" aria-label="分镜列表">{edits.map((item, index) => <button key={item.id} type="button" className={`preview-shot ${index === selected ? 'selected' : ''}`} aria-pressed={index === selected} onClick={() => setSelected(index)}><span>{String(index + 1).padStart(2, '0')}</span><div><strong>{item.title}</strong><small>{item.duration.toFixed(2)} 秒</small></div></button>)}</aside>
+      <div className="preview-grid"><aside className="panel preview-shot-list" aria-label="分镜列表">{edits.map((item, index) => <button key={item.id} type="button" className={`preview-shot ${index === selected ? 'selected' : ''}`} aria-pressed={index === selected} onClick={() => setSelected(index)}><span>{String(index + 1).padStart(2, '0')}</span><div><strong>{item.title}</strong><small>{sequence && `第 ${groupNumbers[index]} 组 · `}{item.duration.toFixed(2)} 秒</small></div></button>)}</aside>
         <div className="panel preview-editor"><div className="panel-title">镜头 {selected + 1} <span>{shot.transition_from_previous}</span></div>
           <div className="fields two"><div className="field"><label htmlFor="preview-title">镜头标题</label><input id="preview-title" value={edit.title} required maxLength={200} aria-invalid={invalidField('title')} disabled={busy} onChange={event => change({ title: event.target.value })} /></div><div className="field"><label htmlFor="preview-duration">镜头时长（秒）</label><input id="preview-duration" type="number" min={preview.min_duration} max={preview.max_duration} step="0.01" required value={Number.isFinite(edit.duration) ? edit.duration : ''} aria-invalid={invalidField('duration')} disabled={busy || preview.fixed_duration != null} onChange={event => change({ duration: event.target.value === '' ? NaN : Number(event.target.value) })} /></div></div>
           <div className="preview-direction"><p><strong>画面动作</strong>{shot.action}</p><p><strong>镜头语言</strong>{shot.camera}</p><small>这是当前剧本的镜头设计。调整画面或运镜，请修改下方提示词。</small></div>
           <div className="preview-direction"><strong>镜内动作节奏</strong>{timing ? <ol aria-label="镜内动作时间线">{timing.beats.map((beat, index) => <li key={index}><strong>{beat.start}–{beat.end} 秒</strong> {beat.action}</li>)}</ol> : <p>当前未单独分段。短镜头可只写一个清晰动作；已有提示词保持原样。</p>}<small>4 秒以上的新分镜按动作需要分段。可在下方视频提示词末尾修改时间和动作；调整时长会同步缩放已有时间段。时间是生成指引，实际动作节奏取决于视频模型。</small></div>
+          {sequence && <div className="field"><label htmlFor="preview-transition">与前段的衔接</label><select id="preview-transition" value={['CONTINUE_FRAME', 'CONTINUE_VIDEO'].includes(edit.transition_from_previous ?? '') ? 'CONTINUE_VIDEO' : 'CUT'} disabled={busy || selected === 0} onChange={event => change({ transition_from_previous: event.target.value })}><option value="CUT">切镜 · 开始新组</option><option value="CONTINUE_VIDEO">连续 · 延续上一段声画</option></select><small>第 {groupNumbers[selected]} 组。保存后重新检查动作状态、场景与参考素材是否一致。</small></div>}
           <ShotContinuity episode={base} value={edit.visual_continuity} disabled={busy} onChange={visual_continuity => change({ visual_continuity })} />
           {fields.map(({ field, label }) => <div className="field" key={field}><label htmlFor={`preview-${field}`}>{label}</label><textarea id={`preview-${field}`} value={edit[field]} required maxLength={6000} rows={5} aria-invalid={invalidField(field)} disabled={busy || !!shot.preview_prompt_view?.locked[field]} onChange={event => change({ [field]: event.target.value })} />{shot.preview_prompt_view?.locked[field] && <small>{shot.preview_prompt_view.locked[field]}</small>}{shot.preview_prompt_view?.hints?.[field] && <small>{shot.preview_prompt_view.hints[field]}</small>}</div>)}
           {preview.capability === 'FIRST_LAST_TO_VIDEO' && <label className="check"><input type="checkbox" checked={edit.allow_static_end_frame} disabled={busy} onChange={event => change({ allow_static_end_frame: event.target.checked })} />允许静止首尾帧（仅用于有意定格的镜头）</label>}

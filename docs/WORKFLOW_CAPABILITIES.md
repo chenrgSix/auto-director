@@ -58,3 +58,7 @@ C05 状态：**VERIFIED（本地工程与浏览器门禁）**。完整 `make che
 新计划把每镜最短/最长秒数、建议时长/镜头数与允许数量同时发给 Agent，并通过动态 JSON schema 验证。默认争取 2.5 秒下限；片长或能力不允许时按可行区间下降，全局 1 秒边界和用户合法固定时长继续生效。镜头最多时长仍是 workflow、显存与用户上限的交集，不能因想要长镜头跳过显存保护。
 
 时间线归一化采用同时按权重分配与百分之一秒最大余数，保留合法原比例；10 秒、上限 3 秒的默认新计划收敛到 4×2.5 秒。旧计划和资产不修改，60/90/600 秒继续分批规划。
+
+## C63 第五类能力：多参考连续镜头
+
+`REFERENCE_SEQUENCE_TO_VIDEO` 由参考素材驱动，复用 `codex-H3-Ref2VA-连续镜头` 的单一导演台模板；每组一次提交，按报告中的实际帧边界拆分后完整拼接。关键帧是旧两类视频模式的可选生产路线，不再是所有视频的前置条件。配置/API 适配文件在 `workflow_examples/codex_h3_continuous/continuous.profile.json`，不会另存多份 ComfyUI 画布。当前需要 MiniMax Director、Ref2VA 及配套 LoRA/编解码器；不支持任意其他序列节点。详见 [C63 契约](CONTINUOUS_PRODUCTION.md)。

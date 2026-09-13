@@ -18,7 +18,7 @@ export function PromptPreparation({ episode }: { episode: Episode }) {
   const current = running ? episode.shots.filter(item => preparation.active_shot_ids.includes(item.id)) : [];
   const seconds = preparation?.batch_started_at ? Math.max(0, Math.floor((clock - Date.parse(preparation.batch_started_at)) / 1000)) : 0;
   const last = preparation?.recent_batches.at(-1);
-  const fields = (Object.keys(labels) as PreviewPromptField[]).filter(field => field !== 'end_frame_prompt' || preparation?.video_capability !== 'IMAGE_TO_VIDEO');
+  const fields = (Object.keys(labels) as PreviewPromptField[]).filter(field => episode.production_mode === 'reference_sequence' ? field === 'video_prompt' : field !== 'end_frame_prompt' || preparation?.video_capability !== 'IMAGE_TO_VIDEO');
   return <section className="panel prompt-preparation">
     <div className="panel-title">分镜准备 · 可提前查看</div>
     <p className="muted">故事与时长已列在下面，提示词每批保存后自动显示。这里展示生成草稿；全部准备完成后，可编辑分镜并查看高级覆盖后的实际输入，再确认生成。</p>

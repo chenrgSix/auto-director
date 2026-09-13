@@ -312,3 +312,15 @@ WorkflowImport / WorkflowPatch 的 `capabilities.audio_prompt_format` 接受 `no
 工作流 `Binding.optional` 默认 false；仅支持 reference_image_2～9 的独立 LoadImage -> 单一可选 IMAGE 输入，实际提交去掉未绑定分支，主图仍必需。显式资产覆盖仍受归属检查，不能用占位文件或有缺口的参考编号提交。
 
 C59 修正：image-review 摘要中的工作流版本使用 configuration_version（旧记录缺失时回退 version），最近试跑/校验等纯元数据更新不会撤销图片确认；实际配置变化仍返回 409。已有旧摘要须刷新后确认，不自动改写历史批准。
+
+## C63 多参考连续镜头
+
+`REFERENCE_SEQUENCE_TO_VIDEO` 使用同一 Director 的 `sequence/prompt/duration/fps/width/height/seed` 绑定和 `video/sequence_report` 输出。`sequence` 是系统编译字段，不接受创作时覆盖。具体节点与声画报告约束见 [连续制作](CONTINUOUS_PRODUCTION.md)。
+
+选择此视频能力后，Episode 保存 `production_mode=reference_sequence`，图像工作流兼容字段指向文生图参考工作流；创建和更换只需 video/reference ID，不要求另配关键帧工作流。已有产物禁止直接跨制作模式切换，可新建制作版本。旧 Episode 缺省视为 keyframes。
+
+创作包的 image/start/end 提示词可省略；video_prompt、visual_continuity 和有序参考必填。`PATCH /episodes/{id}/preview` 可在此模式提供 `shots[].transition_from_previous` 调整分组；省略保持原值，旧模式不开放此编辑。每段 1～5 秒、1～9 张参考图，每组最多 8 段；首段不能延续。Episode detail 和 MCP feedback 返回 `sequence_groups`（id、shot_ids、title、planned_duration、status）。
+
+一组对应一个 `SEQUENCE_VIDEO` 作业，`input_values._sequence` 及 `_sequence_versions` 保存不可变片段与版本。输出检查完整音轨、24 FPS、实际帧数和 Director 报告；每段 `video_asset_id` 独立，源视频与帧边界证据保存在作业。进度字段为 `segment/segment_total/phase_label/overall_value/overall_max`。参考确认直接进入视频；实际抽帧和记录复核接口沿用 C57/C59。
+
+`rerun` 选中一段自动扩大到整组；仅支持 video/prompts（创作包只开放 video），拒绝 keyframes 和首尾帧选项。MCP 返回 `affected_shot_ids` 和 `rerun_scope=whole_group`。UNKNOWN/服务重启恢复原 prompt；已获取完整远端源文件但报告校验失败时，继续只读取原结果，显式整组重跑才提交新版本。取消不会绑定晚到结果。

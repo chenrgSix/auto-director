@@ -107,3 +107,7 @@ C57 新创作需声明每镜 `visual_continuity`，先确定出场角色和参�
 新增 MCP 工具（共 17 个）：`inspect_preproduction_images(project_id, episode_id, targets?)` 返回当前摘要和带标签的图片；每次最多八张，使用 targets 读取其余参考，不能确认未看过的图。`decide_preproduction_images(project_id, episode_id, request)` 复用 [HTTP 决策契约](API_CONTRACT.md#c58制作前画面确认)，按用户既有授权确认继续或单图修订，必须记录实际观察，保持 UUID 重试、版本和素材摘要保护。
 
 确认图像只授权下一制作阶段，不表示视频动作/边界/音频已通过。制作后的实际连续性复核仍使用 C57 工具。修订保留源包与旧资产，新的剧情/参考身份变更另存创作包版本。
+
+## C63 连续镜头制作
+
+制作区选择 `codex-H3-Ref2VA-连续镜头` 后，关键帧工作流选择隐藏。Codex 获取的上下文按当前能力给出无首尾帧 schema 和组限制；以 CUT 开组，CONTINUE_FRAME/CONTINUE_VIDEO 接续，逐段声明有序参考和动作状态。网页分镜预览可编辑组边界。参考图确认后直接生成声画，生成反馈返回连续组与每段实际时长；复核/重跑不需要控制或占用 Codex 会话。详见 [连续制作目标与边界](CONTINUOUS_PRODUCTION.md)。
