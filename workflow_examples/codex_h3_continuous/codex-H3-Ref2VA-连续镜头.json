@@ -1,0 +1,1092 @@
+{
+  "id": "20484113-0eed-52ac-9901-ab786732ebaf",
+  "revision": 0,
+  "last_node_id": 31,
+  "last_link_id": 29,
+  "nodes": [
+    {
+      "id": 2,
+      "type": "CLIPLoader",
+      "pos": [
+        -720,
+        220
+      ],
+      "size": [
+        360,
+        114
+      ],
+      "flags": {},
+      "order": 0,
+      "mode": 0,
+      "inputs": [
+        {
+          "localized_name": "CLIP名称",
+          "name": "clip_name",
+          "type": "COMBO",
+          "widget": {
+            "name": "clip_name"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "类型",
+          "name": "type",
+          "type": "COMBO",
+          "widget": {
+            "name": "type"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "设备",
+          "name": "device",
+          "shape": 7,
+          "type": "COMBO",
+          "widget": {
+            "name": "device"
+          },
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "localized_name": "CLIP",
+          "name": "CLIP",
+          "type": "CLIP",
+          "links": [
+            16
+          ]
+        }
+      ],
+      "title": "CLIP (minimax / Qwen3-VL)",
+      "properties": {
+        "Node name for S&R": "CLIPLoader",
+        "models": [
+          {
+            "name": "qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors",
+            "directory": "text_encoders"
+          }
+        ]
+      },
+      "widgets_values": [
+        "qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors",
+        "minimax",
+        "default"
+      ],
+      "widgets_values_named": {
+        "clip_name": "qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors",
+        "type": "minimax",
+        "device": "default"
+      }
+    },
+    {
+      "id": 3,
+      "type": "VAELoader",
+      "pos": [
+        -720,
+        380
+      ],
+      "size": [
+        360,
+        62
+      ],
+      "flags": {},
+      "order": 1,
+      "mode": 0,
+      "inputs": [
+        {
+          "localized_name": "vae名称",
+          "name": "vae_name",
+          "type": "COMBO",
+          "widget": {
+            "name": "vae_name"
+          },
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "localized_name": "VAE",
+          "name": "VAE",
+          "type": "VAE",
+          "links": [
+            15
+          ]
+        }
+      ],
+      "title": "Video VAE",
+      "properties": {
+        "Node name for S&R": "VAELoader",
+        "models": [
+          {
+            "name": "minimax_h3_video_vae_fp16.safetensors",
+            "directory": "vae"
+          }
+        ]
+      },
+      "widgets_values": [
+        "minimax_h3_video_vae_fp16.safetensors"
+      ],
+      "widgets_values_named": {
+        "vae_name": "minimax_h3_video_vae_fp16.safetensors"
+      }
+    },
+    {
+      "id": 4,
+      "type": "VAELoader",
+      "pos": [
+        -720,
+        500
+      ],
+      "size": [
+        360,
+        62
+      ],
+      "flags": {},
+      "order": 2,
+      "mode": 0,
+      "inputs": [
+        {
+          "localized_name": "vae名称",
+          "name": "vae_name",
+          "type": "COMBO",
+          "widget": {
+            "name": "vae_name"
+          },
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "localized_name": "VAE",
+          "name": "VAE",
+          "type": "VAE",
+          "links": [
+            13
+          ]
+        }
+      ],
+      "title": "Audio VAE",
+      "properties": {
+        "Node name for S&R": "VAELoader",
+        "models": [
+          {
+            "name": "minimax_h3_audio_vae_fp32.safetensors",
+            "directory": "vae"
+          }
+        ]
+      },
+      "widgets_values": [
+        "minimax_h3_audio_vae_fp32.safetensors"
+      ],
+      "widgets_values_named": {
+        "vae_name": "minimax_h3_audio_vae_fp32.safetensors"
+      }
+    },
+    {
+      "id": 11,
+      "type": "MarkdownNote",
+      "pos": [
+        -724.3830097138574,
+        658.4727692014667
+      ],
+      "size": [
+        360,
+        320
+      ],
+      "flags": {},
+      "order": 3,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [],
+      "title": "codex 连续镜头 · 使用说明",
+      "properties": {},
+      "widgets_values": [
+        "# codex-H3-Ref2VA-连续镜头\n保留当前导演台的素材组、分段编辑和统一导出。\n\n公共参考：人物 / 场景 / 面碗 / 构图；第 4 张不是严格首帧锁定。\n段间引导已开：22 帧，后续素材组勾选「引用上段」。\n模型：Ref2VA INT8 + Ref2V Turbo4；24 FPS，768×448。\n示例是六段，可在导演台增加、删除或调整时长。\n\n当前已安装导演台曾出现官方节点参数兼容错误；作者已修复，使用前更新 ComfyUI_MiniMaxH3_Director 并重启 ComfyUI。\nhttps://github.com/AIMixer/ComfyUI_MiniMaxH3_Director"
+      ],
+      "widgets_values_named": {
+        "text": "https://github.com/AIMixer/ComfyUI_MiniMaxH3_Director"
+      },
+      "color": "#432",
+      "bgcolor": "#653"
+    },
+    {
+      "id": 13,
+      "type": "MarkdownNote",
+      "pos": [
+        -677.5318640062727,
+        1021.9142453295678
+      ],
+      "size": [
+        300,
+        512
+      ],
+      "flags": {},
+      "order": 4,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [],
+      "title": "Note: Size Settings Reference",
+      "properties": {},
+      "widgets_values": [
+        "| megapixels | Aspect | Output (multiple=32) |\n|---|---|---|\n| 0.2 | 16:9 | 608 x 352 |\n| 0.3 | 16:9 | 736 x 416 |\n| 0.4 | 16:9 | 864 x 480 |\n| 0.5 | 16:9 | 960 x 544 |\n| 0.6 | 16:9 | 1056 x 608 |\n| 0.7 | 16:9 | 1152 x 640 |\n| 0.8 | 16:9 | 1216 x 672 |\n| 0.9 | 16:9 | 1280 x 736 |\n| 0.98 | 16:9 | 1344 x 768 |\n| 1.0 | 16:9 | 1376 x 768 |\n| 1.2 | 16:9 | 1504 x 832 |\n| 1.5 | 16:9 | 1664 x 928 |\n| 1.8 | 16:9 | 1824 x 1024 |\n| 2.0 | 16:9 | 1920 x 1088 |\n"
+      ],
+      "widgets_values_named": {
+        "text": "| megapixels | Aspect | Output (multiple=32) |\n|---|---|---|\n| 0.2 | 16:9 | 608 x 352 |\n| 0.3 | 16:9 | 736 x 416 |\n| 0.4 | 16:9 | 864 x 480 |\n| 0.5 | 16:9 | 960 x 544 |\n| 0.6 | 16:9 | 1056 x 608 |\n| 0.7 | 16:9 | 1152 x 640 |\n| 0.8 | 16:9 | 1216 x 672 |\n| 0.9 | 16:9 | 1280 x 736 |\n| 0.98 | 16:9 | 1344 x 768 |\n| 1.0 | 16:9 | 1376 x 768 |\n| 1.2 | 16:9 | 1504 x 832 |\n| 1.5 | 16:9 | 1664 x 928 |\n| 1.8 | 16:9 | 1824 x 1024 |\n| 2.0 | 16:9 | 1920 x 1088 |\n"
+      },
+      "color": "#222",
+      "bgcolor": "#000"
+    },
+    {
+      "id": 14,
+      "type": "ModelAttentionBackend",
+      "pos": [
+        -184.67949301200898,
+        -160.5821375474329
+      ],
+      "size": [
+        270,
+        138
+      ],
+      "flags": {},
+      "order": 6,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "model",
+          "type": "MODEL",
+          "link": 24
+        },
+        {
+          "name": "attention",
+          "type": "COMBO",
+          "widget": {
+            "name": "attention"
+          },
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "localized_name": "模型",
+          "name": "MODEL",
+          "type": "MODEL",
+          "links": [
+            25
+          ]
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "ModelAttentionBackend"
+      },
+      "widgets_values": [
+        "comfy kitchen attention"
+      ],
+      "widgets_values_named": {
+        "sage_attention": "auto",
+        "allow_compile": false
+      },
+      "title": "8GB 注意力加速"
+    },
+    {
+      "id": 1,
+      "type": "UNETLoader",
+      "pos": [
+        -720,
+        80
+      ],
+      "size": [
+        360,
+        86
+      ],
+      "flags": {},
+      "order": 5,
+      "mode": 0,
+      "inputs": [
+        {
+          "localized_name": "UNet名称",
+          "name": "unet_name",
+          "type": "COMBO",
+          "widget": {
+            "name": "unet_name"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "数据类型",
+          "name": "weight_dtype",
+          "type": "COMBO",
+          "widget": {
+            "name": "weight_dtype"
+          },
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "localized_name": "模型",
+          "name": "MODEL",
+          "type": "MODEL",
+          "links": [
+            22
+          ]
+        }
+      ],
+      "title": "Ref2VA INT8 · 参考素材生成",
+      "properties": {
+        "Node name for S&R": "UNETLoader",
+        "models": [
+          {
+            "name": "minimax_h3_fl2va_pruned_int8_convrot.safetensors",
+            "directory": "diffusion_models"
+          }
+        ]
+      },
+      "widgets_values": [
+        "minimax_h3_ref2va_pruned_int8_convrot.safetensors",
+        "default"
+      ],
+      "widgets_values_named": {
+        "unet_name": "minimax_h3_fl2va_pruned_int8_convrot.safetensors",
+        "weight_dtype": "default"
+      }
+    },
+    {
+      "id": 25,
+      "type": "VHS_VideoCombine",
+      "pos": [
+        1039.4714018273885,
+        110.74804381943048
+      ],
+      "size": [
+        547.640625,
+        410
+      ],
+      "flags": {},
+      "order": 9,
+      "mode": 0,
+      "inputs": [
+        {
+          "localized_name": "images",
+          "name": "images",
+          "type": "IMAGE",
+          "link": 26
+        },
+        {
+          "localized_name": "audio",
+          "name": "audio",
+          "shape": 7,
+          "type": "AUDIO",
+          "link": 27
+        },
+        {
+          "localized_name": "meta_batch",
+          "name": "meta_batch",
+          "shape": 7,
+          "type": "VHS_BatchManager",
+          "link": null
+        },
+        {
+          "localized_name": "vae",
+          "name": "vae",
+          "shape": 7,
+          "type": "VAE",
+          "link": null
+        },
+        {
+          "localized_name": "frame_rate",
+          "name": "frame_rate",
+          "type": "FLOAT",
+          "widget": {
+            "name": "frame_rate"
+          },
+          "link": 28
+        },
+        {
+          "localized_name": "loop_count",
+          "name": "loop_count",
+          "type": "INT",
+          "widget": {
+            "name": "loop_count"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "filename_prefix",
+          "name": "filename_prefix",
+          "type": "STRING",
+          "widget": {
+            "name": "filename_prefix"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "format",
+          "name": "format",
+          "type": "COMBO",
+          "widget": {
+            "name": "format"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "pingpong",
+          "name": "pingpong",
+          "type": "BOOLEAN",
+          "widget": {
+            "name": "pingpong"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "save_output",
+          "name": "save_output",
+          "type": "BOOLEAN",
+          "widget": {
+            "name": "save_output"
+          },
+          "link": null
+        },
+        {
+          "name": "pix_fmt",
+          "type": [
+            "yuv420p",
+            "yuv420p10le"
+          ],
+          "widget": {
+            "name": "pix_fmt"
+          },
+          "link": null
+        },
+        {
+          "name": "crf",
+          "type": "INT",
+          "widget": {
+            "name": "crf"
+          },
+          "link": null
+        },
+        {
+          "name": "save_metadata",
+          "type": "BOOLEAN",
+          "widget": {
+            "name": "save_metadata"
+          },
+          "link": null
+        },
+        {
+          "name": "trim_to_audio",
+          "type": "BOOLEAN",
+          "widget": {
+            "name": "trim_to_audio"
+          },
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "localized_name": "Filenames",
+          "name": "Filenames",
+          "type": "VHS_FILENAMES",
+          "links": null
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "VHS_VideoCombine"
+      },
+      "widgets_values": {
+        "frame_rate": 24,
+        "loop_count": 0,
+        "filename_prefix": "codex/continuous/take01",
+        "format": "video/h264-mp4",
+        "pix_fmt": "yuv420p",
+        "crf": 18,
+        "save_metadata": true,
+        "trim_to_audio": false,
+        "pingpong": false,
+        "save_output": true
+      },
+      "widgets_values_named": {
+        "frame_rate": 8,
+        "loop_count": 0,
+        "filename_prefix": "minimaxh3",
+        "format": "video/h264-mp4",
+        "pix_fmt": "yuv420p",
+        "crf": 19,
+        "save_metadata": true,
+        "trim_to_audio": false,
+        "pingpong": false,
+        "save_output": true,
+        "videopreview": {
+          "hidden": false,
+          "paused": false,
+          "params": {
+            "filename": "minimaxh3_00002-audio.mp4",
+            "subfolder": "",
+            "type": "output",
+            "format": "video/h264-mp4",
+            "frame_rate": 24,
+            "workflow": "minimaxh3_00002.png",
+            "fullpath": "/root/ComfyUI/output/minimaxh3_00002-audio.mp4"
+          }
+        }
+      },
+      "title": "连续镜头 · 统一音视频导出"
+    },
+    {
+      "id": 24,
+      "type": "LoraLoaderModelOnly",
+      "pos": [
+        515.2828280434381,
+        -144.58424687688188
+      ],
+      "size": [
+        387.125,
+        90
+      ],
+      "flags": {},
+      "order": 8,
+      "mode": 0,
+      "inputs": [
+        {
+          "localized_name": "模型",
+          "name": "model",
+          "type": "MODEL",
+          "link": 22
+        },
+        {
+          "localized_name": "LoRA名称",
+          "name": "lora_name",
+          "type": "COMBO",
+          "widget": {
+            "name": "lora_name"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "模型强度",
+          "name": "strength_model",
+          "type": "FLOAT",
+          "widget": {
+            "name": "strength_model"
+          },
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "localized_name": "模型",
+          "name": "MODEL",
+          "type": "MODEL",
+          "links": [
+            24
+          ]
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "LoraLoaderModelOnly"
+      },
+      "widgets_values": [
+        "minimax_h3_ref2v_turbo_4step_v0.1_comfyui_bf16.safetensors",
+        1.0
+      ],
+      "widgets_values_named": {
+        "lora_name": "minimax_h3_fl2v_turbo_8step_v1.0_comfyui_bf16.safetensors",
+        "strength_model": 1
+      },
+      "title": "Ref2V Turbo · 4 步"
+    },
+    {
+      "id": 12,
+      "type": "MiniMaxH3Director",
+      "pos": [
+        -292.81612240755305,
+        69.34248300160233
+      ],
+      "size": [
+        1240.171875,
+        1736
+      ],
+      "flags": {},
+      "order": 7,
+      "mode": 0,
+      "inputs": [
+        {
+          "localized_name": "model",
+          "name": "model",
+          "type": "MODEL",
+          "link": 25
+        },
+        {
+          "localized_name": "video_vae",
+          "name": "video_vae",
+          "type": "VAE",
+          "link": 15
+        },
+        {
+          "localized_name": "audio_vae",
+          "name": "audio_vae",
+          "type": "VAE",
+          "link": 13
+        },
+        {
+          "localized_name": "clip",
+          "name": "clip",
+          "type": "CLIP",
+          "link": 16
+        },
+        {
+          "localized_name": "i2v_groups",
+          "name": "i2v_groups",
+          "shape": 7,
+          "type": "MMX_DIR_GROUP",
+          "link": null
+        },
+        {
+          "localized_name": "r2v_groups",
+          "name": "r2v_groups",
+          "shape": 7,
+          "type": "MMX_DIR_GROUP",
+          "link": null
+        },
+        {
+          "localized_name": "refine",
+          "name": "refine",
+          "shape": 7,
+          "type": "MMX_DIR_REFINE",
+          "link": null
+        },
+        {
+          "localized_name": "sigmas",
+          "name": "sigmas",
+          "shape": 7,
+          "type": "SIGMAS",
+          "link": null
+        },
+        {
+          "localized_name": "task_type",
+          "name": "task_type",
+          "type": "COMBO",
+          "widget": {
+            "name": "task_type"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "global_prompt",
+          "name": "global_prompt",
+          "type": "STRING",
+          "widget": {
+            "name": "global_prompt"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "bd_grp_sample",
+          "name": "bd_grp_sample",
+          "type": "BDGROUP",
+          "widget": {
+            "name": "bd_grp_sample"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "cfg",
+          "name": "cfg",
+          "type": "FLOAT",
+          "widget": {
+            "name": "cfg"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "seed",
+          "name": "seed",
+          "type": "INT",
+          "widget": {
+            "name": "seed"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "frame_rate",
+          "name": "frame_rate",
+          "type": "FLOAT",
+          "widget": {
+            "name": "frame_rate"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "width",
+          "name": "width",
+          "type": "INT",
+          "widget": {
+            "name": "width"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "height",
+          "name": "height",
+          "type": "INT",
+          "widget": {
+            "name": "height"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "ref_max_size",
+          "name": "ref_max_size",
+          "type": "INT",
+          "widget": {
+            "name": "ref_max_size"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "total_frames",
+          "name": "total_frames",
+          "type": "INT",
+          "widget": {
+            "name": "total_frames"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "timeline_data",
+          "name": "timeline_data",
+          "type": "STRING",
+          "widget": {
+            "name": "timeline_data"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "bd_grp_advanced",
+          "name": "bd_grp_advanced",
+          "shape": 7,
+          "type": "BDGROUP",
+          "widget": {
+            "name": "bd_grp_advanced"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "steps",
+          "name": "steps",
+          "shape": 7,
+          "type": "INT",
+          "widget": {
+            "name": "steps"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "sampler",
+          "name": "sampler",
+          "shape": 7,
+          "type": "COMBO",
+          "widget": {
+            "name": "sampler"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "scheduler",
+          "name": "scheduler",
+          "shape": 7,
+          "type": "COMBO",
+          "widget": {
+            "name": "scheduler"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "shift_video",
+          "name": "shift_video",
+          "shape": 7,
+          "type": "FLOAT",
+          "widget": {
+            "name": "shift_video"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "shift_audio",
+          "name": "shift_audio",
+          "shape": 7,
+          "type": "FLOAT",
+          "widget": {
+            "name": "shift_audio"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "bd_grp_perf",
+          "name": "bd_grp_perf",
+          "shape": 7,
+          "type": "BDGROUP",
+          "widget": {
+            "name": "bd_grp_perf"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "clear_vram_between_segments",
+          "name": "clear_vram_between_segments",
+          "shape": 7,
+          "type": "BOOLEAN",
+          "widget": {
+            "name": "clear_vram_between_segments"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "export_source_images",
+          "name": "export_source_images",
+          "shape": 7,
+          "type": "BOOLEAN",
+          "widget": {
+            "name": "export_source_images"
+          },
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "localized_name": "images",
+          "name": "images",
+          "shape": 6,
+          "type": "IMAGE",
+          "links": [
+            26
+          ]
+        },
+        {
+          "localized_name": "audio",
+          "name": "audio",
+          "shape": 6,
+          "type": "AUDIO",
+          "links": [
+            27
+          ]
+        },
+        {
+          "localized_name": "fps",
+          "name": "fps",
+          "type": "FLOAT",
+          "links": [
+            28
+          ]
+        },
+        {
+          "localized_name": "frame_count",
+          "name": "frame_count",
+          "type": "INT",
+          "links": null
+        },
+        {
+          "localized_name": "source_images",
+          "name": "source_images",
+          "shape": 6,
+          "type": "IMAGE",
+          "links": null
+        },
+        {
+          "localized_name": "report",
+          "name": "report",
+          "type": "STRING",
+          "links": []
+        },
+        {
+          "localized_name": "images_pre_refine",
+          "name": "images_pre_refine",
+          "shape": 6,
+          "type": "IMAGE",
+          "links": null
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "MiniMaxH3Director"
+      },
+      "widgets_values": [
+        "r2v — 参考主体生视频(Reference to Video)",
+        "Use <Picture 4> as a reference for the camera composition and the shopkeeper standing behind the counter. It is a composition reference, not a timed first frame.",
+        "采样设置",
+        1.0,
+        614091401,
+        "fixed",
+        24.0,
+        768,
+        448,
+        768,
+        744,
+        "{\"version\":5,\"editMode\":\"segment\",\"totalFrames\":744,\"frameRate\":24,\"video\":{\"fileName\":\"\",\"videoFile\":\"\",\"subfolder\":\"\",\"type\":\"input\",\"frames\":[],\"frameMap\":[],\"sourceFrameCount\":744,\"deletedSourceRanges\":[]},\"videoClips\":[],\"global\":{\"taskType\":\"r2v — 参考主体生视频(Reference to Video)\",\"prompt\":\"Use <Picture 4> as a reference for the camera composition and the shopkeeper standing behind the counter. It is a composition reference, not a timed first frame.\",\"refs\":[{\"index\":0,\"imageFile\":\"eb8c7268-fad0-42b7-88a2-aac7a668fed4.png\",\"fileName\":\"eb8c7268-fad0-42b7-88a2-aac7a668fed4.png\",\"type\":\"input\",\"subfolder\":\"autodirector\"},{\"index\":1,\"imageFile\":\"00c09ecb-856a-41ad-bca8-3143b7602849.png\",\"fileName\":\"00c09ecb-856a-41ad-bca8-3143b7602849.png\",\"type\":\"input\",\"subfolder\":\"autodirector\"},{\"index\":2,\"imageFile\":\"f6709f66-a9bd-4e8d-869b-987e756df3ae.png\",\"fileName\":\"f6709f66-a9bd-4e8d-869b-987e756df3ae.png\",\"type\":\"input\",\"subfolder\":\"autodirector\"},{\"index\":3,\"imageFile\":\"0622594b-47ba-4c77-98b6-294fe650101f.png\",\"fileName\":\"0622594b-47ba-4c77-98b6-294fe650101f.png\",\"type\":\"input\",\"subfolder\":\"autodirector\"}],\"refAudios\":[],\"refVideos\":[],\"referenceVideo\":{\"videoFile\":\"\",\"fileName\":\"\",\"type\":\"input\",\"subfolder\":\"\"},\"continuousReference\":false,\"genImage\":{\"imageFile\":\"\"},\"sourceWidth\":768,\"sourceHeight\":448,\"commonEnabled\":true,\"commonCollapsed\":false},\"output\":{\"mode\":\"fixed\",\"aspectRatio\":\"custom\",\"megapixels\":0.344064,\"multiple\":32,\"longEdge\":768,\"width\":768,\"height\":448,\"maxExportFrames\":0,\"exportMode\":\"all\",\"audioMode\":\"generate\",\"exportSourceImages\":false,\"refImageSize\":\"match\",\"continuityEnabled\":true,\"continuityOverlapFrames\":22,\"continuityKeepTail\":true},\"runSelectEnabled\":false,\"runSelection\":[],\"segments\":[{\"id\":\"codex-continuous-01\",\"start\":0,\"length\":124,\"frameCount\":124,\"durationSec\":5.166666666666667,\"prompt\":\"integrated_multimodal_description: [Shot 1] A single continuous locked medium-wide shot. The same gray-haired Chinese shopkeeper in a cream shirt and navy apron from <Picture 1> stands behind the wooden counter in the warm small noodle shop from <Picture 2>. The same white noodle bowl with two thin blue rim stripes from <Picture 3> rests upright on the counter in front of him. Preserve the starting camera position, framing, face, clothing, bowl, room layout and warm lighting throughout. Subtle steam rises from the noodles. Natural restrained performance at real-time speed. No cuts, camera moves, new people, titles or subtitles.\\n\\nWith his right hand already touching the bowl, he gently slides it a short distance forward toward the unseen customer, then finishes the slide, releases the bowl, and lets his hand settle beside it. He looks down at the freshly served noodles. The action ends in a relaxed pause.\\n\\nSpeech performance: No spoken dialogue.\\noverall_soundscape: Continuous soft rain pattering outside the window, quiet indoor room tone, very subtle cloth movement and ceramic contact only when the hand touches the bowl. No speech.\\nnon_diegetic_music: N/A\",\"negativePrompt\":\"\",\"taskType\":\"\",\"refs\":[],\"refAudios\":[],\"refVideos\":[],\"genImage\":{\"imageFile\":\"\",\"fileName\":\"\"},\"referenceVideo\":{\"videoFile\":\"\",\"fileName\":\"\",\"type\":\"input\",\"subfolder\":\"\"},\"continuityFromPrev\":false,\"refImageSize\":\"match\"},{\"id\":\"codex-continuous-02\",\"start\":124,\"length\":124,\"frameCount\":124,\"durationSec\":5.166666666666667,\"prompt\":\"integrated_multimodal_description: [Shot 1] A single continuous locked medium-wide shot. The same gray-haired Chinese shopkeeper in a cream shirt and navy apron from <Picture 1> stands behind the wooden counter in the warm small noodle shop from <Picture 2>. The same white noodle bowl with two thin blue rim stripes from <Picture 3> rests upright on the counter in front of him. Preserve the starting camera position, framing, face, clothing, bowl, room layout and warm lighting throughout. Subtle steam rises from the noodles. Natural restrained performance at real-time speed. No cuts, camera moves, new people, titles or subtitles.\\n\\nContinue directly from the preceding pose, without repeating the serving motion. Hearing the rain, the shopkeeper slowly turns his head and eyes toward the rain-streaked window on screen right. His shoulders follow just a little. His hands remain relaxed near the counter. The bowl stays in place as he briefly watches the rain.\\n\\nSpeech performance: No spoken dialogue.\\noverall_soundscape: Continuous soft rain pattering outside the window, quiet indoor room tone, very subtle cloth movement and ceramic contact only when the hand touches the bowl. No speech.\\nnon_diegetic_music: N/A\",\"negativePrompt\":\"\",\"taskType\":\"\",\"refs\":[],\"refAudios\":[],\"refVideos\":[],\"genImage\":{\"imageFile\":\"\",\"fileName\":\"\"},\"referenceVideo\":{\"videoFile\":\"\",\"fileName\":\"\",\"type\":\"input\",\"subfolder\":\"\"},\"continuityFromPrev\":true,\"refImageSize\":\"match\"},{\"id\":\"codex-continuous-03\",\"start\":248,\"length\":124,\"frameCount\":124,\"durationSec\":5.166666666666667,\"prompt\":\"integrated_multimodal_description: [Shot 1] A single continuous locked medium-wide shot. The same gray-haired Chinese shopkeeper in a cream shirt and navy apron from <Picture 1> stands behind the wooden counter in the warm small noodle shop from <Picture 2>. The same white noodle bowl with two thin blue rim stripes from <Picture 3> rests upright on the counter in front of him. Preserve the starting camera position, framing, face, clothing, bowl, room layout and warm lighting throughout. Subtle steam rises from the noodles. Natural restrained performance at real-time speed. No cuts, camera moves, new people, titles or subtitles.\\n\\nContinue directly from the preceding pose. The shopkeeper turns his head slowly away from the window and back toward the unseen customer just beyond the camera. A small welcoming smile appears and he gives one gentle nod. His body stays behind the counter, his hands remain low, and the bowl stays exactly in place.\\n\\nSpeech performance: No spoken dialogue.\\noverall_soundscape: Continuous soft rain pattering outside the window, quiet indoor room tone, very subtle cloth movement and ceramic contact only when the hand touches the bowl. No speech.\\nnon_diegetic_music: N/A\",\"negativePrompt\":\"\",\"taskType\":\"\",\"refs\":[],\"refAudios\":[],\"refVideos\":[],\"genImage\":{\"imageFile\":\"\",\"fileName\":\"\"},\"referenceVideo\":{\"videoFile\":\"\",\"fileName\":\"\",\"type\":\"input\",\"subfolder\":\"\"},\"continuityFromPrev\":true,\"refImageSize\":\"match\"},{\"id\":\"codex-continuous-04\",\"start\":372,\"length\":124,\"frameCount\":124,\"durationSec\":5.166666666666667,\"prompt\":\"integrated_multimodal_description: [Shot 1] A single continuous locked medium-wide shot. The same gray-haired Chinese shopkeeper in a cream shirt and navy apron from <Picture 1> stands behind the wooden counter in the warm small noodle shop from <Picture 2>. The same white noodle bowl with two thin blue rim stripes from <Picture 3> rests upright on the counter in front of him. Preserve the starting camera position, framing, face, clothing, bowl, room layout and warm lighting throughout. Subtle steam rises from the noodles. Natural restrained performance at real-time speed. No cuts, camera moves, new people, titles or subtitles.\\n\\nContinue directly from the preceding pose. With a small welcoming smile, he raises his right hand just above the counter and makes one modest open-palm gesture toward the served bowl, inviting the unseen customer to eat. He then lowers the hand naturally beside the bowl. He keeps looking toward the customer.\\n\\nSpeech performance: No spoken dialogue.\\noverall_soundscape: Continuous soft rain pattering outside the window, quiet indoor room tone, very subtle cloth movement and ceramic contact only when the hand touches the bowl. No speech.\\nnon_diegetic_music: N/A\",\"negativePrompt\":\"\",\"taskType\":\"\",\"refs\":[],\"refAudios\":[],\"refVideos\":[],\"genImage\":{\"imageFile\":\"\",\"fileName\":\"\"},\"referenceVideo\":{\"videoFile\":\"\",\"fileName\":\"\",\"type\":\"input\",\"subfolder\":\"\"},\"continuityFromPrev\":true,\"refImageSize\":\"match\"},{\"id\":\"codex-continuous-05\",\"start\":496,\"length\":124,\"frameCount\":124,\"durationSec\":5.166666666666667,\"prompt\":\"integrated_multimodal_description: [Shot 1] A single continuous locked medium-wide shot. The same gray-haired Chinese shopkeeper in a cream shirt and navy apron from <Picture 1> stands behind the wooden counter in the warm small noodle shop from <Picture 2>. The same white noodle bowl with two thin blue rim stripes from <Picture 3> rests upright on the counter in front of him. Preserve the starting camera position, framing, face, clothing, bowl, room layout and warm lighting throughout. Subtle steam rises from the noodles. Natural restrained performance at real-time speed. No cuts, camera moves, new people, titles or subtitles.\\n\\nContinue directly from the preceding pose. The shopkeeper lowers his eyes to the bowl, gently touches its outer side with his right fingertips to straighten it by a tiny amount on the wooden counter, then releases it carefully. The bowl remains upright. He watches the steam for a brief quiet pause.\\n\\nSpeech performance: No spoken dialogue.\\noverall_soundscape: Continuous soft rain pattering outside the window, quiet indoor room tone, very subtle cloth movement and ceramic contact only when the hand touches the bowl. No speech.\\nnon_diegetic_music: N/A\",\"negativePrompt\":\"\",\"taskType\":\"\",\"refs\":[],\"refAudios\":[],\"refVideos\":[],\"genImage\":{\"imageFile\":\"\",\"fileName\":\"\"},\"referenceVideo\":{\"videoFile\":\"\",\"fileName\":\"\",\"type\":\"input\",\"subfolder\":\"\"},\"continuityFromPrev\":true,\"refImageSize\":\"match\"},{\"id\":\"codex-continuous-06\",\"start\":620,\"length\":124,\"frameCount\":124,\"durationSec\":5.166666666666667,\"prompt\":\"integrated_multimodal_description: [Shot 1] A single continuous locked medium-wide shot. The same gray-haired Chinese shopkeeper in a cream shirt and navy apron from <Picture 1> stands behind the wooden counter in the warm small noodle shop from <Picture 2>. The same white noodle bowl with two thin blue rim stripes from <Picture 3> rests upright on the counter in front of him. Preserve the starting camera position, framing, face, clothing, bowl, room layout and warm lighting throughout. Subtle steam rises from the noodles. Natural restrained performance at real-time speed. No cuts, camera moves, new people, titles or subtitles.\\n\\nContinue directly from the preceding pose. The shopkeeper slowly lifts his eyes from the steaming bowl toward the unseen customer. His expression softens into a small kind smile. He settles his hands naturally on the counter and holds this calm welcoming pose as the rain continues outside. End with stillness and gentle steam.\\n\\nSpeech performance: No spoken dialogue.\\noverall_soundscape: Continuous soft rain pattering outside the window, quiet indoor room tone, very subtle cloth movement and ceramic contact only when the hand touches the bowl. No speech.\\nnon_diegetic_music: N/A\",\"negativePrompt\":\"\",\"taskType\":\"\",\"refs\":[],\"refAudios\":[],\"refVideos\":[],\"genImage\":{\"imageFile\":\"\",\"fileName\":\"\"},\"referenceVideo\":{\"videoFile\":\"\",\"fileName\":\"\",\"type\":\"input\",\"subfolder\":\"\"},\"continuityFromPrev\":true,\"refImageSize\":\"match\"}],\"timelineMode\":\"prompt_batch\",\"width\":768,\"height\":448,\"refMaxSize\":768,\"gen\":{\"defaultFrameCount\":124},\"keyframes\":[],\"durationSec\":31,\"shots\":[],\"liveTaePreview\":false,\"batchDetailMode\":\"solo\",\"batchWorkspaces\":{\"r2v\":{\"selectedIndex\":0,\"editMode\":\"segment\",\"runSelectEnabled\":false,\"runSelection\":[],\"segments\":[{\"id\":\"codex-continuous-01\",\"start\":0,\"length\":124,\"frameCount\":124,\"durationSec\":5.166666666666667,\"prompt\":\"integrated_multimodal_description: [Shot 1] A single continuous locked medium-wide shot. The same gray-haired Chinese shopkeeper in a cream shirt and navy apron from <Picture 1> stands behind the wooden counter in the warm small noodle shop from <Picture 2>. The same white noodle bowl with two thin blue rim stripes from <Picture 3> rests upright on the counter in front of him. Preserve the starting camera position, framing, face, clothing, bowl, room layout and warm lighting throughout. Subtle steam rises from the noodles. Natural restrained performance at real-time speed. No cuts, camera moves, new people, titles or subtitles.\\n\\nWith his right hand already touching the bowl, he gently slides it a short distance forward toward the unseen customer, then finishes the slide, releases the bowl, and lets his hand settle beside it. He looks down at the freshly served noodles. The action ends in a relaxed pause.\\n\\nSpeech performance: No spoken dialogue.\\noverall_soundscape: Continuous soft rain pattering outside the window, quiet indoor room tone, very subtle cloth movement and ceramic contact only when the hand touches the bowl. No speech.\\nnon_diegetic_music: N/A\",\"negativePrompt\":\"\",\"taskType\":\"\",\"refs\":[],\"refAudios\":[],\"refVideos\":[],\"genImage\":{\"imageFile\":\"\",\"fileName\":\"\"},\"referenceVideo\":{\"videoFile\":\"\",\"fileName\":\"\",\"type\":\"input\",\"subfolder\":\"\"},\"continuityFromPrev\":false,\"refImageSize\":\"match\"},{\"id\":\"codex-continuous-02\",\"start\":124,\"length\":124,\"frameCount\":124,\"durationSec\":5.166666666666667,\"prompt\":\"integrated_multimodal_description: [Shot 1] A single continuous locked medium-wide shot. The same gray-haired Chinese shopkeeper in a cream shirt and navy apron from <Picture 1> stands behind the wooden counter in the warm small noodle shop from <Picture 2>. The same white noodle bowl with two thin blue rim stripes from <Picture 3> rests upright on the counter in front of him. Preserve the starting camera position, framing, face, clothing, bowl, room layout and warm lighting throughout. Subtle steam rises from the noodles. Natural restrained performance at real-time speed. No cuts, camera moves, new people, titles or subtitles.\\n\\nContinue directly from the preceding pose, without repeating the serving motion. Hearing the rain, the shopkeeper slowly turns his head and eyes toward the rain-streaked window on screen right. His shoulders follow just a little. His hands remain relaxed near the counter. The bowl stays in place as he briefly watches the rain.\\n\\nSpeech performance: No spoken dialogue.\\noverall_soundscape: Continuous soft rain pattering outside the window, quiet indoor room tone, very subtle cloth movement and ceramic contact only when the hand touches the bowl. No speech.\\nnon_diegetic_music: N/A\",\"negativePrompt\":\"\",\"taskType\":\"\",\"refs\":[],\"refAudios\":[],\"refVideos\":[],\"genImage\":{\"imageFile\":\"\",\"fileName\":\"\"},\"referenceVideo\":{\"videoFile\":\"\",\"fileName\":\"\",\"type\":\"input\",\"subfolder\":\"\"},\"continuityFromPrev\":true,\"refImageSize\":\"match\"},{\"id\":\"codex-continuous-03\",\"start\":248,\"length\":124,\"frameCount\":124,\"durationSec\":5.166666666666667,\"prompt\":\"integrated_multimodal_description: [Shot 1] A single continuous locked medium-wide shot. The same gray-haired Chinese shopkeeper in a cream shirt and navy apron from <Picture 1> stands behind the wooden counter in the warm small noodle shop from <Picture 2>. The same white noodle bowl with two thin blue rim stripes from <Picture 3> rests upright on the counter in front of him. Preserve the starting camera position, framing, face, clothing, bowl, room layout and warm lighting throughout. Subtle steam rises from the noodles. Natural restrained performance at real-time speed. No cuts, camera moves, new people, titles or subtitles.\\n\\nContinue directly from the preceding pose. The shopkeeper turns his head slowly away from the window and back toward the unseen customer just beyond the camera. A small welcoming smile appears and he gives one gentle nod. His body stays behind the counter, his hands remain low, and the bowl stays exactly in place.\\n\\nSpeech performance: No spoken dialogue.\\noverall_soundscape: Continuous soft rain pattering outside the window, quiet indoor room tone, very subtle cloth movement and ceramic contact only when the hand touches the bowl. No speech.\\nnon_diegetic_music: N/A\",\"negativePrompt\":\"\",\"taskType\":\"\",\"refs\":[],\"refAudios\":[],\"refVideos\":[],\"genImage\":{\"imageFile\":\"\",\"fileName\":\"\"},\"referenceVideo\":{\"videoFile\":\"\",\"fileName\":\"\",\"type\":\"input\",\"subfolder\":\"\"},\"continuityFromPrev\":true,\"refImageSize\":\"match\"},{\"id\":\"codex-continuous-04\",\"start\":372,\"length\":124,\"frameCount\":124,\"durationSec\":5.166666666666667,\"prompt\":\"integrated_multimodal_description: [Shot 1] A single continuous locked medium-wide shot. The same gray-haired Chinese shopkeeper in a cream shirt and navy apron from <Picture 1> stands behind the wooden counter in the warm small noodle shop from <Picture 2>. The same white noodle bowl with two thin blue rim stripes from <Picture 3> rests upright on the counter in front of him. Preserve the starting camera position, framing, face, clothing, bowl, room layout and warm lighting throughout. Subtle steam rises from the noodles. Natural restrained performance at real-time speed. No cuts, camera moves, new people, titles or subtitles.\\n\\nContinue directly from the preceding pose. With a small welcoming smile, he raises his right hand just above the counter and makes one modest open-palm gesture toward the served bowl, inviting the unseen customer to eat. He then lowers the hand naturally beside the bowl. He keeps looking toward the customer.\\n\\nSpeech performance: No spoken dialogue.\\noverall_soundscape: Continuous soft rain pattering outside the window, quiet indoor room tone, very subtle cloth movement and ceramic contact only when the hand touches the bowl. No speech.\\nnon_diegetic_music: N/A\",\"negativePrompt\":\"\",\"taskType\":\"\",\"refs\":[],\"refAudios\":[],\"refVideos\":[],\"genImage\":{\"imageFile\":\"\",\"fileName\":\"\"},\"referenceVideo\":{\"videoFile\":\"\",\"fileName\":\"\",\"type\":\"input\",\"subfolder\":\"\"},\"continuityFromPrev\":true,\"refImageSize\":\"match\"},{\"id\":\"codex-continuous-05\",\"start\":496,\"length\":124,\"frameCount\":124,\"durationSec\":5.166666666666667,\"prompt\":\"integrated_multimodal_description: [Shot 1] A single continuous locked medium-wide shot. The same gray-haired Chinese shopkeeper in a cream shirt and navy apron from <Picture 1> stands behind the wooden counter in the warm small noodle shop from <Picture 2>. The same white noodle bowl with two thin blue rim stripes from <Picture 3> rests upright on the counter in front of him. Preserve the starting camera position, framing, face, clothing, bowl, room layout and warm lighting throughout. Subtle steam rises from the noodles. Natural restrained performance at real-time speed. No cuts, camera moves, new people, titles or subtitles.\\n\\nContinue directly from the preceding pose. The shopkeeper lowers his eyes to the bowl, gently touches its outer side with his right fingertips to straighten it by a tiny amount on the wooden counter, then releases it carefully. The bowl remains upright. He watches the steam for a brief quiet pause.\\n\\nSpeech performance: No spoken dialogue.\\noverall_soundscape: Continuous soft rain pattering outside the window, quiet indoor room tone, very subtle cloth movement and ceramic contact only when the hand touches the bowl. No speech.\\nnon_diegetic_music: N/A\",\"negativePrompt\":\"\",\"taskType\":\"\",\"refs\":[],\"refAudios\":[],\"refVideos\":[],\"genImage\":{\"imageFile\":\"\",\"fileName\":\"\"},\"referenceVideo\":{\"videoFile\":\"\",\"fileName\":\"\",\"type\":\"input\",\"subfolder\":\"\"},\"continuityFromPrev\":true,\"refImageSize\":\"match\"},{\"id\":\"codex-continuous-06\",\"start\":620,\"length\":124,\"frameCount\":124,\"durationSec\":5.166666666666667,\"prompt\":\"integrated_multimodal_description: [Shot 1] A single continuous locked medium-wide shot. The same gray-haired Chinese shopkeeper in a cream shirt and navy apron from <Picture 1> stands behind the wooden counter in the warm small noodle shop from <Picture 2>. The same white noodle bowl with two thin blue rim stripes from <Picture 3> rests upright on the counter in front of him. Preserve the starting camera position, framing, face, clothing, bowl, room layout and warm lighting throughout. Subtle steam rises from the noodles. Natural restrained performance at real-time speed. No cuts, camera moves, new people, titles or subtitles.\\n\\nContinue directly from the preceding pose. The shopkeeper slowly lifts his eyes from the steaming bowl toward the unseen customer. His expression softens into a small kind smile. He settles his hands naturally on the counter and holds this calm welcoming pose as the rain continues outside. End with stillness and gentle steam.\\n\\nSpeech performance: No spoken dialogue.\\noverall_soundscape: Continuous soft rain pattering outside the window, quiet indoor room tone, very subtle cloth movement and ceramic contact only when the hand touches the bowl. No speech.\\nnon_diegetic_music: N/A\",\"negativePrompt\":\"\",\"taskType\":\"\",\"refs\":[],\"refAudios\":[],\"refVideos\":[],\"genImage\":{\"imageFile\":\"\",\"fileName\":\"\"},\"referenceVideo\":{\"videoFile\":\"\",\"fileName\":\"\",\"type\":\"input\",\"subfolder\":\"\"},\"continuityFromPrev\":true,\"refImageSize\":\"match\"}],\"globalCommon\":{\"taskType\":\"r2v — 参考主体生视频(Reference to Video)\",\"prompt\":\"Use <Picture 4> as a reference for the camera composition and the shopkeeper standing behind the counter. It is a composition reference, not a timed first frame.\",\"refs\":[{\"index\":0,\"imageFile\":\"eb8c7268-fad0-42b7-88a2-aac7a668fed4.png\",\"fileName\":\"eb8c7268-fad0-42b7-88a2-aac7a668fed4.png\",\"type\":\"input\",\"subfolder\":\"autodirector\"},{\"index\":1,\"imageFile\":\"00c09ecb-856a-41ad-bca8-3143b7602849.png\",\"fileName\":\"00c09ecb-856a-41ad-bca8-3143b7602849.png\",\"type\":\"input\",\"subfolder\":\"autodirector\"},{\"index\":2,\"imageFile\":\"f6709f66-a9bd-4e8d-869b-987e756df3ae.png\",\"fileName\":\"f6709f66-a9bd-4e8d-869b-987e756df3ae.png\",\"type\":\"input\",\"subfolder\":\"autodirector\"},{\"index\":3,\"imageFile\":\"0622594b-47ba-4c77-98b6-294fe650101f.png\",\"fileName\":\"0622594b-47ba-4c77-98b6-294fe650101f.png\",\"type\":\"input\",\"subfolder\":\"autodirector\"}],\"refAudios\":[],\"refVideos\":[],\"referenceVideo\":{\"videoFile\":\"\",\"fileName\":\"\",\"type\":\"input\",\"subfolder\":\"\"},\"continuousReference\":false,\"genImage\":{\"imageFile\":\"\"},\"sourceWidth\":768,\"sourceHeight\":448,\"commonEnabled\":true,\"commonCollapsed\":false}}},\"globalCommon\":{\"taskType\":\"r2v — 参考主体生视频(Reference to Video)\",\"prompt\":\"Use <Picture 4> as a reference for the camera composition and the shopkeeper standing behind the counter. It is a composition reference, not a timed first frame.\",\"refs\":[{\"index\":0,\"imageFile\":\"eb8c7268-fad0-42b7-88a2-aac7a668fed4.png\",\"fileName\":\"eb8c7268-fad0-42b7-88a2-aac7a668fed4.png\",\"type\":\"input\",\"subfolder\":\"autodirector\"},{\"index\":1,\"imageFile\":\"00c09ecb-856a-41ad-bca8-3143b7602849.png\",\"fileName\":\"00c09ecb-856a-41ad-bca8-3143b7602849.png\",\"type\":\"input\",\"subfolder\":\"autodirector\"},{\"index\":2,\"imageFile\":\"f6709f66-a9bd-4e8d-869b-987e756df3ae.png\",\"fileName\":\"f6709f66-a9bd-4e8d-869b-987e756df3ae.png\",\"type\":\"input\",\"subfolder\":\"autodirector\"},{\"index\":3,\"imageFile\":\"0622594b-47ba-4c77-98b6-294fe650101f.png\",\"fileName\":\"0622594b-47ba-4c77-98b6-294fe650101f.png\",\"type\":\"input\",\"subfolder\":\"autodirector\"}],\"refAudios\":[],\"refVideos\":[],\"referenceVideo\":{\"videoFile\":\"\",\"fileName\":\"\",\"type\":\"input\",\"subfolder\":\"\"},\"continuousReference\":false,\"genImage\":{\"imageFile\":\"\"},\"sourceWidth\":768,\"sourceHeight\":448,\"commonEnabled\":true,\"commonCollapsed\":false}}",
+        "高级采样",
+        4,
+        "euler",
+        "simple",
+        12.0,
+        3.0,
+        "性能",
+        true,
+        false
+      ],
+      "widgets_values_named": {
+        "task_type": "r2v — 参考主体生视频(Reference to Video)",
+        "global_prompt": "",
+        "bd_grp_sample": "采样设置",
+        "cfg": 1,
+        "seed": 743721672376562,
+        "control_after_generate": "randomize",
+        "frame_rate": 24,
+        "width": 736,
+        "height": 992,
+        "ref_max_size": 992,
+        "total_frames": 2172,
+        "timeline_data": "{\"version\":5,\"editMode\":\"segment\",\"totalFrames\":2172,\"frameRate\":24,\"video\":{\"fileName\":\"\",\"videoFile\":\"\",\"subfolder\":\"\",\"type\":\"input\",\"frames\":[],\"frameMap\":[],\"sourceFrameCount\":2172,\"deletedSourceRanges\":[]},\"videoClips\":[],\"global\":{\"taskType\":\"r2v — 参考主体生视频(Reference to Video)\",\"prompt\":\"\",\"refs\":[{\"index\":0,\"imageFile\":\"画境作品 (2).png\",\"fileName\":\"\",\"type\":\"input\",\"subfolder\":\"\"}],\"referenceVideo\":{\"videoFile\":\"\",\"fileName\":\"\",\"type\":\"input\",\"subfolder\":\"\"},\"continuousReference\":false,\"genImage\":{\"imageFile\":\"\"},\"sourceWidth\":768,\"sourceHeight\":1024,\"refAudios\":[],\"refVideos\":[],\"commonEnabled\":true,\"commonCollapsed\":true},\"output\":{\"mode\":\"fixed\",\"aspectRatio\":\"3:4 (竖版标准)\",\"megapixels\":0.7,\"multiple\":32,\"longEdge\":992,\"width\":736,\"height\":992,\"maxExportFrames\":0,\"exportMode\":\"all\",\"audioMode\":\"source\",\"exportSourceImages\":false,\"refImageSize\":\"match\",\"continuityEnabled\":true,\"continuityOverlapFrames\":22},\"runSelectEnabled\":false,\"runSelection\":[],\"segments\":[{\"id\":\"mse3lbnz61yvx\",\"start\":0,\"length\":362,\"frameCount\":362,\"durationSec\":15,\"prompt\":\"For the target video, at 0.00 seconds into the target video, <Picture 1> (from [Shot 1]) is fully referenced.\\n\\nintegrated_multimodal_description: [Shot 1] Live-action, cinematic, a medium-wide shot frames the professional woman shown in <Picture 1> seated at her sleek desk in a modern securities firm office, preserving her appearance, business attire, and the surrounding workstation with dual monitors displaying stock data. Floor-to-ceiling windows behind her reveal a city skyline in daylight. She raises her right hand with a graceful wrist rotation and flicks her fingers upward; a semi-transparent, luminous blue-cyan holographic K-line candlestick diagram materializes in the air above the desk, glowing softly. She tilts her head slightly to the right with a subtle, charming smile, tucking a strand of hair behind her left ear with her free hand. The camera pushes in with small amplitude at slow speed from medium-wide to medium shot as the woman with a confident, alluring yet professional voice (S1) says: <d>[Chinese] K线就像股票的体检报告。一根K线，记录了四个关键数据：开盘价、收盘价、最高价、最低价，缺一不可。</d> While speaking, she extends her index finger and traces four small glowing dots that appear on the holographic K-line one by one — each dot pulses brighter as she names its corresponding price. She maintains direct eye contact with the camera throughout, her lips syncing precisely to every syllable, a faint playful smirk lingering at the corners of her mouth.\\n\\noverall_soundscape: Low office ambient hum from air conditioning and computer fans continues throughout. Her fingers produce a soft tap each time she touches the holographic surface, accompanied by a faint electronic chime. A distant phone ring is audible from a neighboring desk, and the subtle rustle of her blazer fabric as she moves adds texture.\\n\\nnon_diegetic_music: N/A\\n\",\"negativePrompt\":\"\",\"taskType\":\"\",\"refs\":[{\"index\":2,\"imageFile\":\"Gemini_Generated_Image_yhwnv2yhwnv2yhwn.png\",\"fileName\":\"\",\"type\":\"input\",\"subfolder\":\"\"},{\"index\":3,\"imageFile\":\"Gemini_Generated_Image_skjq82skjq82skjq.png\",\"fileName\":\"\",\"type\":\"input\",\"subfolder\":\"\"}],\"refAudios\":[],\"refVideos\":[],\"genImage\":{\"imageFile\":\"\",\"fileName\":\"\"},\"continuityFromPrev\":false,\"refImageSize\":\"match\"},{\"id\":\"mspiepd3v64zd\",\"start\":362,\"length\":362,\"frameCount\":362,\"durationSec\":15,\"prompt\":\"For the target video, at 0.00 seconds into the target video, <Picture 1> (from [Shot 1]) is fully referenced.\\n\\nintegrated_multimodal_description: [Shot 1] Live-action, cinematic, a medium shot frames the professional woman shown in <Picture 1> seated at her desk in the securities firm office, with the holographic K-line diagram still glowing in the air before her. She gently taps the central rectangular body of the holographic K-line with her right index finger; the entity section expands and glows brighter in response, splitting into a red candlestick and a green candlestick side by side. She leans forward slightly, her eyes narrowing with a teasing, knowing look as the woman (S1) says: <d>[Chinese] 红色代表上涨，绿色代表下跌。中间这个矩形实体，就是开盘价和收盘价的差距，我们叫它'实体'。</d> The camera pans right with small amplitude at slow speed, following her gesture toward the two highlighted candlesticks. As she says \\\"红色\\\" and \\\"绿色,\\\" she points to each respective candlestick, which pulses in sync. She bites her lower lip briefly after saying \\\"实体,\\\" then gives a small, satisfied nod, her fingertips brushing the holographic surface with a delicate flick, sending a ripple of light across the diagram.\\n\\noverall_soundscape: The steady office air-conditioning hum persists beneath the soft electronic hum of the holographic display. Her fingertips produce gentle tap sounds against the holographic interface, followed by subtle crystalline chimes as the candlestick colors activate. The faint click of her keyboard and the murmur of distant colleagues talking in the hallway add realistic office ambience.\\n\\nnon_diegetic_music: N/A\\n\",\"negativePrompt\":\"\",\"taskType\":\"\",\"refs\":[],\"refAudios\":[],\"refVideos\":[],\"genImage\":{\"imageFile\":\"\",\"fileName\":\"\"},\"continuityFromPrev\":true,\"refImageSize\":\"match\"},{\"id\":\"mspifftdldpqe\",\"start\":724,\"length\":362,\"frameCount\":362,\"durationSec\":15,\"prompt\":\"For the target video, at 0.00 seconds into the target video, <Picture 1> (from [Shot 1]) is fully referenced.\\n\\nintegrated_multimodal_description: [Shot 1] Live-action, cinematic, a medium shot frames the professional woman shown in <Picture 1> at her office desk with the holographic K-line diagram glowing before her. She raises her right hand and traces her index finger upward along the thin vertical line extending above the rectangular entity of the holographic K-line; the line illuminates in a bright cyan trail as her finger moves along it, and a small label \\\"最高价\\\" materializes at its top. She then traces downward along the thin line below the entity, which illuminates the same way, with a label \\\"最低价\\\" appearing at the bottom. The camera arcs with small amplitude at slow speed from her left side toward a frontal angle, revealing both her face and the full vertical extent of the holographic K-line. She tilts her head, her eyes meeting the camera with a warm, slightly mischievous gaze, as the woman (S1) says: <d>[Chinese] 实体上方这根细线叫上影线，最高价就在顶端；下方这根细线叫下影线，最低价就在底端。明白了吗？</d> She raises her eyebrows playfully on \\\"明白了吗？\\\", curling her fingers into a light beckoning gesture toward the camera, her lips curving into a half-smile.\\n\\noverall_soundscape: The continuous office ambient hum and computer fan drone persist. Her finger gliding along the holographic surface produces a soft, ascending then descending electronic whisper, like running a finger along a crystal rim. Faint typing sounds from a neighboring cubicle and the occasional creak of an office chair add depth to the environment.\\n\\nnon_diegetic_music: N/A\",\"negativePrompt\":\"\",\"taskType\":\"\",\"refs\":[],\"refAudios\":[],\"refVideos\":[],\"genImage\":{\"imageFile\":\"\",\"fileName\":\"\"},\"continuityFromPrev\":true,\"refImageSize\":\"match\"},{\"id\":\"mspifxblwnvos\",\"start\":1086,\"length\":362,\"frameCount\":362,\"durationSec\":15,\"prompt\":\"For the target video, at 0.00 seconds into the target video, <Picture 1> (from [Shot 1]) is fully referenced.\\n\\nintegrated_multimodal_description: [Shot 1] Live-action, cinematic, a medium shot frames the professional woman shown in <Picture 1> at her securities office desk. With a graceful sweep of her right hand, she summons a new holographic element beside the K-line diagram — a translucent, glowing blue thermometer icon that floats in the air, its scale markings luminous. She pinches her thumb and index finger together and draws an upward gesture; the thermometer's mercury level rises, and simultaneously the K-line's upper shadow line glows brighter, creating a visual parallel. She then reverses the gesture downward; the mercury drops and the lower shadow line illuminates. The camera pulls out with small amplitude at slow speed to a medium-wide framing that encompasses both her expressive face and the two parallel holographic visuals. She rests her chin lightly on her left hand, elbow on the desk, her eyes glancing up at the camera through her lashes with a soft, inviting expression, as the woman (S1) says: <d>[Chinese] 打个比方，K线就像一根温度计。上影线告诉你今天最高到多少度，下影线告诉你最低到多少度。很好理解吧？</d> On \\\"很好理解吧？\\\", she gives a small, coy head tilt and a gentle nod, her smile widening just slightly.\\n\\noverall_soundscape: The office ambient hum continues steadily. The holographic thermometer produces a faint glass-like vibration sound as the mercury level changes. Her elbow settling on the desk creates a soft thud, and the faint rustle of her sleeve against the desk surface is audible. A distant printer whirs intermittently in the background.\\n\\nnon_diegetic_music: N/A\\n\\n\",\"negativePrompt\":\"\",\"taskType\":\"\",\"refs\":[],\"refAudios\":[],\"refVideos\":[],\"genImage\":{\"imageFile\":\"\",\"fileName\":\"\"},\"continuityFromPrev\":true,\"refImageSize\":\"match\"},{\"id\":\"mspigdpd0eofu\",\"start\":1448,\"length\":362,\"frameCount\":362,\"durationSec\":15,\"prompt\":\"For the target video, at 0.00 seconds into the target video, <Picture 1> (from [Shot 1]) is fully referenced.\\n\\nintegrated_multimodal_description: [Shot 1] Live-action, cinematic, a medium-wide shot frames the professional woman shown in <Picture 1> at her office desk. With a flick of both wrists, she dismisses the thermometer hologram and expands the K-line diagram, splitting it into two enlarged candlesticks floating side by side — one red with its close near the top, one green with its close near the bottom. She pushes her right palm forward toward the red candlestick; its upper portion glows intensely, and a small upward arrow icon appears above it. She then turns her palm toward the green candlestick; its lower portion darkens and a downward arrow icon appears. The camera pushes in with small amplitude at slow speed from medium-wide to a medium-close shot, tightening on her face and the two candlesticks. She straightens her posture slightly, her expression shifting to a more focused, professional look with a hint of allure, one eyebrow subtly raised, as the woman (S1) says: <d>[Chinese] 所以，收盘价接近最高价，说明多方力量很强；反过来，接近最低价，就说明空方占优了。记住了吗？</d> She taps her temple lightly with her index finger on \\\"记住了吗？\\\", then points at the camera with the same finger, her lips pressed into a playful, knowing smile.\\n\\noverall_soundscape: The office ambient hum persists beneath the soft electronic pulse of the holographic display. Her palm pressing against the holographic interface produces a deep, resonant bass tone, and the arrow icons appearing generate crisp digital blips. The squeak of her office chair as she straightens her posture and the subtle tap of her finger against her temple add tactile realism.\\n\\nnon_diegetic_music: N/A\\n\",\"negativePrompt\":\"\",\"taskType\":\"\",\"refs\":[],\"refAudios\":[],\"refVideos\":[],\"genImage\":{\"imageFile\":\"\",\"fileName\":\"\"},\"continuityFromPrev\":true,\"refImageSize\":\"match\"},{\"id\":\"mspihme8cr6uk\",\"start\":1810,\"length\":362,\"frameCount\":362,\"durationSec\":15,\"prompt\":\"For the target video, at 0.00 seconds into the target video, <Picture 1> (from [Shot 1]) is fully referenced.\\n\\nintegrated_multimodal_description: [Shot 1] Live-action, cinematic, a medium-close shot frames the professional woman shown in <Picture 1> at her securities firm desk. She sweeps both hands together in front of her, and the two candlestick holograms merge back into a single, complete annotated K-line diagram with all labels visible — \\\"开盘价,\\\" \\\"收盘价,\\\" \\\"最高价,\\\" \\\"最低价,\\\" \\\"上影线,\\\" \\\"下影线,\\\" and \\\"实体\\\" — each element glowing softly in its designated position. She traces both hands along the full outline of the K-line with a fluid, conductor-like motion, and the entire diagram pulses once with a warm golden light. She leans back slightly in her chair, crossing one leg over the other beneath the desk, and lifts her chin with a confident, radiant smile. The camera pedestals up with small amplitude at slow speed and simultaneously pulls out to a medium-wide framing, capturing her full upper body and the glowing holographic summary diagram beside her. She gives a small, graceful wave toward the camera with her right hand, her eyes warm and inviting, as the woman (S1) says: <d>[Chinese] 看懂K线，就是看懂多空双方的博弈。阳线越长，买方越积极；阴线越长，卖方越急切。你学会了吗？</d> On \\\"你学会了吗？\\\", she tilts her head, blinks slowly, and lets her smile linger as the holographic diagram slowly dims behind her.\\n\\noverall_soundscape: The office ambient hum and computer fan drone provide a steady base. Her hands sweeping through the holographic field produce a broad, resonant shimmer sound, and the golden pulse of the diagram emits a warm, bell-like chime. Her office chair creaks softly as she leans back and crosses her legs, and the faint rustle of her skirt fabric is audible. Distant keyboard typing and a muffled conversation from the hallway round out the realistic office soundscape.\\n\\nnon_diegetic_music: N/A\\n\\n\",\"negativePrompt\":\"\",\"taskType\":\"\",\"refs\":[],\"refAudios\":[],\"refVideos\":[],\"genImage\":{\"imageFile\":\"\",\"fileName\":\"\"},\"continuityFromPrev\":true,\"refImageSize\":\"match\"}],\"timelineMode\":\"prompt_batch\",\"width\":736,\"height\":992,\"refMaxSize\":992,\"gen\":{\"defaultFrameCount\":124},\"keyframes\":[{\"id\":\"msdtx3zi62ktv_s\",\"imageFile\":\"0059.png\",\"width\":768,\"height\":1024,\"start\":0,\"length\":62,\"frameCount\":62,\"durationSec\":5,\"prompt\":\"一个猴子在极速奔跑，跑的过程中裤子掉在地上，但他仍然继续奔跑。过程中伴随自然的跑步声\",\"negativePrompt\":\"bad video\",\"isStartFrame\":true,\"isEndFrame\":false},{\"id\":\"msdtx3zi62ktv_e\",\"imageFile\":\"0060.png\",\"width\":512,\"height\":682,\"start\":62,\"length\":62,\"frameCount\":62,\"durationSec\":5,\"prompt\":\"\",\"negativePrompt\":\"bad video\",\"isStartFrame\":false,\"isEndFrame\":true},{\"id\":\"msdtx87njf33g_s\",\"imageFile\":\"0060.png\",\"width\":512,\"height\":682,\"start\":124,\"length\":62,\"frameCount\":62,\"durationSec\":5,\"prompt\":\"猴子在快速奔跑，双臂自然摆动，跑到一个岩石旁，慢慢的坐下，随着时间的流逝，沙尘慢慢消失，漏出蓝天背景。过程中伴随自然的跑步、坐下时候产生的声音\",\"negativePrompt\":\"bad video\",\"isStartFrame\":true,\"isEndFrame\":false},{\"id\":\"msdtx87njf33g_e\",\"imageFile\":\"0062.png\",\"width\":768,\"height\":1024,\"start\":186,\"length\":62,\"frameCount\":62,\"durationSec\":5,\"prompt\":\"\",\"negativePrompt\":\"bad video\",\"isStartFrame\":false,\"isEndFrame\":true},{\"id\":\"msdtwxyuscavj_s\",\"imageFile\":\"0062.png\",\"width\":768,\"height\":1024,\"start\":248,\"length\":62,\"frameCount\":62,\"durationSec\":5,\"prompt\":\"猴子从岩石上起身，起身后穿上衣服，背上书包，去教室上课，慢慢走到教室里，过程中伴随穿衣、背书包、走路的背景音\",\"negativePrompt\":\"bad video\",\"isStartFrame\":true,\"isEndFrame\":false},{\"id\":\"msdtwxyuscavj_e\",\"imageFile\":\"0086.png\",\"width\":768,\"height\":1024,\"start\":310,\"length\":62,\"frameCount\":62,\"durationSec\":5,\"prompt\":\"\",\"negativePrompt\":\"bad video\",\"isStartFrame\":false,\"isEndFrame\":true},{\"id\":\"msdx1e2eigp2x\",\"imageFile\":\"\",\"width\":0,\"height\":0,\"start\":372,\"length\":124,\"frameCount\":124,\"durationSec\":5,\"prompt\":\"\",\"negativePrompt\":\"bad video\",\"isStartFrame\":true,\"isEndFrame\":false}],\"durationSec\":20,\"shots\":[{\"id\":\"msdtx3zi62ktv\",\"durationSec\":5,\"prompt\":\"一个猴子在极速奔跑，跑的过程中裤子掉在地上，但他仍然继续奔跑。过程中伴随自然的跑步声\",\"negativePrompt\":\"bad video\",\"startImage\":{\"imageFile\":\"0059.png\",\"width\":768,\"height\":1024},\"endImage\":{\"imageFile\":\"0060.png\",\"width\":512,\"height\":682}},{\"id\":\"msdtx87njf33g\",\"durationSec\":5,\"prompt\":\"猴子在快速奔跑，双臂自然摆动，跑到一个岩石旁，慢慢的坐下，随着时间的流逝，沙尘慢慢消失，漏出蓝天背景。过程中伴随自然的跑步、坐下时候产生的声音\",\"negativePrompt\":\"bad video\",\"startImage\":{\"imageFile\":\"0060.png\",\"width\":512,\"height\":682},\"endImage\":{\"imageFile\":\"0062.png\",\"width\":768,\"height\":1024}},{\"id\":\"msdtwxyuscavj\",\"durationSec\":5,\"prompt\":\"猴子从岩石上起身，起身后穿上衣服，背上书包，去教室上课，慢慢走到教室里，过程中伴随穿衣、背书包、走路的背景音\",\"negativePrompt\":\"bad video\",\"startImage\":{\"imageFile\":\"0062.png\",\"width\":768,\"height\":1024},\"endImage\":{\"imageFile\":\"0086.png\",\"width\":768,\"height\":1024}},{\"id\":\"msdx1e2eigp2x\",\"durationSec\":5,\"prompt\":\"\",\"negativePrompt\":\"bad video\",\"startImage\":null,\"endImage\":null}],\"liveTaePreview\":true,\"batchDetailMode\":\"solo\",\"batchWorkspaces\":{\"r2v\":{\"selectedIndex\":5,\"editMode\":\"segment\",\"runSelectEnabled\":false,\"runSelection\":[],\"segments\":[{\"id\":\"mse3lbnz61yvx\",\"start\":0,\"length\":362,\"frameCount\":362,\"durationSec\":15,\"prompt\":\"For the target video, at 0.00 seconds into the target video, <Picture 1> (from [Shot 1]) is fully referenced.\\n\\nintegrated_multimodal_description: [Shot 1] Live-action, cinematic, a medium-wide shot frames the professional woman shown in <Picture 1> seated at her sleek desk in a modern securities firm office, preserving her appearance, business attire, and the surrounding workstation with dual monitors displaying stock data. Floor-to-ceiling windows behind her reveal a city skyline in daylight. She raises her right hand with a graceful wrist rotation and flicks her fingers upward; a semi-transparent, luminous blue-cyan holographic K-line candlestick diagram materializes in the air above the desk, glowing softly. She tilts her head slightly to the right with a subtle, charming smile, tucking a strand of hair behind her left ear with her free hand. The camera pushes in with small amplitude at slow speed from medium-wide to medium shot as the woman with a confident, alluring yet professional voice (S1) says: <d>[Chinese] K线就像股票的体检报告。一根K线，记录了四个关键数据：开盘价、收盘价、最高价、最低价，缺一不可。</d> While speaking, she extends her index finger and traces four small glowing dots that appear on the holographic K-line one by one — each dot pulses brighter as she names its corresponding price. She maintains direct eye contact with the camera throughout, her lips syncing precisely to every syllable, a faint playful smirk lingering at the corners of her mouth.\\n\\noverall_soundscape: Low office ambient hum from air conditioning and computer fans continues throughout. Her fingers produce a soft tap each time she touches the holographic surface, accompanied by a faint electronic chime. A distant phone ring is audible from a neighboring desk, and the subtle rustle of her blazer fabric as she moves adds texture.\\n\\nnon_diegetic_music: N/A\\n\",\"negativePrompt\":\"\",\"taskType\":\"\",\"refs\":[{\"index\":2,\"imageFile\":\"Gemini_Generated_Image_yhwnv2yhwnv2yhwn.png\",\"fileName\":\"\",\"type\":\"input\",\"subfolder\":\"\"},{\"index\":3,\"imageFile\":\"Gemini_Generated_Image_skjq82skjq82skjq.png\",\"fileName\":\"\",\"type\":\"input\",\"subfolder\":\"\"}],\"refAudios\":[],\"refVideos\":[],\"genImage\":{\"imageFile\":\"\",\"fileName\":\"\"},\"continuityFromPrev\":false,\"refImageSize\":\"match\",\"referenceVideo\":{\"videoFile\":\"\",\"fileName\":\"\",\"type\":\"input\",\"subfolder\":\"\"},\"_videoFrameCount\":362,\"previewFps\":24},{\"id\":\"mspiepd3v64zd\",\"start\":362,\"length\":362,\"frameCount\":362,\"durationSec\":15,\"prompt\":\"For the target video, at 0.00 seconds into the target video, <Picture 1> (from [Shot 1]) is fully referenced.\\n\\nintegrated_multimodal_description: [Shot 1] Live-action, cinematic, a medium shot frames the professional woman shown in <Picture 1> seated at her desk in the securities firm office, with the holographic K-line diagram still glowing in the air before her. She gently taps the central rectangular body of the holographic K-line with her right index finger; the entity section expands and glows brighter in response, splitting into a red candlestick and a green candlestick side by side. She leans forward slightly, her eyes narrowing with a teasing, knowing look as the woman (S1) says: <d>[Chinese] 红色代表上涨，绿色代表下跌。中间这个矩形实体，就是开盘价和收盘价的差距，我们叫它'实体'。</d> The camera pans right with small amplitude at slow speed, following her gesture toward the two highlighted candlesticks. As she says \\\"红色\\\" and \\\"绿色,\\\" she points to each respective candlestick, which pulses in sync. She bites her lower lip briefly after saying \\\"实体,\\\" then gives a small, satisfied nod, her fingertips brushing the holographic surface with a delicate flick, sending a ripple of light across the diagram.\\n\\noverall_soundscape: The steady office air-conditioning hum persists beneath the soft electronic hum of the holographic display. Her fingertips produce gentle tap sounds against the holographic interface, followed by subtle crystalline chimes as the candlestick colors activate. The faint click of her keyboard and the murmur of distant colleagues talking in the hallway add realistic office ambience.\\n\\nnon_diegetic_music: N/A\\n\",\"negativePrompt\":\"\",\"taskType\":\"\",\"refs\":[],\"refAudios\":[],\"refVideos\":[],\"genImage\":{\"imageFile\":\"\",\"fileName\":\"\"},\"continuityFromPrev\":true,\"refImageSize\":\"match\",\"referenceVideo\":{\"videoFile\":\"\",\"fileName\":\"\",\"type\":\"input\",\"subfolder\":\"\"},\"_videoFrameCount\":362,\"previewFps\":24},{\"id\":\"mspifftdldpqe\",\"start\":724,\"length\":362,\"frameCount\":362,\"durationSec\":15,\"prompt\":\"For the target video, at 0.00 seconds into the target video, <Picture 1> (from [Shot 1]) is fully referenced.\\n\\nintegrated_multimodal_description: [Shot 1] Live-action, cinematic, a medium shot frames the professional woman shown in <Picture 1> at her office desk with the holographic K-line diagram glowing before her. She raises her right hand and traces her index finger upward along the thin vertical line extending above the rectangular entity of the holographic K-line; the line illuminates in a bright cyan trail as her finger moves along it, and a small label \\\"最高价\\\" materializes at its top. She then traces downward along the thin line below the entity, which illuminates the same way, with a label \\\"最低价\\\" appearing at the bottom. The camera arcs with small amplitude at slow speed from her left side toward a frontal angle, revealing both her face and the full vertical extent of the holographic K-line. She tilts her head, her eyes meeting the camera with a warm, slightly mischievous gaze, as the woman (S1) says: <d>[Chinese] 实体上方这根细线叫上影线，最高价就在顶端；下方这根细线叫下影线，最低价就在底端。明白了吗？</d> She raises her eyebrows playfully on \\\"明白了吗？\\\", curling her fingers into a light beckoning gesture toward the camera, her lips curving into a half-smile.\\n\\noverall_soundscape: The continuous office ambient hum and computer fan drone persist. Her finger gliding along the holographic surface produces a soft, ascending then descending electronic whisper, like running a finger along a crystal rim. Faint typing sounds from a neighboring cubicle and the occasional creak of an office chair add depth to the environment.\\n\\nnon_diegetic_music: N/A\",\"negativePrompt\":\"\",\"taskType\":\"\",\"refs\":[],\"refAudios\":[],\"refVideos\":[],\"genImage\":{\"imageFile\":\"\",\"fileName\":\"\"},\"continuityFromPrev\":true,\"refImageSize\":\"match\",\"referenceVideo\":{\"videoFile\":\"\",\"fileName\":\"\",\"type\":\"input\",\"subfolder\":\"\"},\"_videoFrameCount\":362,\"previewFps\":24},{\"id\":\"mspifxblwnvos\",\"start\":1086,\"length\":362,\"frameCount\":362,\"durationSec\":15,\"prompt\":\"For the target video, at 0.00 seconds into the target video, <Picture 1> (from [Shot 1]) is fully referenced.\\n\\nintegrated_multimodal_description: [Shot 1] Live-action, cinematic, a medium shot frames the professional woman shown in <Picture 1> at her securities office desk. With a graceful sweep of her right hand, she summons a new holographic element beside the K-line diagram — a translucent, glowing blue thermometer icon that floats in the air, its scale markings luminous. She pinches her thumb and index finger together and draws an upward gesture; the thermometer's mercury level rises, and simultaneously the K-line's upper shadow line glows brighter, creating a visual parallel. She then reverses the gesture downward; the mercury drops and the lower shadow line illuminates. The camera pulls out with small amplitude at slow speed to a medium-wide framing that encompasses both her expressive face and the two parallel holographic visuals. She rests her chin lightly on her left hand, elbow on the desk, her eyes glancing up at the camera through her lashes with a soft, inviting expression, as the woman (S1) says: <d>[Chinese] 打个比方，K线就像一根温度计。上影线告诉你今天最高到多少度，下影线告诉你最低到多少度。很好理解吧？</d> On \\\"很好理解吧？\\\", she gives a small, coy head tilt and a gentle nod, her smile widening just slightly.\\n\\noverall_soundscape: The office ambient hum continues steadily. The holographic thermometer produces a faint glass-like vibration sound as the mercury level changes. Her elbow settling on the desk creates a soft thud, and the faint rustle of her sleeve against the desk surface is audible. A distant printer whirs intermittently in the background.\\n\\nnon_diegetic_music: N/A\\n\\n\",\"negativePrompt\":\"\",\"taskType\":\"\",\"refs\":[],\"refAudios\":[],\"refVideos\":[],\"genImage\":{\"imageFile\":\"\",\"fileName\":\"\"},\"continuityFromPrev\":true,\"refImageSize\":\"match\",\"referenceVideo\":{\"videoFile\":\"\",\"fileName\":\"\",\"type\":\"input\",\"subfolder\":\"\"},\"_videoFrameCount\":362,\"previewFps\":24},{\"id\":\"mspigdpd0eofu\",\"start\":1448,\"length\":362,\"frameCount\":362,\"durationSec\":15,\"prompt\":\"For the target video, at 0.00 seconds into the target video, <Picture 1> (from [Shot 1]) is fully referenced.\\n\\nintegrated_multimodal_description: [Shot 1] Live-action, cinematic, a medium-wide shot frames the professional woman shown in <Picture 1> at her office desk. With a flick of both wrists, she dismisses the thermometer hologram and expands the K-line diagram, splitting it into two enlarged candlesticks floating side by side — one red with its close near the top, one green with its close near the bottom. She pushes her right palm forward toward the red candlestick; its upper portion glows intensely, and a small upward arrow icon appears above it. She then turns her palm toward the green candlestick; its lower portion darkens and a downward arrow icon appears. The camera pushes in with small amplitude at slow speed from medium-wide to a medium-close shot, tightening on her face and the two candlesticks. She straightens her posture slightly, her expression shifting to a more focused, professional look with a hint of allure, one eyebrow subtly raised, as the woman (S1) says: <d>[Chinese] 所以，收盘价接近最高价，说明多方力量很强；反过来，接近最低价，就说明空方占优了。记住了吗？</d> She taps her temple lightly with her index finger on \\\"记住了吗？\\\", then points at the camera with the same finger, her lips pressed into a playful, knowing smile.\\n\\noverall_soundscape: The office ambient hum persists beneath the soft electronic pulse of the holographic display. Her palm pressing against the holographic interface produces a deep, resonant bass tone, and the arrow icons appearing generate crisp digital blips. The squeak of her office chair as she straightens her posture and the subtle tap of her finger against her temple add tactile realism.\\n\\nnon_diegetic_music: N/A\\n\",\"negativePrompt\":\"\",\"taskType\":\"\",\"refs\":[],\"refAudios\":[],\"refVideos\":[],\"genImage\":{\"imageFile\":\"\",\"fileName\":\"\"},\"continuityFromPrev\":true,\"refImageSize\":\"match\",\"referenceVideo\":{\"videoFile\":\"\",\"fileName\":\"\",\"type\":\"input\",\"subfolder\":\"\"},\"_videoFrameCount\":362,\"previewFps\":24},{\"id\":\"mspihme8cr6uk\",\"start\":1810,\"length\":362,\"frameCount\":362,\"durationSec\":15,\"prompt\":\"For the target video, at 0.00 seconds into the target video, <Picture 1> (from [Shot 1]) is fully referenced.\\n\\nintegrated_multimodal_description: [Shot 1] Live-action, cinematic, a medium-close shot frames the professional woman shown in <Picture 1> at her securities firm desk. She sweeps both hands together in front of her, and the two candlestick holograms merge back into a single, complete annotated K-line diagram with all labels visible — \\\"开盘价,\\\" \\\"收盘价,\\\" \\\"最高价,\\\" \\\"最低价,\\\" \\\"上影线,\\\" \\\"下影线,\\\" and \\\"实体\\\" — each element glowing softly in its designated position. She traces both hands along the full outline of the K-line with a fluid, conductor-like motion, and the entire diagram pulses once with a warm golden light. She leans back slightly in her chair, crossing one leg over the other beneath the desk, and lifts her chin with a confident, radiant smile. The camera pedestals up with small amplitude at slow speed and simultaneously pulls out to a medium-wide framing, capturing her full upper body and the glowing holographic summary diagram beside her. She gives a small, graceful wave toward the camera with her right hand, her eyes warm and inviting, as the woman (S1) says: <d>[Chinese] 看懂K线，就是看懂多空双方的博弈。阳线越长，买方越积极；阴线越长，卖方越急切。你学会了吗？</d> On \\\"你学会了吗？\\\", she tilts her head, blinks slowly, and lets her smile linger as the holographic diagram slowly dims behind her.\\n\\noverall_soundscape: The office ambient hum and computer fan drone provide a steady base. Her hands sweeping through the holographic field produce a broad, resonant shimmer sound, and the golden pulse of the diagram emits a warm, bell-like chime. Her office chair creaks softly as she leans back and crosses her legs, and the faint rustle of her skirt fabric is audible. Distant keyboard typing and a muffled conversation from the hallway round out the realistic office soundscape.\\n\\nnon_diegetic_music: N/A\\n\\n\",\"negativePrompt\":\"\",\"taskType\":\"\",\"refs\":[],\"refAudios\":[],\"refVideos\":[],\"genImage\":{\"imageFile\":\"\",\"fileName\":\"\"},\"continuityFromPrev\":true,\"refImageSize\":\"match\",\"referenceVideo\":{\"videoFile\":\"\",\"fileName\":\"\",\"type\":\"input\",\"subfolder\":\"\"},\"_videoFrameCount\":362,\"previewFps\":24}],\"globalCommon\":{\"commonEnabled\":true,\"commonCollapsed\":true,\"prompt\":\"\",\"refs\":[{\"index\":0,\"imageFile\":\"画境作品 (2).png\",\"fileName\":\"\",\"type\":\"input\",\"subfolder\":\"\"}],\"refAudios\":[],\"refVideos\":[]}}}}",
+        "bd_grp_advanced": "高级采样",
+        "steps": 4,
+        "sampler": "euler",
+        "scheduler": "simple",
+        "shift_video": 12,
+        "shift_audio": 3,
+        "export_source_images": false,
+        "bd_grp_perf": true,
+        "clear_vram_between_segments": false,
+        "minimax_director_ui": ""
+      },
+      "title": "codex-H3-Ref2VA-连续镜头"
+    }
+  ],
+  "links": [
+    [
+      13,
+      4,
+      0,
+      12,
+      2,
+      "VAE"
+    ],
+    [
+      15,
+      3,
+      0,
+      12,
+      1,
+      "VAE"
+    ],
+    [
+      16,
+      2,
+      0,
+      12,
+      3,
+      "CLIP"
+    ],
+    [
+      22,
+      1,
+      0,
+      24,
+      0,
+      "MODEL"
+    ],
+    [
+      24,
+      24,
+      0,
+      14,
+      0,
+      "MODEL"
+    ],
+    [
+      25,
+      14,
+      0,
+      12,
+      0,
+      "MODEL"
+    ],
+    [
+      26,
+      12,
+      0,
+      25,
+      0,
+      "IMAGE"
+    ],
+    [
+      27,
+      12,
+      1,
+      25,
+      1,
+      "AUDIO"
+    ],
+    [
+      28,
+      12,
+      2,
+      25,
+      4,
+      "FLOAT"
+    ]
+  ],
+  "groups": [
+    {
+      "id": 1,
+      "title": "模型加载 (MiniMax H3)",
+      "bounding": [
+        -760,
+        40,
+        440,
+        560
+      ],
+      "color": "#3f789e",
+      "flags": {}
+    },
+    {
+      "id": 3,
+      "title": "输出",
+      "bounding": [
+        959.7884550354713,
+        38.736816353831586,
+        760,
+        760
+      ],
+      "color": "#b58",
+      "flags": {}
+    },
+    {
+      "id": 4,
+      "title": "加速模块（用就开启，不用可以关掉）",
+      "bounding": [
+        -232.17580618807037,
+        -257.8403935307404,
+        696.8626780790273,
+        222.74509026022088
+      ],
+      "color": "#3f789e",
+      "flags": {}
+    }
+  ],
+  "config": {},
+  "extra": {
+    "frontendVersion": "1.48.7",
+    "note": "codex-H3-Ref2VA-连续镜头",
+    "ds": {
+      "scale": 0.7000896918354345,
+      "offset": [
+        810.2903459986128,
+        553.7783441693339
+      ]
+    },
+    "VHS_latentpreview": false,
+    "VHS_latentpreviewrate": 0,
+    "VHS_MetadataImage": true,
+    "VHS_KeepIntermediate": true
+  },
+  "version": 0.4
+}

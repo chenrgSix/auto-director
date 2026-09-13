@@ -1,5 +1,13 @@
 # 验收记录
 
+## 2026-09-14 · C61 单一 codex 连续镜头画布
+
+- 按用户指定的远端画布 ID `d0d1f1a2-4b1f-4d98-ab7a-ed3c4bfd549a` 查到 `60秒.json`，以其为基础保存 `codex-H3-Ref2VA-连续镜头.json`。保持原 10 个节点 ID、一个 MiniMaxH3Director、分段编辑入口和 VHS 导出；新画布 ID `20484113-0eed-52ac-9901-ab786732ebaf`。
+- 依据当前远端节点 schema 检查全部 9 条连线、字段类型、必需输入、模型/LoRA 选项、4 张素材可读取、公共参数与 R2V 工作区一致性。保存后读回内容完全相同，原 `60秒.json` 内容和原工作流列表均保持；本轮误拆出的六份工作流已按备份逐份核对后撤回。
+- 独立条件编码预检 `d6c18770-51aa-4871-a1ba-3f3bc2023c50` 没有执行采样器，确认当前 Director 仍在 R2V 调用官方节点时因位置参数错位报 `unsupported operand type(s) for //: 'str' and 'int'`。作者主分支已将该调用改为关键字参数；工作流内说明和 README 均标明更新该插件并重启的前提，本轮没有远程改写插件或重启服务。
+- 前一轮原生 Motion Context 六段样片实测为 719 帧、29.958333 秒，用户观看后要求保存；该结果不等于本次 Director 画布已通过真实生成。此次只完成保存、结构与依赖预检，未重新采样整片；浏览器连接超时，UI 实测未完成。没有修改应用源码，不重跑完整后端/前端门禁，未执行 CI。
+- 本地证据：ignored `data/repairs/c61-saved-workflows/single-workflow-verification.json`、`conditioning-preflight-history.json`、`split-workflows-reverted.json`；保存文件和使用说明位于 `workflow_examples/codex_h3_continuous/`。
+
 ## 2026-09-13 · C57 项目级镜头参考与连续性
 
 - 完整 `make check` 全部通过：Ruff、格式检查、ESLint、TypeScript、构建和 **952 passed**（311.70 秒，2 条既有依赖弃用警告）。新增 15 项测试覆盖双角色逐镜参考、无人道具镜头、单/多参考容量、歧义旧包、跨反打状态、显式跳转、禁用镜头及真实渲染图绑定。既有批次上下文、早期参数拒绝和重跑夹具同步适配，并保留原约束断言。

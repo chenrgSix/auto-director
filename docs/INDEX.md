@@ -7,6 +7,7 @@
 | [制作前画面确认](PREPRODUCTION_REVIEW.md) | C58 参考/关键帧确认、共享道具与多图输入 |
 | [H3 多图工作流](../workflow_examples/h3_multi_reference/README.md) | 用户画布转换、可选辅助图片与实测边界 |
 | [H3 Ref2VA 视频](../workflow_examples/h3_ref2va/README.md) | 首帧锚定、多参考视频与段间运动实测 |
+| [codex 连续镜头](../workflow_examples/codex_h3_continuous/README.md) | 基于用户原画布的单一导演台、参考素材与连续性配置 |
 | [镜头参考与连续性](SHOT_CONTINUITY.md) | C57 角色参考、空间/动作状态、制作前检查与画面复核 |
 | [创作包与 MCP](CREATION_PACKAGES.md) | C53 外部持续创作、版本交付、MCP 和验收目标 |
 | [开发任务](DEVELOPMENT_TASKS.md) | 冻结目标、任务、状态、验收门禁与后续范围 |

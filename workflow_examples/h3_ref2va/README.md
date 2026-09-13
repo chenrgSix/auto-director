@@ -1,5 +1,7 @@
 # H3 Ref2VA 多参考视频
 
+基于用户原导演台画布的单一工作流另见 [codex-H3-Ref2VA-连续镜头](../codex_h3_continuous/README.md)，保留分段编辑与统一导出；其插件兼容条件和本页原生采样实测分开记录。
+
 在项目工作流页导入 `h3_ref2va.profile.json`，作为可选的 IMAGE_TO_VIDEO 工作流。`h3_ref2va.api.json` 可供 ComfyUI API 使用。生成器：`backend/.venv/bin/python scripts/build_ref2va_workflow.py`。
 
 模型配套：`minimax_h3_ref2va_pruned_int8_convrot.safetensors` + `minimax_h3_ref2v_turbo_4step_v0.1_comfyui_bf16.safetensors`；4 步 Euler/simple，video/audio shift 为 12/3。复用 Qwen3-VL NVFP4、视频 VAE 与音频 VAE，视频分块解码；24 FPS，单次规划上限 5 秒。
