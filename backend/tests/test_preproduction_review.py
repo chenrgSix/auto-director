@@ -191,3 +191,38 @@ def test_waiting_review_survives_worker_restart_and_releases_queue(system):
     assert app.state.store.list("job", id) == jobs
     post(client, id, decision(client, id))
     wait_gate(client, app, id)
+
+
+def test_workflow_test_metadata_does_not_invalidate_image_approval(system):
+    client, app, _ = system
+    _, id = setup(client)
+    episode = wait_gate(client, app, id)
+    before = client.get(f"{ROOT}/{id}/image-review").json()
+    profile_id = episode["video_workflow_id"]
+    workflow = app.state.store.get("workflow", profile_id)
+    app.state.store.update(
+        "workflow",
+        profile_id,
+        {
+            "last_test_job_id": "another-independent-test",
+            "configuration_version": workflow.get("configuration_version", workflow["version"]),
+        },
+    )
+    after = client.get(f"{ROOT}/{id}/image-review").json()
+    assert after["review_key"] == before["review_key"]
+    post(
+        client,
+        id,
+        {
+            "request_id": str(uuid4()),
+            "expected_version": before["version"],
+            "review_key": before["review_key"],
+            "decision": "approve",
+            "notes": "Same inspected reference images; only unrelated workflow test metadata changed.",
+        },
+    )
+    wait_gate(client, app, id)
+    app.state.store.update("workflow", profile_id, {"last_test_job_id": "yet-another-test"})
+    from app.generation.preproduction import gate
+
+    gate(app.state.generation, id, "references")  # Previously approved references remain approved.

@@ -13,7 +13,6 @@ from app.core.errors import AppError
 from app.db.store import now
 from app.generation.continuity import CONTINUOUS
 from app.generation.parameters import parameter_overrides, role_overrides
-from app.generation.preview import workflow_versions
 
 WAITING = "AWAITING_IMAGE_REVIEW"
 
@@ -64,7 +63,9 @@ def context(pipeline, episode, stage=None, shot_id=None):
             )
         },
         "stage": stage,
-        "workflow_versions": workflow_versions(profiles),
+        "workflow_versions": {
+            p["id"]: p.get("configuration_version", p["version"]) for p in profiles
+        },
         "overrides": episode.get("workflow_overrides", {}),
         "bible": episode["bible"],
         "references": episode["references"],

@@ -308,3 +308,5 @@ WorkflowImport / WorkflowPatch 的 `capabilities.audio_prompt_format` 接受 `no
 `VisualBible.props` 为可选列表，每项包含稳定 `id`、`description`、`distinguishing_features`；`visual_continuity.reference_roles` 新增 `prop:<id>`。人物、道具各自的 ID 不重复。
 
 工作流 `Binding.optional` 默认 false；仅支持 reference_image_2～9 的独立 LoadImage -> 单一可选 IMAGE 输入，实际提交去掉未绑定分支，主图仍必需。显式资产覆盖仍受归属检查，不能用占位文件或有缺口的参考编号提交。
+
+C59 修正：image-review 摘要中的工作流版本使用 configuration_version（旧记录缺失时回退 version），最近试跑/校验等纯元数据更新不会撤销图片确认；实际配置变化仍返回 409。已有旧摘要须刷新后确认，不自动改写历史批准。
