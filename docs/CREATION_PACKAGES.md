@@ -56,3 +56,28 @@ MCP 不负责唤醒 Codex；首版提供用户会话的连接说明。自动启�
 | `POST /projects/{id}/productions/{episode_id}/cancel` | 显式取消此项目的制作 |
 
 request_id 必须为 UUID；同一逻辑请求重试保持 ID 和内容，ID 对应不同内容返回 IDEMPOTENCY_CONFLICT。版本与提交收据在一个 SQLite 事务保存；确认收据与 QUEUED 状态原子保存，启动恢复既有队列。提交只准备预览，不请求 ComfyUI；制作时再执行实时依赖和媒体检查。外部创作拒绝内部“重新生成提示词”，需提交包新版本。
+
+## 连接自己的 Codex
+
+启动 AutoDirector 后，在 Codex 的 MCP 设置中添加 Streamable HTTP 服务，URL 为 `http://127.0.0.1:8000/mcp/`。本机 CLI 也可执行：
+
+```sh
+codex mcp add autodirector --url http://127.0.0.1:8000/mcp/
+```
+
+8000 是默认端口，改过端口则使用实际地址。上述配置由用户执行，本项目不代写 Codex 配置。服务只面向本机；继续遵守现有 Host/Origin 限制，无 API Key 或 Codex 凭据交换。连接方式参考 [Codex 官方 MCP 文档](https://learn.chatgpt.com/docs/extend/mcp)。
+
+网页建立创作项目后，复制创作指令到自己的 Codex 会话。Codex 先读取 `get_creation_context`，根据实际 schema 创作并保存版本；校验通过后交付预览。用户可以在网页确认制作，也可以在自己的会话授权 Codex 确认该版本。未授权时只提交预览。
+
+| MCP 工具 | 用途 |
+| --- | --- |
+| `list_creation_projects` / `create_creation_project` | 找到或建立项目 |
+| `get_creation_context` | 最新包、制作约束/hash、动态输出 schema |
+| `read_creation_package` / `save_creation_package` | 读取指定版本 / CAS 保存新版本 |
+| `validate_creation_package` / `submit_creation_package` | 本地校验 / 交付待确认预览 |
+| `list_creations_in_production` | 此项目已交付的预览和制作 |
+| `confirm_production` | 携带当前 expected_version、UUID request_id、confirm=true 受理制作 |
+| `get_production_feedback` / `cancel_production` | 查询镜头/作业/素材 / 显式取消制作 |
+| `inspect_production_media` | 返回项目内图片或视频的五点抽帧，供 Codex 实际查看 |
+
+读写工具调用同一 CreationService；工具失败返回 `isError` 与结构化错误，冲突后先读取并合并。协议层采用官方 Python SDK v1 维护线、无状态 HTTP；业务版本和幂等收据存于 SQLite，既有 GenerationService 持有后台任务。断开或重连 MCP 不持有、不释放 Codex 会话锁，也不取消制作。视频抽帧不能证明完整运动、对白或口型质量；声音仍需实际播放复核。

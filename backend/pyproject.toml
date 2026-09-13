@@ -13,6 +13,7 @@ dependencies = [
   "websockets>=14,<16",
   "python-multipart>=0.0.20,<1",
   "pillow>=11,<13",
+  "mcp>=1.28,<2",
 ]
 
 [dependency-groups]
@@ -23,6 +24,10 @@ pythonpath = ["."]
 asyncio_mode = "auto"
 testpaths = ["tests"]
 markers = ["integration: real external services, explicitly enabled"]
+
+[[tool.uv.index]]
+url = "https://mirrors.aliyun.com/pypi/simple"
+default = true
 
 [tool.ruff]
 target-version = "py312"

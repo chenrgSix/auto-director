@@ -11,6 +11,7 @@ from app.api.routes import router
 from app.core.config import ROOT, Settings
 from app.core.errors import AppError
 from app.core.runtime_settings import RuntimeSettings
+from app.creation.mcp import create_mcp
 from app.creation.routes import router as creation_router
 from app.creation.service import CreationService
 from app.db.store import Store
@@ -41,7 +42,8 @@ def create_app(
         state.creation = CreationService(state.generation)
         await state.generation.start()
         try:
-            yield
+            async with app.state.mcp.session_manager.run():
+                yield
         finally:
             await state.generation.stop()
             state.store.close()
@@ -107,6 +109,8 @@ def create_app(
 
     app.include_router(router)
     app.include_router(creation_router)
+    app.state.mcp = create_mcp(app, config)
+    app.mount("/mcp", app.state.mcp.streamable_http_app())
     frontend = ROOT / "frontend" / "dist"
     if frontend.is_dir():
         app.mount("/", StaticFiles(directory=frontend, html=True), name="frontend")
