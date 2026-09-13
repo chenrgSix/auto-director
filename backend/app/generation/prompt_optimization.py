@@ -103,6 +103,12 @@ def validate_changes(episode, shot, profiles, changes):
 
 async def propose(service, episode_id, shot_id, request):
     episode = service.store.get("episode", episode_id)
+    if episode.get("creation_source"):
+        raise AppError(
+            "CREATION_PACKAGE_REQUIRED",
+            "请在创作包中修改提示词并提交新版本，可先通过 MCP 查看制作反馈与画面",
+            status=409,
+        )
     require_idle(service, episode, request.expected_version)
     shot = find_shot(episode, shot_id)
     profiles = profiles_for(service, episode)

@@ -46,6 +46,7 @@ export default function CreatePage({ notify }: { notify: Notify }) {
     <div className="page-heading"><div className="eyebrow"><span />你的下一部短片，从这里开始</div><h1>一个想法。<br /><span>一部属于你的短片。</span></h1><p>描述脑海中的画面，让导演把故事、镜头与视觉串在一起。</p></div>
     {workflows.error && <ErrorNotice>{workflows.error}</ErrorNotice>}
     {config.error && <ErrorNotice>{config.error}</ErrorNotice>}
+    <div className="notice creation-entry">想用自己的 Codex 创作？<a href="#creation">打开创作包工作台 →</a><span>无需文字模型 API Key，保留创作版本，再交付制作。</span></div>
     <div className="create-grid">
       <form className="create-form" onSubmit={submit}>
         <div className="panel idea-panel"><label htmlFor="idea" className="panel-title"><Wand2 size={18} />你想讲一个怎样的故事？</label><textarea id="idea" className="idea-input" value={idea} onChange={event => setIdea(event.target.value)} maxLength={2000} required placeholder="比如，三只狮子突然来到侏罗纪……" /><div className="idea-footer"><span>只需一句话，也可以写下更具体的画面。</span><span>{idea.length} / 2000</span></div></div>

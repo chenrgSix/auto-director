@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react';
+import { useRef, useState, type FormEvent } from 'react';
 import { Check, Play, Save } from 'lucide-react';
 import { api } from './api';
 import type { Notify } from './App';
@@ -54,6 +54,7 @@ export function EpisodePreview({ episode, busy, setBusy, refresh, notify }: {
   const [selected, setSelected] = useState(0);
   const [error, setError] = useState<string>();
   const [reviewAccepted, setReviewAccepted] = useState(false);
+  const pendingApproval = useRef<{ request_id: string; expected_version: number; confirm: true } | null>(null);
   const settingsOnly = (episode.quality !== base.quality || episode.qa_policy !== base.qa_policy) && ([
     'id', 'idea', 'title', 'plan', 'bible', 'shots', 'references', 'preview', 'status', 'script_review',
     'preview_approved_at', 'target_duration', 'aspect_ratio', 'style',
@@ -98,7 +99,13 @@ export function EpisodePreview({ episode, busy, setBusy, refresh, notify }: {
     try {
       const saved = dirty ? await api<Episode>(`/episodes/${base.id}/preview`, 'PATCH', { expected_version: base.version, shots: edits }) : base;
       setBase(saved); setEdits(editableShots(saved)); setDirty(false);
-      if (start) await api(`/episodes/${base.id}/approve`, 'POST', { expected_version: saved.version, accept_script_review: reviewAccepted });
+      if (start && saved.creation_source) {
+        if (pendingApproval.current?.expected_version !== saved.version) {
+          pendingApproval.current = { request_id: crypto.randomUUID(), expected_version: saved.version, confirm: true };
+        }
+        await api(`/creation/projects/${saved.creation_source.project_id}/productions/${saved.id}/confirm`, 'POST', pendingApproval.current);
+        pendingApproval.current = null;
+      } else if (start) await api(`/episodes/${base.id}/approve`, 'POST', { expected_version: saved.version, accept_script_review: reviewAccepted });
       refresh(); notify(start ? '分镜已确认，开始生成视频' : '分镜修改已保存');
     } catch (problem) { setError((problem as Error).message); refresh(); }
     finally { setBusy(false); }

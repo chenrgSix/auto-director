@@ -52,6 +52,8 @@ export type PromptOptimizationProposal = {
 };
 export type PreviewShotEdit = Pick<Shot, 'id' | 'title' | 'duration'> & Record<PreviewPromptField, string> & { allow_static_end_frame: boolean };
 export type Episode = {
+  creation_source?: { project_id: string; revision: number; content_hash: string; constraints_hash: string };
+  creation_visual_review?: 'manual' | 'model';
   version: number; image_workflow_id: string; video_workflow_id: string; reference_workflow_id: string;
   workflow_binding_history?: unknown[];
   rerun_history?: { id: string; created_at: string; scope: string; shot_ids: string[]; affected_shot_ids: string[]; new_seed: boolean; final_video_asset_id: string | null; final_duration?: number | null; shots: Shot[]; prompt_optimization?: PromptOptimizationProposal }[];

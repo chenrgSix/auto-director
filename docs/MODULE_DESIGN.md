@@ -1,8 +1,10 @@
 # 模块设计
 
-## C53 创作包与 MCP（实施中）
+## C53 创作包与 MCP
 
 独立创作包业务服务接收外部持续创作成果。网页 API 与本地 MCP 为同一服务的适配层，后端不持有 Codex 会话。交付产生独立 Episode，复用预览/执行/恢复边界；完整包不得回退内部文字 Agent。见 [C53](CREATION_PACKAGES.md)。
+
+`creation_project` 保存头版本，`creation_revision` 保存不可变包/hash，`creation_request` 保存请求收据。Store 的作用域事务对象让版本、头和收据原子写入，事务内无模型或网络操作。制作确认在 Episode 中原子保存请求身份与 QUEUED，任务由既有 GenerationService 持有。ExternalCreationProvider 阻止意外文字模型调用，只在明确选择视觉复核时按需加载 VLM。MCP 返回结构化失败和限定项目归属的媒体，客户端断线不控制任务生命周期。
 
 ## C50 视频工作流原生音频
 

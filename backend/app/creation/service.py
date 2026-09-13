@@ -58,7 +58,7 @@ class CreationService:
         revisions = self.store.list("creation_revision", project_id)
         return {
             **summary(project),
-            "document": self.revision(project_id)["document"],
+            "document": self.revision(project_id, project["revision"])["document"],
             "history": [
                 {key: item[key] for key in ("revision", "content_hash", "created_at")}
                 for item in revisions
@@ -228,6 +228,12 @@ class CreationService:
 
     def _snapshot(self, document):
         episode, profiles = self._profiles(document)
+        if document.brief.visual_review == "model" and not self.generation.settings.vlm_model:
+            raise AppError(
+                "CONFIGURATION_REQUIRED",
+                "请选择人工复核，或先在连接与设置中配置视觉模型",
+                status=409,
+            )
         if not document.title.strip() or not document.logline.strip():
             raise AppError(
                 "PACKAGE_INCOMPLETE", "请补齐标题与故事梗概", {"field": "title/logline"}, 422

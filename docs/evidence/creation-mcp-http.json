@@ -1,0 +1,30 @@
+{
+  "project_id": "c215bf4a-4c5b-536f-8d1a-f3c2bcb98d6c",
+  "validation": {
+    "valid": true,
+    "issues": [],
+    "revision": 3,
+    "content_hash": "7dce5fd77388fccc44ed4e9ca877324a02b2fe8b4a0827a2c25d61779826b546",
+    "constraints_hash": "bf90041f290fc9b5a9a2850e224d85fa33b06a94a4e01e9466cc1d0e35a07130",
+    "review": "制作技术校验；剧情与画面需由用户复核"
+  },
+  "delivery": {
+    "episode_id": "e9b051e2-91c8-5352-ae73-fab950b9d757",
+    "version": 1,
+    "status": "AWAITING_REVIEW",
+    "revision": 3
+  },
+  "accepted": {
+    "episode_id": "e9b051e2-91c8-5352-ae73-fab950b9d757",
+    "status": "QUEUED",
+    "version": 2
+  },
+  "completed_after_disconnect": {
+    "status": "COMPLETED",
+    "duration": 5.0,
+    "llm_calls": 0,
+    "sampled_frames": 5,
+    "confirmation_replay_status": "COMPLETED"
+  },
+  "environment": "isolated 8011, official MCP ClientSession over TCP, FakeComfy and real FFmpeg; no real model or Codex session"
+}

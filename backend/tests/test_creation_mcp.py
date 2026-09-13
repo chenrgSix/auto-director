@@ -215,3 +215,50 @@ def test_mcp_requires_explicit_confirmation_and_rejects_browser_origin(system):
     response = client.post("/mcp/", headers={"Origin": "https://untrusted.example"}, json={})
     assert response.status_code == 403
     assert client.get("/mcp/", headers={"Host": "untrusted.example"}).status_code == 400
+
+
+def test_mcp_explicit_cancel_stops_queued_production(system):
+    client, app, comfy = system
+    project, _ = create(client)
+    delivery, _ = submit(client, project)
+    gate = asyncio.Event()
+    entered = asyncio.Event()
+    finished = asyncio.Event()
+    original = app.state.generation.generate
+
+    async def delayed(*args, **kwargs):
+        entered.set()
+        await gate.wait()
+        try:
+            await original(*args, **kwargs)
+        finally:
+            finished.set()
+
+    app.state.generation.generate = delayed
+
+    async def exercise():
+        async with connect(app) as session:
+            arguments = {"project_id": project, "episode_id": delivery["episode_id"]}
+            await call(
+                session,
+                "confirm_production",
+                {
+                    **arguments,
+                    "request": {
+                        "request_id": str(uuid4()),
+                        "expected_version": delivery["version"],
+                        "confirm": True,
+                    },
+                },
+            )
+            await asyncio.wait_for(entered.wait(), 2)
+            cancelled = await call(session, "cancel_production", arguments)
+            assert cancelled["status"] == "CANCELLED"
+            gate.set()
+            await asyncio.wait_for(finished.wait(), 2)
+            assert (await call(session, "get_production_feedback", arguments))[
+                "status"
+            ] == "CANCELLED"
+
+    client.portal.call(exercise)
+    assert not comfy.prompts

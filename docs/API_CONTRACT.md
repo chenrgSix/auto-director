@@ -1,8 +1,8 @@
 # API 与工作流契约
 
-## C53 创作包与 MCP（实施中）
+## C53 创作包与 MCP
 
-新增项目/包版本/校验/交付 API 与本地 Streamable HTTP MCP。修改携带基础版本，提交和确认可按请求身份核对；断线不取消受理制作。既有 Episode API 保持兼容。冻结边界见 [C53](CREATION_PACKAGES.md)，字段随实现补齐。
+`/api/v1/creation` 提供草稿、不可变版本、校验与制作交付；`/mcp/` 提供 12 个共享业务服务的 Streamable HTTP 工具。修改携带基础版本，提交/确认携带 UUID 请求身份，断线不取消受理制作。字段、路径、工具及配置说明见 [C53](CREATION_PACKAGES.md)。既有 API 创作路径保持；带 creation_source 的 Episode 禁止内部重新编写提示词与模型优化，需回到创作包保存新版本。
 
 ## C49 小批次准备与阶段进度
 

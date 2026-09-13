@@ -109,7 +109,8 @@ def test_versions_roundtrip_cas_and_idempotent_writes(system):
 
 
 @pytest.mark.parametrize(
-    "case", ["draft", "total", "duplicate", "order", "first", "characters", "precision", "ai"]
+    "case",
+    ["draft", "total", "duplicate", "order", "first", "characters", "precision", "ai", "shot_ai"],
 )
 def test_invalid_delivery_keeps_draft_and_creates_nothing(system, case):
     client, app, _ = system
@@ -130,6 +131,8 @@ def test_invalid_delivery_keeps_draft_and_creates_nothing(system, case):
         package["shots"][0]["duration"] = 2.501
     if case == "ai":
         package["bible"]["ai_parameters"] = {"invented": {"seed": 1}}
+    if case == "shot_ai":
+        package["shots"][0]["prompts"]["ai_parameters"] = {"invented": {"seed": 1}}
     project, _ = create(client, package)
     before = app.state.creation.detail(project)
     report = client.post(f"{BASE}/{project}/validate").json()
@@ -185,6 +188,12 @@ def test_full_package_production_never_calls_text_model_and_replays_requests(sys
     feedback = client.get(f"{BASE}/{project}/productions/{id}").json()
     assert feedback["assets"] and "path" not in feedback["assets"][0]
     assert all(s["creation_shot_id"].startswith("shot_") for s in feedback["shots"])
+    optimization = client.post(
+        f"/api/v1/episodes/{id}/shots/{final['shots'][0]['id']}/prompt-optimization",
+        json={"expected_version": final["version"], "feedback": "修改动作"},
+    )
+    assert optimization.status_code == 409, optimization.text
+    assert optimization.json()["error"]["code"] == "CREATION_PACKAGE_REQUIRED"
     assert (
         client.post(
             f"/api/v1/episodes/{id}/rerun",
@@ -227,6 +236,83 @@ def test_workflow_drift_and_new_revision_leave_delivery_immutable(system):
         ).status_code
         == 409
     )
+
+
+def test_import_normalizes_missing_defaults_and_rejects_invalid_limits(system):
+    client, _, _ = system
+    path = "/api/v1/creation/normalize"
+    normalized = client.post(path, json={"brief": {"idea": "草稿", "target_duration": 5}})
+    assert normalized.status_code == 200
+    assert normalized.json()["shots"] == [] and normalized.json()["decisions"] == []
+    assert normalized.json()["brief"]["visual_review"] == "manual"
+    for value in (None, {"brief": {"idea": "草稿", "target_duration": 5, "max_shot_duration": 31}}):
+        assert client.post(path, json=value).status_code == 422
+
+
+def test_explicit_model_review_requires_a_configured_visual_model(system):
+    client, app, _ = system
+    app.state.config.vlm_model = ""
+    package = document()
+    package["brief"]["visual_review"] = "model"
+    project, _ = create(client, package)
+    report = client.post(f"{BASE}/{project}/validate").json()
+    assert not report["valid"]
+    assert report["issues"][0]["code"] == "CONFIGURATION_REQUIRED"
+    app.state.config.vlm_model = "TEST-VISION"
+    delivery, _ = submit(client, project)
+    app.state.config.vlm_model = ""
+    approval = client.post(
+        f"{BASE}/{project}/productions/{delivery['episode_id']}/confirm",
+        json={"expected_version": delivery["version"], "request_id": str(uuid4()), "confirm": True},
+    )
+    assert approval.status_code == 409
+    assert approval.json()["error"]["code"] == "CONFIGURATION_REQUIRED"
+
+
+def test_external_audio_contract_is_validated_on_delivery_and_preview_confirmation(system):
+    from tests.test_episode_preview import edits
+    from tests.test_native_audio_prompts import H3, LINE, PROMPT
+
+    client, app, comfy = system
+    profile = app.state.store.get("workflow", "default_video")
+    app.state.store.update(
+        "workflow",
+        "default_video",
+        {"capabilities": {**profile["capabilities"], "audio_prompt_format": H3}},
+    )
+    package = document()
+    project, _ = create(client, package)
+    assert not client.post(f"{BASE}/{project}/validate").json()["valid"]
+    for shot in package["shots"]:
+        shot["prompts"].update(video_prompt=PROMPT, narration_text=LINE)
+    saved = client.post(
+        f"{BASE}/{project}/revisions",
+        json={"expected_revision": 1, "request_id": str(uuid4()), "document": package},
+    )
+    assert saved.status_code == 200
+    delivery, _ = submit(client, project)
+    id = delivery["episode_id"]
+    episode = client.get(f"/api/v1/episodes/{id}").json()
+    changes = edits(episode)
+    changes["shots"][0]["video_prompt"] = "Lion walking"
+    updated = client.patch(
+        f"/api/v1/episodes/{id}/preview",
+        json=changes,
+    )
+    # Existing preview validation may reject the edit immediately; otherwise approval must.
+    if updated.status_code == 200:
+        approved = client.post(
+            f"{BASE}/{project}/productions/{id}/confirm",
+            json={
+                "expected_version": updated.json()["version"],
+                "request_id": str(uuid4()),
+                "confirm": True,
+            },
+        )
+        assert approved.status_code == 422, approved.text
+    else:
+        assert updated.status_code == 422, updated.text
+    assert not comfy.prompts
 
 
 def test_atomic_record_write_rolls_back_and_survives_restart(tmp_path):

@@ -34,11 +34,11 @@ export function EpisodeRerun({ episode, shot, locked, busy, setBusy, refresh, no
   }
   return <section className="panel">
     <div className="panel-title rerun-heading">重新生成<div className="actions"><button disabled={locked || busy} onClick={() => chooseTarget(shot?.enabled ? shot.id : 'all')}>选择镜头重跑</button><button className="primary" disabled={locked || busy || !episode.shots.some(s => s.enabled)} onClick={() => chooseTarget('all')}><RefreshCw size={14} />整片重新生成</button></div></div>
-    <p className="muted">可以重新生成指定镜头或整片，也可连同提示词一起重写。分镜故事、视觉设定、参考图和旧版产物会保留。</p>
+    <p className="muted">{episode.creation_source ? '可以沿用创作包重新生成指定镜头或整片；修改剧情或提示词，请回到创作包保存新版本。旧版产物会保留。' : '可以重新生成指定镜头或整片，也可连同提示词一起重写。分镜故事、视觉设定、参考图和旧版产物会保留。'}</p>
     {locked && <p className="muted">任务运行中或状态尚未确认，请先等待完成、恢复或核对原任务。</p>}
     {open && <div className="rerun-form">
       <label>重跑范围<select value={target} disabled={locked || busy} onChange={e => setTarget(e.target.value)}><option value="all">整片（全部启用镜头）</option>{episode.shots.filter(s => s.enabled).map(s => <option key={s.id} value={s.id}>镜头 {s.index + 1} · {s.title}</option>)}</select></label>
-      <label>生成内容<select value={scope} disabled={locked || busy} onChange={e => setScope(e.target.value)}><option value="video">仅重新生成视频（沿用已有关键帧）</option><option value="keyframes">重新生成关键帧及视频</option><option value="prompts">重新生成提示词、关键帧及视频</option></select></label>
+      <label>生成内容<select value={scope} disabled={locked || busy} onChange={e => setScope(e.target.value)}><option value="video">仅重新生成视频（沿用已有关键帧）</option><option value="keyframes">重新生成关键帧及视频</option>{!episode.creation_source && <option value="prompts">重新生成提示词、关键帧及视频</option>}</select></label>
       {scope === 'prompts' && <p className="muted">AI 将按原分镜重新编写所选镜头的画面/视频提示词、旁白脚本及 AI 动态参数，然后开始生成。旧提示词在重跑历史中保留；高级模式的固定参数覆盖仍优先。</p>}
       <label><input type="checkbox" checked={newSeed} disabled={locked || busy} onChange={e => setNewSeed(e.target.checked)} />使用新随机种子，尝试不同结果</label>
       <small className="muted">高级参数中明确指定的种子仍优先；取消勾选可沿用种子复现。模型输出不保证一定不同。</small>

@@ -546,6 +546,7 @@ class GenerationService:
         from app.agents.parameters import constrained_output
         from app.agents.schemas import ShotPrompts
 
+        self.require_creation_review_model(episode)
         schema = audio_output(
             constrained_output(ShotPrompts, ai_parameters(*profiles[:2])),
             ai_parameters(*profiles[:2]),
@@ -559,6 +560,18 @@ class GenerationService:
                 "提示词不完整或不符合当前制作约束，请修改创作包",
                 status=422,
             ) from exc
+
+    def require_creation_review_model(self, episode):
+        if (
+            episode.get("creation_source")
+            and episode.get("creation_visual_review") == "model"
+            and not self.settings.vlm_model
+        ):
+            raise AppError(
+                "CONFIGURATION_REQUIRED",
+                "此制作选择了视觉模型复核，请先恢复视觉模型配置",
+                status=409,
+            )
 
     def cancelled(self, id: str) -> bool:
         return self.store.get("episode", id)["status"] == "CANCELLED"
@@ -1043,6 +1056,7 @@ class GenerationService:
         agents = Directors(provider, check_cancel=check_cancel)
         preview_complete = False
         try:
+            self.require_creation_review_model(episode)
             if episode.get("preview_required") and not preview_only:
                 if not episode.get("preview_approved_at"):
                     raise AppError("PREVIEW_REQUIRED", "请先确认分镜", status=409)

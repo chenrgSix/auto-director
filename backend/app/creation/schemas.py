@@ -4,7 +4,7 @@ from uuid import UUID
 from pydantic import Field, field_validator
 
 from app.agents.schemas import ShotPlan, ShotPrompts, StrictModel, VisualBible
-from app.core.limits import MAX_EPISODE_SECONDS, MAX_EPISODE_SHOTS
+from app.core.limits import MAX_EPISODE_SECONDS, MAX_EPISODE_SHOTS, MAX_SHOT_SECONDS
 from app.generation.schemas import EpisodeCreate
 
 
@@ -17,7 +17,7 @@ class CreationBrief(StrictModel):
     image_workflow_id: str | None = None
     video_workflow_id: str | None = None
     reference_workflow_id: str | None = None
-    max_shot_duration: float | None = Field(default=None, ge=1, le=600)
+    max_shot_duration: float | None = Field(default=None, ge=1, le=MAX_SHOT_SECONDS)
     seed: int = Field(default=42, ge=0, le=2147483647)
     visual_review: Literal["manual", "model"] = "manual"
 

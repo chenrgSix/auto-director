@@ -16,6 +16,12 @@ def schema():
     return CreationPackage.model_json_schema()
 
 
+@router.post("/normalize")
+def normalize(body: CreationPackage):
+    """Validate file structure and fill defaults without saving or invoking any service."""
+    return body.model_dump(mode="json")
+
+
 @router.get("/projects")
 def projects(request: Request):
     return request.app.state.creation.projects()
