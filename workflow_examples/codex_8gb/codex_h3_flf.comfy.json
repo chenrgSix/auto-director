@@ -1,8 +1,8 @@
 {
   "id": "cf7c6438-b48b-558f-8e8a-e05b392e083e",
-  "revision": 0,
+  "revision": 1,
   "last_node_id": 99,
-  "last_link_id": 18,
+  "last_link_id": 21,
   "nodes": [
     {
       "id": 1,
@@ -638,7 +638,8 @@
           "name": "output",
           "type": "LATENT",
           "links": [
-            14
+            14,
+            19
           ]
         },
         {
@@ -769,7 +770,7 @@
         {
           "name": "audio",
           "type": "AUDIO",
-          "link": null,
+          "link": 21,
           "shape": 7
         },
         {
@@ -1009,16 +1010,102 @@
       ],
       "size": [
         790,
-        170
+        205
       ],
       "flags": {},
       "order": 16,
       "mode": 0,
       "properties": {},
       "widgets_values": [
-        "codex · 8GB 实机配置\nAutoDirector 会自动填写提示词、素材和尺寸。独立运行请先选择首帧/尾帧/参考图片。\n视频：24 FPS，124 帧约 5.17 秒；导演可规划更短镜头。注意力加速可切回 pytorch attention。\n采用已安装模型；试跑与优化记录见仓库 docs/ACCEPTANCE.md C48。"
+        "codex · 8GB 实机配置\nAutoDirector 会自动填写提示词、素材和尺寸。独立运行请先选择首帧/尾帧/参考图片。\n视频：24 FPS，124 帧约 5.17 秒；导演可规划更短镜头。注意力加速可切回 pytorch attention。\n采用已安装模型；试跑与优化记录见仓库 docs/ACCEPTANCE.md C48。\nC50：原生音频已接入 MP4；复用同次视频采样，无独立 TTS。"
       ],
       "title": "codex-H3-首尾帧视频-Turbo8-8GB"
+    },
+    {
+      "id": 21,
+      "type": "VAELoader",
+      "title": "H3 原生音频 VAE",
+      "pos": [
+        0,
+        1250
+      ],
+      "size": [
+        360,
+        130
+      ],
+      "inputs": [
+        {
+          "name": "vae_name",
+          "type": "COMBO",
+          "widget": {
+            "name": "vae_name"
+          },
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "name": "VAE",
+          "type": "VAE",
+          "links": [
+            20
+          ]
+        }
+      ],
+      "widgets_values": [
+        "minimax_h3_audio_vae_fp32.safetensors"
+      ],
+      "widgets_values_named": {
+        "vae_name": "minimax_h3_audio_vae_fp32.safetensors"
+      },
+      "flags": {},
+      "order": 17,
+      "mode": 0,
+      "properties": {
+        "Node name for S&R": "VAELoader"
+      }
+    },
+    {
+      "id": 22,
+      "type": "VAEDecodeAudio",
+      "title": "解码同次采样的原生声音",
+      "pos": [
+        2460,
+        650
+      ],
+      "size": [
+        360,
+        100
+      ],
+      "inputs": [
+        {
+          "name": "samples",
+          "type": "LATENT",
+          "link": 19
+        },
+        {
+          "name": "vae",
+          "type": "VAE",
+          "link": 20
+        }
+      ],
+      "outputs": [
+        {
+          "name": "AUDIO",
+          "type": "AUDIO",
+          "links": [
+            21
+          ]
+        }
+      ],
+      "widgets_values": [],
+      "widgets_values_named": {},
+      "flags": {},
+      "order": 18,
+      "mode": 0,
+      "properties": {
+        "Node name for S&R": "VAEDecodeAudio"
+      }
     }
   ],
   "links": [
@@ -1165,6 +1252,30 @@
       20,
       0,
       "MODEL"
+    ],
+    [
+      19,
+      11,
+      0,
+      22,
+      0,
+      "LATENT"
+    ],
+    [
+      20,
+      21,
+      0,
+      22,
+      1,
+      "VAE"
+    ],
+    [
+      21,
+      22,
+      0,
+      13,
+      2,
+      "AUDIO"
     ]
   ],
   "groups": [],

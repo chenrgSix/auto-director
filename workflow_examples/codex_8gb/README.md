@@ -40,6 +40,8 @@
 
 文生图作为「参考图工作流」。图生图作为「关键帧工作流」时保留输入画面结构，适合小幅改动；大幅换景或换姿态需要真实视觉验收。已安装的是 FL2VA 权重，故图生图使用匹配的 FL2VA 节点，不能把 REF2VA 节点与 FL2VA 剪枝权重混搭。取生成帧而非被锁定的第 0 帧。
 
-两套视频默认只保存画面，省去音频 VAE 加载与解码；H3 内部仍联合采样音频 latent，不能视为移除了模型本身的音频开销。没有安装新模型、自定义节点或云端 API 节点。串行试跑，首轮包含模型加载成本。
+两套视频从 C50 起保存原生声音：同一次 `SamplerCustomAdvanced` 的联合 latent 分别送入视频与音频解码，`VAEDecodeAudio` 使用已安装的 `minimax_h3_audio_vae_fp32.safetensors`，输出连接 `CreateVideo.audio` 后保存 MP4。仍为一次 8 步采样；增加的加载、解码和显存换入换出开销以 C50 实测为准。
+
+视频提示词可描述环境声、动作声或对白；是否出现以及听感由模型决定，未配置独立 TTS，旁白脚本不会自动朗读。拼接沿用片段音轨，只有无音轨片段才补静音。更新工作流不会给旧 MP4 自动补声，也不会删除或重跑旧成片。没有安装新模型、自定义节点或云端 API 节点。
 
 依据：[ComfyUI 官方 H3 节点与模型指南](https://docs.comfy.org/tutorials/video/minimax/minimax-h3-native)、[官方帧数规则](https://github.com/Comfy-Org/embedded-docs/blob/main/comfyui_embedded_docs/docs/MiniMaxH3ImageToVideo/en.md)、[原生 attention 实现](https://github.com/Comfy-Org/ComfyUI/blob/master/comfy_extras/nodes_model_advanced.py)、[Image Studio 作者说明](https://github.com/astropuzzo/ComfyUI-MiniMax-H3-Image-Studio)。初次适配验收保留在 C47，本次计算路径优化记录在 C48。

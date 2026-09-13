@@ -1,4 +1,6 @@
+import array
 import shutil
+import sys
 
 import pytest
 from PIL import Image
@@ -58,6 +60,29 @@ async def test_real_ffmpeg_normalizes_silent_and_audio_clips(tmp_path):
     assert abs(result["duration"] - 2) < 0.2
     assert result["video"]["width"] == 256
     assert result["audio"]["sample_rate"] == "48000"
+    # Detect discarded source audio or sound shifted into the silent first shot.
+    raw = await run_process(
+        "ffmpeg",
+        "-v",
+        "error",
+        "-i",
+        str(output),
+        "-vn",
+        "-ac",
+        "1",
+        "-ar",
+        "8000",
+        "-f",
+        "f32le",
+        "pipe:1",
+    )
+    samples = array.array("f", raw)
+    if sys.byteorder != "little":
+        samples.byteswap()
+    silent_window, tone_window = samples[1600:6400], samples[9600:14400]
+    assert len(silent_window) == len(tone_window) == 4800
+    assert max(abs(value) for value in silent_window) < 0.001
+    assert sum(value * value for value in tone_window) / len(tone_window) > 0.001
     frame = await extract_frame(output, tmp_path / "last.png")
     assert (await inspect_media(frame))["kind"] == "image"
     assert (await probe(output))["video"]["codec_name"] == "h264"

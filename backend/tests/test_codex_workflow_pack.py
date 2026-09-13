@@ -77,6 +77,20 @@ def test_codex_pack_import_patch_and_user_override(tmp_path, path):
         fallback = patch(profile, {**fallback_values, **fallback_assets}, fallback_raw)
         assert fallback[attention_id]["inputs"]["attention"] == "pytorch attention"
         assert fallback_sources[key] == "user"
+
+        # A video file alone is insufficient: retain the audio from this same sample.
+        output = graph[profile["outputs"]["video"]]
+        video = graph[output["inputs"]["video"][0]]
+        audio = graph[video["inputs"]["audio"][0]]
+        assert audio["class_type"] == "VAEDecodeAudio"
+        video_decoder = graph[video["inputs"]["images"][0]]
+        assert audio["inputs"]["samples"] == video_decoder["inputs"]["samples"]
+        assert graph[audio["inputs"]["samples"][0]] == sampler
+        audio_vae = graph[audio["inputs"]["vae"][0]]
+        assert audio_vae["class_type"] == "VAELoader"
+        assert audio_vae["inputs"]["vae_name"] == "minimax_h3_audio_vae_fp32.safetensors"
+        assert sum(n["class_type"] == "SamplerCustomAdvanced" for n in graph.values()) == 1
+        assert fallback[video["inputs"]["audio"][0]] == audio
     elif profile["capability"] == "TEXT_TO_IMAGE":
         output = graph[profile["outputs"]["image"]]
         decoder = graph[output["inputs"]["images"][0]]
