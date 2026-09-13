@@ -35,6 +35,7 @@ class ParameterRule(BaseModel):
 
 class Binding(BaseModel):
     model_config = ConfigDict(extra="forbid")
+    optional: bool = False
     node_id: str
     input: str
     transform: Literal["identity", "duration_to_frames"] = "identity"

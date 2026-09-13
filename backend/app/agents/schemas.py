@@ -68,6 +68,11 @@ class CharacterBible(StrictModel):
 class VisualBible(StrictModel):
     ai_parameters: dict[str, dict[str, Any]] = Field(default_factory=dict)
     characters: list[CharacterBible] = Field(max_length=10)
+    props: list[CharacterBible] = Field(
+        default_factory=list,
+        max_length=20,
+        description="Recurring visual props with stable IDs, appearance and distinguishing features.",
+    )
     environment: dict[str, str]
     style: dict[str, str]
     continuity_rules: list[str] = Field(min_length=1, max_length=30)
@@ -78,7 +83,7 @@ class VisualBible(StrictModel):
 
 StateText = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=300)]
 ReferenceRole = Annotated[
-    str, StringConstraints(pattern=r"^(character:[a-zA-Z0-9_-]{1,64}|environment|style)$")
+    str, StringConstraints(pattern=r"^((?:character|prop):[a-zA-Z0-9_-]{1,64}|environment|style)$")
 ]
 
 

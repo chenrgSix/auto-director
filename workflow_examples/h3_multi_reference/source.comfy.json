@@ -1,0 +1,960 @@
+{
+  "id": "6c3c5de5-3804-4bbe-9b4f-b59e70ea0033",
+  "revision": 0,
+  "last_node_id": 13,
+  "last_link_id": 42,
+  "nodes": [
+    {
+      "id": 0,
+      "type": "LoadImage",
+      "pos": [
+        470,
+        1120
+      ],
+      "size": [
+        390,
+        322
+      ],
+      "flags": {},
+      "order": 0,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "IMAGE",
+          "type": "IMAGE",
+          "links": [
+            22,
+            25
+          ]
+        },
+        {
+          "name": "MASK",
+          "type": "MASK",
+          "links": null
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "LoadImage"
+      },
+      "widgets_values": [
+        "【哲风壁纸】3D渲染-双麻花辫.jpg",
+        "image"
+      ],
+      "widgets_values_named": {
+        "image": "【哲风壁纸】3D渲染-双麻花辫.jpg",
+        "upload": "image"
+      }
+    },
+    {
+      "id": 1,
+      "type": "UNETLoader",
+      "pos": [
+        0,
+        430
+      ],
+      "size": [
+        390,
+        86
+      ],
+      "flags": {},
+      "order": 1,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "MODEL",
+          "type": "MODEL",
+          "links": [
+            31
+          ]
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "UNETLoader"
+      },
+      "widgets_values": [
+        "minimax_h3_fl2va_pruned_int8_convrot.safetensors",
+        "default"
+      ],
+      "widgets_values_named": {
+        "unet_name": "minimax_h3_fl2va_pruned_int8_convrot.safetensors",
+        "weight_dtype": "default"
+      }
+    },
+    {
+      "id": 2,
+      "type": "CLIPLoader",
+      "pos": [
+        0,
+        820
+      ],
+      "size": [
+        390,
+        114
+      ],
+      "flags": {},
+      "order": 2,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "CLIP",
+          "type": "CLIP",
+          "links": [
+            23
+          ]
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "CLIPLoader"
+      },
+      "widgets_values": [
+        "qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors",
+        "minimax",
+        "default"
+      ],
+      "widgets_values_named": {
+        "clip_name": "qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors",
+        "type": "minimax",
+        "device": "default"
+      }
+    },
+    {
+      "id": 3,
+      "type": "VAELoader",
+      "pos": [
+        0,
+        1160
+      ],
+      "size": [
+        390,
+        62
+      ],
+      "flags": {},
+      "order": 3,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "VAE",
+          "type": "VAE",
+          "links": [
+            24,
+            38
+          ]
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "VAELoader"
+      },
+      "widgets_values": [
+        "minimax_h3_video_vae_fp16.safetensors"
+      ],
+      "widgets_values_named": {
+        "vae_name": "minimax_h3_video_vae_fp16.safetensors"
+      }
+    },
+    {
+      "id": 4,
+      "type": "H3ImageResolutionPreset",
+      "pos": [
+        940,
+        1040
+      ],
+      "size": [
+        390,
+        210
+      ],
+      "flags": {},
+      "order": 5,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "source_image",
+          "shape": 7,
+          "type": "IMAGE",
+          "link": 22
+        }
+      ],
+      "outputs": [
+        {
+          "name": "width",
+          "type": "INT",
+          "links": [
+            27
+          ]
+        },
+        {
+          "name": "height",
+          "type": "INT",
+          "links": [
+            28
+          ]
+        },
+        {
+          "name": "resolution_info",
+          "type": "STRING",
+          "links": null
+        }
+      ],
+      "properties": {
+        "Image Studio": "v18",
+        "Node name for S&R": "H3ImageResolutionPreset"
+      },
+      "widgets_values": [
+        "source image",
+        "native detail | 0.98 MP",
+        1,
+        true
+      ],
+      "widgets_values_named": {
+        "aspect_ratio": "source image",
+        "resolution_profile": "native detail | 0.98 MP",
+        "custom_megapixels": 1,
+        "limit_to_native_area": true
+      },
+      "color": "#443066",
+      "bgcolor": "#211635"
+    },
+    {
+      "id": 5,
+      "type": "H3ReferenceEditPrepare",
+      "pos": [
+        1410,
+        900
+      ],
+      "size": [
+        400,
+        522
+      ],
+      "flags": {},
+      "order": 7,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "clip",
+          "type": "CLIP",
+          "link": 23
+        },
+        {
+          "name": "vae",
+          "type": "VAE",
+          "link": 24
+        },
+        {
+          "name": "source_image",
+          "type": "IMAGE",
+          "link": 25
+        },
+        {
+          "name": "reference_image_2",
+          "shape": 7,
+          "type": "IMAGE",
+          "link": null
+        },
+        {
+          "name": "reference_image_3",
+          "shape": 7,
+          "type": "IMAGE",
+          "link": null
+        },
+        {
+          "name": "reference_image_4",
+          "shape": 7,
+          "type": "IMAGE",
+          "link": null
+        },
+        {
+          "name": "reference_image_5",
+          "shape": 7,
+          "type": "IMAGE",
+          "link": null
+        },
+        {
+          "name": "reference_image_6",
+          "shape": 7,
+          "type": "IMAGE",
+          "link": null
+        },
+        {
+          "name": "reference_image_7",
+          "shape": 7,
+          "type": "IMAGE",
+          "link": null
+        },
+        {
+          "name": "reference_image_8",
+          "shape": 7,
+          "type": "IMAGE",
+          "link": null
+        },
+        {
+          "name": "reference_image_9",
+          "shape": 7,
+          "type": "IMAGE",
+          "link": null
+        },
+        {
+          "name": "width",
+          "type": "INT",
+          "widget": {
+            "name": "width"
+          },
+          "link": 27
+        },
+        {
+          "name": "height",
+          "type": "INT",
+          "widget": {
+            "name": "height"
+          },
+          "link": 28
+        }
+      ],
+      "outputs": [
+        {
+          "name": "positive",
+          "type": "CONDITIONING",
+          "links": [
+            30
+          ]
+        },
+        {
+          "name": "h3_latent",
+          "type": "LATENT",
+          "links": [
+            36
+          ]
+        },
+        {
+          "name": "fitted_source",
+          "type": "IMAGE",
+          "links": [
+            40
+          ]
+        },
+        {
+          "name": "requested_frames",
+          "type": "INT",
+          "links": null
+        },
+        {
+          "name": "image_prompt",
+          "type": "STRING",
+          "links": null
+        },
+        {
+          "name": "run_info",
+          "type": "STRING",
+          "links": null
+        }
+      ],
+      "properties": {
+        "Image Studio": "v18",
+        "Node name for S&R": "H3ReferenceEditPrepare"
+      },
+      "widgets_values": [
+        "Use < picture 1 > as the main character and scene, and change the image character to stand. The figure's upper body leans forward slightly, his hips rise slightly, and his eyes look at the camera. Side view",
+        1344,
+        768,
+        "recommended | 5 frames",
+        0.65,
+        "crop_center",
+        "match_generation_area",
+        true
+      ],
+      "widgets_values_named": {
+        "edit_instruction": "Use < picture 1 > as the main character and scene, and change the image character to stand. The figure's upper body leans forward slightly, his hips rise slightly, and his eyes look at the camera. Side view",
+        "width": 1344,
+        "height": 768,
+        "quality_profile": "recommended | 5 frames",
+        "source_fidelity": 0.65,
+        "source_fit": "crop_center",
+        "reference_detail": "match_generation_area",
+        "optimize_for_still": true
+      },
+      "color": "#24395c",
+      "bgcolor": "#101c31"
+    },
+    {
+      "id": 6,
+      "type": "RandomNoise",
+      "pos": [
+        1880,
+        980
+      ],
+      "size": [
+        390,
+        82
+      ],
+      "flags": {},
+      "order": 4,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "NOISE",
+          "type": "NOISE",
+          "links": [
+            32
+          ]
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "RandomNoise"
+      },
+      "widgets_values": [
+        1068100264298865,
+        "randomize"
+      ],
+      "widgets_values_named": {
+        "noise_seed": 1068100264298865,
+        "control_after_generate": "randomize"
+      }
+    },
+    {
+      "id": 7,
+      "type": "BasicGuider",
+      "pos": [
+        1410,
+        430
+      ],
+      "size": [
+        390,
+        54
+      ],
+      "flags": {},
+      "order": 8,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "model",
+          "type": "MODEL",
+          "link": 29
+        },
+        {
+          "name": "conditioning",
+          "type": "CONDITIONING",
+          "link": 30
+        }
+      ],
+      "outputs": [
+        {
+          "name": "GUIDER",
+          "type": "GUIDER",
+          "links": [
+            33
+          ]
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "BasicGuider"
+      }
+    },
+    {
+      "id": 8,
+      "type": "H3ImageSamplingPreset",
+      "pos": [
+        940,
+        430
+      ],
+      "size": [
+        390,
+        370
+      ],
+      "flags": {},
+      "order": 6,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "model",
+          "type": "MODEL",
+          "link": 31
+        }
+      ],
+      "outputs": [
+        {
+          "name": "model",
+          "type": "MODEL",
+          "links": [
+            29
+          ]
+        },
+        {
+          "name": "sampler",
+          "type": "SAMPLER",
+          "links": [
+            34
+          ]
+        },
+        {
+          "name": "sigmas",
+          "type": "SIGMAS",
+          "links": [
+            35
+          ]
+        },
+        {
+          "name": "sampling_info",
+          "type": "STRING",
+          "links": null
+        }
+      ],
+      "properties": {
+        "Image Studio": "v18",
+        "Node name for S&R": "H3ImageSamplingPreset"
+      },
+      "widgets_values": [
+        "base speed | RES 12 steps",
+        "res_multistep",
+        "simple",
+        12,
+        1,
+        12,
+        3,
+        0.6,
+        0.6
+      ],
+      "widgets_values_named": {
+        "sampling_profile": "base speed | RES 12 steps",
+        "custom_sampler": "res_multistep",
+        "custom_scheduler": "simple",
+        "custom_steps": 12,
+        "custom_denoise": 1,
+        "custom_shift_video": 12,
+        "custom_shift_audio": 3,
+        "custom_beta_alpha": 0.6,
+        "custom_beta_beta": 0.6
+      },
+      "color": "#5a3424",
+      "bgcolor": "#2c1810"
+    },
+    {
+      "id": 10,
+      "type": "SamplerCustomAdvanced",
+      "pos": [
+        1880,
+        430
+      ],
+      "size": [
+        390,
+        114
+      ],
+      "flags": {},
+      "order": 9,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "noise",
+          "type": "NOISE",
+          "link": 32
+        },
+        {
+          "name": "guider",
+          "type": "GUIDER",
+          "link": 33
+        },
+        {
+          "name": "sampler",
+          "type": "SAMPLER",
+          "link": 34
+        },
+        {
+          "name": "sigmas",
+          "type": "SIGMAS",
+          "link": 35
+        },
+        {
+          "name": "latent_image",
+          "type": "LATENT",
+          "link": 36
+        }
+      ],
+      "outputs": [
+        {
+          "name": "output",
+          "type": "LATENT",
+          "links": [
+            37
+          ]
+        },
+        {
+          "name": "denoised_output",
+          "type": "LATENT",
+          "links": null
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "SamplerCustomAdvanced"
+      }
+    },
+    {
+      "id": 11,
+      "type": "H3ImageDecode",
+      "pos": [
+        2350,
+        430
+      ],
+      "size": [
+        390,
+        118
+      ],
+      "flags": {},
+      "order": 10,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "samples",
+          "type": "LATENT",
+          "link": 37
+        },
+        {
+          "name": "vae",
+          "type": "VAE",
+          "link": 38
+        }
+      ],
+      "outputs": [
+        {
+          "name": "frames",
+          "type": "IMAGE",
+          "links": [
+            39
+          ]
+        },
+        {
+          "name": "decoded_frames",
+          "type": "INT",
+          "links": null
+        },
+        {
+          "name": "decode_info",
+          "type": "STRING",
+          "links": null
+        },
+        {
+          "name": "recommended_index",
+          "type": "INT",
+          "links": [
+            41
+          ]
+        }
+      ],
+      "properties": {
+        "Image Studio": "v18",
+        "Node name for S&R": "H3ImageDecode"
+      },
+      "color": "#25534d",
+      "bgcolor": "#102a27"
+    },
+    {
+      "id": 12,
+      "type": "H3ImageFrameSelector",
+      "pos": [
+        2820,
+        430
+      ],
+      "size": [
+        390,
+        362
+      ],
+      "flags": {},
+      "order": 11,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "frames",
+          "type": "IMAGE",
+          "link": 39
+        },
+        {
+          "name": "source_image",
+          "shape": 7,
+          "type": "IMAGE",
+          "link": 40
+        },
+        {
+          "name": "recommended_index",
+          "shape": 7,
+          "type": "INT",
+          "link": 41
+        }
+      ],
+      "outputs": [
+        {
+          "name": "selected_image",
+          "type": "IMAGE",
+          "links": [
+            42
+          ]
+        },
+        {
+          "name": "candidate_batch_debug",
+          "type": "IMAGE",
+          "links": null
+        },
+        {
+          "name": "selected_index",
+          "type": "INT",
+          "links": null
+        },
+        {
+          "name": "selected_score",
+          "type": "FLOAT",
+          "links": null
+        },
+        {
+          "name": "score_report",
+          "type": "STRING",
+          "links": null
+        }
+      ],
+      "properties": {
+        "Image Studio": "v18",
+        "Node name for S&R": "H3ImageFrameSelector"
+      },
+      "widgets_values": [
+        "decode_recommended",
+        0,
+        0,
+        0,
+        1,
+        0.35,
+        4,
+        false
+      ],
+      "widgets_values_named": {
+        "strategy": "decode_recommended",
+        "manual_index": 0,
+        "skip_first_frames": 0,
+        "candidate_start": 0,
+        "candidate_end": 1,
+        "similarity_weight": 0.35,
+        "top_k": 4,
+        "emit_candidate_batch": false
+      },
+      "color": "#25534d",
+      "bgcolor": "#102a27"
+    },
+    {
+      "id": 13,
+      "type": "SaveImage",
+      "pos": [
+        3290,
+        430
+      ],
+      "size": [
+        390,
+        302
+      ],
+      "flags": {},
+      "order": 12,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "images",
+          "type": "IMAGE",
+          "link": 42
+        }
+      ],
+      "outputs": [
+        {
+          "name": "images",
+          "type": "IMAGE",
+          "links": null
+        }
+      ],
+      "properties": {},
+      "widgets_values": [
+        "MiniMax_H3_8GB_Balanced"
+      ],
+      "widgets_values_named": {
+        "filename_prefix": "MiniMax_H3_8GB_Balanced"
+      }
+    }
+  ],
+  "links": [
+    [
+      22,
+      0,
+      0,
+      4,
+      0,
+      "IMAGE"
+    ],
+    [
+      23,
+      2,
+      0,
+      5,
+      0,
+      "CLIP"
+    ],
+    [
+      24,
+      3,
+      0,
+      5,
+      1,
+      "VAE"
+    ],
+    [
+      25,
+      0,
+      0,
+      5,
+      2,
+      "IMAGE"
+    ],
+    [
+      27,
+      4,
+      0,
+      5,
+      11,
+      "INT"
+    ],
+    [
+      28,
+      4,
+      1,
+      5,
+      12,
+      "INT"
+    ],
+    [
+      29,
+      8,
+      0,
+      7,
+      0,
+      "MODEL"
+    ],
+    [
+      30,
+      5,
+      0,
+      7,
+      1,
+      "CONDITIONING"
+    ],
+    [
+      31,
+      1,
+      0,
+      8,
+      0,
+      "MODEL"
+    ],
+    [
+      32,
+      6,
+      0,
+      10,
+      0,
+      "NOISE"
+    ],
+    [
+      33,
+      7,
+      0,
+      10,
+      1,
+      "GUIDER"
+    ],
+    [
+      34,
+      8,
+      1,
+      10,
+      2,
+      "SAMPLER"
+    ],
+    [
+      35,
+      8,
+      2,
+      10,
+      3,
+      "SIGMAS"
+    ],
+    [
+      36,
+      5,
+      1,
+      10,
+      4,
+      "LATENT"
+    ],
+    [
+      37,
+      10,
+      0,
+      11,
+      0,
+      "LATENT"
+    ],
+    [
+      38,
+      3,
+      0,
+      11,
+      1,
+      "VAE"
+    ],
+    [
+      39,
+      11,
+      0,
+      12,
+      0,
+      "IMAGE"
+    ],
+    [
+      40,
+      5,
+      2,
+      12,
+      1,
+      "IMAGE"
+    ],
+    [
+      41,
+      11,
+      3,
+      12,
+      2,
+      "INT"
+    ],
+    [
+      42,
+      12,
+      0,
+      13,
+      0,
+      "IMAGE"
+    ]
+  ],
+  "groups": [],
+  "config": {},
+  "extra": {
+    "ds": {
+      "scale": 0.625196374585591,
+      "offset": [
+        -323.3409360819852,
+        -437.41702304946006
+      ]
+    },
+    "image_studio": {
+      "release": "v21.0.0",
+      "source_api": "examples/api/H3_REFERENCE_EDIT_API.json"
+    },
+    "frontendVersion": "1.51.10",
+    "VHS_latentpreview": false,
+    "VHS_latentpreviewrate": 0,
+    "VHS_MetadataImage": true,
+    "VHS_KeepIntermediate": true
+  },
+  "version": 0.4
+}

@@ -1,0 +1,316 @@
+{
+  "name": "H3-多图参考-按镜头选图",
+  "capability": "IMAGE_TO_IMAGE",
+  "workflow": {
+    "0": {
+      "class_type": "LoadImage",
+      "inputs": {
+        "image": "REQUIRES_REAL_REFERENCE.png"
+      }
+    },
+    "1": {
+      "class_type": "UNETLoader",
+      "inputs": {
+        "unet_name": "minimax_h3_fl2va_pruned_int8_convrot.safetensors",
+        "weight_dtype": "default"
+      }
+    },
+    "2": {
+      "class_type": "CLIPLoader",
+      "inputs": {
+        "clip_name": "qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors",
+        "type": "minimax",
+        "device": "default"
+      }
+    },
+    "3": {
+      "class_type": "VAELoader",
+      "inputs": {
+        "vae_name": "minimax_h3_video_vae_fp16.safetensors"
+      }
+    },
+    "5": {
+      "class_type": "H3ReferenceEditPrepare",
+      "inputs": {
+        "edit_instruction": "Render the requested scene using the explicitly selected references.",
+        "width": 640,
+        "height": 384,
+        "quality_profile": "recommended | 5 frames",
+        "source_fidelity": 0.65,
+        "source_fit": "crop_center",
+        "reference_detail": "match_generation_area",
+        "optimize_for_still": true,
+        "clip": [
+          "2",
+          0
+        ],
+        "vae": [
+          "3",
+          0
+        ],
+        "source_image": [
+          "0",
+          0
+        ],
+        "reference_image_2": [
+          "102",
+          0
+        ],
+        "reference_image_3": [
+          "103",
+          0
+        ],
+        "reference_image_4": [
+          "104",
+          0
+        ],
+        "reference_image_5": [
+          "105",
+          0
+        ],
+        "reference_image_6": [
+          "106",
+          0
+        ],
+        "reference_image_7": [
+          "107",
+          0
+        ],
+        "reference_image_8": [
+          "108",
+          0
+        ],
+        "reference_image_9": [
+          "109",
+          0
+        ]
+      }
+    },
+    "6": {
+      "class_type": "RandomNoise",
+      "inputs": {
+        "noise_seed": 1068100264298865
+      }
+    },
+    "7": {
+      "class_type": "BasicGuider",
+      "inputs": {
+        "model": [
+          "8",
+          0
+        ],
+        "conditioning": [
+          "5",
+          0
+        ]
+      }
+    },
+    "8": {
+      "class_type": "H3ImageSamplingPreset",
+      "inputs": {
+        "sampling_profile": "base speed | RES 12 steps",
+        "custom_sampler": "res_multistep",
+        "custom_scheduler": "simple",
+        "custom_steps": 12,
+        "custom_denoise": 1,
+        "custom_shift_video": 12,
+        "custom_shift_audio": 3,
+        "custom_beta_alpha": 0.6,
+        "custom_beta_beta": 0.6,
+        "model": [
+          "1",
+          0
+        ]
+      }
+    },
+    "10": {
+      "class_type": "SamplerCustomAdvanced",
+      "inputs": {
+        "noise": [
+          "6",
+          0
+        ],
+        "guider": [
+          "7",
+          0
+        ],
+        "sampler": [
+          "8",
+          1
+        ],
+        "sigmas": [
+          "8",
+          2
+        ],
+        "latent_image": [
+          "5",
+          1
+        ]
+      }
+    },
+    "11": {
+      "class_type": "H3ImageDecode",
+      "inputs": {
+        "samples": [
+          "10",
+          0
+        ],
+        "vae": [
+          "3",
+          0
+        ]
+      }
+    },
+    "12": {
+      "class_type": "H3ImageFrameSelector",
+      "inputs": {
+        "strategy": "decode_recommended",
+        "manual_index": 0,
+        "skip_first_frames": 0,
+        "candidate_start": 0,
+        "candidate_end": 1,
+        "similarity_weight": 0.35,
+        "top_k": 4,
+        "emit_candidate_batch": false,
+        "frames": [
+          "11",
+          0
+        ],
+        "source_image": [
+          "5",
+          2
+        ],
+        "recommended_index": [
+          "11",
+          3
+        ]
+      }
+    },
+    "13": {
+      "class_type": "SaveImage",
+      "inputs": {
+        "filename_prefix": "autodirector/H3_MultiReference",
+        "images": [
+          "12",
+          0
+        ]
+      }
+    },
+    "102": {
+      "class_type": "LoadImage",
+      "inputs": {
+        "image": "REQUIRES_REAL_REFERENCE.png"
+      }
+    },
+    "103": {
+      "class_type": "LoadImage",
+      "inputs": {
+        "image": "REQUIRES_REAL_REFERENCE.png"
+      }
+    },
+    "104": {
+      "class_type": "LoadImage",
+      "inputs": {
+        "image": "REQUIRES_REAL_REFERENCE.png"
+      }
+    },
+    "105": {
+      "class_type": "LoadImage",
+      "inputs": {
+        "image": "REQUIRES_REAL_REFERENCE.png"
+      }
+    },
+    "106": {
+      "class_type": "LoadImage",
+      "inputs": {
+        "image": "REQUIRES_REAL_REFERENCE.png"
+      }
+    },
+    "107": {
+      "class_type": "LoadImage",
+      "inputs": {
+        "image": "REQUIRES_REAL_REFERENCE.png"
+      }
+    },
+    "108": {
+      "class_type": "LoadImage",
+      "inputs": {
+        "image": "REQUIRES_REAL_REFERENCE.png"
+      }
+    },
+    "109": {
+      "class_type": "LoadImage",
+      "inputs": {
+        "image": "REQUIRES_REAL_REFERENCE.png"
+      }
+    }
+  },
+  "bindings": {
+    "prompt": {
+      "node_id": "5",
+      "input": "edit_instruction"
+    },
+    "reference_image": {
+      "node_id": "0",
+      "input": "image"
+    },
+    "width": {
+      "node_id": "5",
+      "input": "width"
+    },
+    "height": {
+      "node_id": "5",
+      "input": "height"
+    },
+    "seed": {
+      "node_id": "6",
+      "input": "noise_seed"
+    },
+    "reference_image_2": {
+      "node_id": "102",
+      "input": "image",
+      "optional": true
+    },
+    "reference_image_3": {
+      "node_id": "103",
+      "input": "image",
+      "optional": true
+    },
+    "reference_image_4": {
+      "node_id": "104",
+      "input": "image",
+      "optional": true
+    },
+    "reference_image_5": {
+      "node_id": "105",
+      "input": "image",
+      "optional": true
+    },
+    "reference_image_6": {
+      "node_id": "106",
+      "input": "image",
+      "optional": true
+    },
+    "reference_image_7": {
+      "node_id": "107",
+      "input": "image",
+      "optional": true
+    },
+    "reference_image_8": {
+      "node_id": "108",
+      "input": "image",
+      "optional": true
+    },
+    "reference_image_9": {
+      "node_id": "109",
+      "input": "image",
+      "optional": true
+    }
+  },
+  "outputs": {
+    "image": "13"
+  },
+  "capabilities": {
+    "supports_multi_reference": true
+  }
+}

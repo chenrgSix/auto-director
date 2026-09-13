@@ -3,6 +3,7 @@
 import json
 import re
 
+from app.agents.visual import visual_prose
 from app.core.errors import AppError
 
 CONTINUOUS = {"CONTINUE_FRAME", "CONTINUE_VIDEO"}
@@ -20,6 +21,15 @@ def reference_roles(bible, shot):
                 "SHOT_REFERENCE_INVALID",
                 "出场或参考角色不在视觉设定中",
                 {"characters": sorted(unknown)},
+                422,
+            )
+        props = {item["id"] for item in (bible or {}).get("props", [])}
+        unknown_props = {r[5:] for r in roles if r.startswith("prop:")} - props
+        if unknown_props:
+            raise AppError(
+                "SHOT_REFERENCE_INVALID",
+                "道具参考不在视觉设定中",
+                {"props": sorted(unknown_props)},
                 422,
             )
         return roles
@@ -84,7 +94,8 @@ def continuity_report(episode, image):
         if (
             not shot.get("start_frame_asset_id")
             and roles
-            and len(roles) + int(inherited) < capacity
+            and len(roles) + int(inherited)
+            < sum(not image["bindings"][r].get("optional", False) for r in reference_slots(image))
         ):
             issues.append(
                 {
@@ -194,6 +205,8 @@ def planning_state(shots):
 def reference_description(role, description):
     if role.startswith("character:"):
         instruction = "A clean identity reference of this character only. No additional cast. Keep the background simple so its pose or furniture does not dictate future shot composition."
+    elif role.startswith("prop:"):
+        instruction = "A single object reference on a simple neutral background. Show its exact shape, material, color and distinctive details. No people or extra objects."
     elif role == "environment":
         instruction = "An unoccupied environment reference. No people, animals or character portraits. Show the spatial layout and lighting, not a performed story scene."
     else:
@@ -201,5 +214,5 @@ def reference_description(role, description):
     return (
         instruction
         + " Render the following as visual qualities, never as printed text: "
-        + description
+        + visual_prose(description)
     )

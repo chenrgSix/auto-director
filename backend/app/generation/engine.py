@@ -11,6 +11,7 @@ from app.generation.preflight import check_graph
 from app.generation.resolvers import AssetResolver
 from app.media.service import Assets, video_duration
 from app.workflows.analyzer import patch, refresh_profile, validate_dependencies, workflow_hash
+from app.workflows.optional_references import select_optional_references
 from app.workflows.ownership import canonicalize
 
 
@@ -167,6 +168,7 @@ class RenderEngine:
                             ai_values=job.get("ai_parameter_values", {}),
                         )
                         resolved_values = dict(values)
+                        checked = select_optional_references(checked, bound_assets, info)
                         check_graph(
                             checked,
                             info,

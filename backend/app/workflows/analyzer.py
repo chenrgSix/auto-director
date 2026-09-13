@@ -293,6 +293,12 @@ def validate_bindings(profile: dict) -> list[dict]:
                     "message": "素材输入必须绑定明确的素材角色",
                 }
             )
+    from app.workflows.optional_references import optional_targets
+
+    try:
+        optional_targets(profile)
+    except AppError as exc:
+        issues.append(exc.as_dict())
     occupied = set()
     for role, raw in profile["bindings"].items():
         binding = Binding.model_validate(raw)

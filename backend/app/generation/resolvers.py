@@ -78,7 +78,9 @@ class AssetResolver:
 
     async def resolve(self, profile, bindings, client, episode_id, allowed=(), *, test=False):
         required = required_asset_roles(profile) | {
-            role for role in profile["bindings"] if is_asset_role(role)
+            role
+            for role, binding in profile["bindings"].items()
+            if is_asset_role(role) and not binding.get("optional")
         }
         missing = required - {role for role, asset in bindings.items() if asset}
         if missing:

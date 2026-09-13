@@ -19,6 +19,7 @@ from app.agents.schemas import (
 )
 from app.agents.shot_batch import batch_context, prompt_batch_schema, shot_instruction, shot_output
 from app.agents.timing import TIMING_REQUIRED_SECONDS, compile_timing, timed_output
+from app.agents.visual import visual_prose
 from app.core.cancellation import run_cancellable
 from app.core.errors import AppError
 from app.core.limits import (
@@ -544,6 +545,6 @@ def anchored_prompt(
     if stage == "image":
         parts.append(
             "Visual style, subordinate to the requested target: "
-            + json.dumps(bible.get("style", {}), ensure_ascii=False)
+            + visual_prose(bible.get("style", {}))
         )
     return "\n\n".join(parts)[:20000]

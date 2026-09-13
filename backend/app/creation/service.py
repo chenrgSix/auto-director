@@ -196,7 +196,7 @@ class CreationService:
                 "总时长必须与 brief.target_duration 一致；单镜时长保留最多两位小数。",
                 "首镜不能延续不存在的前镜；画面提示词只描述本镜。",
                 "新镜头填写 prompts.visual_continuity：scene_id、出场角色 ID、有序 reference_roles、景别及 state_in/state_out；第一项是单参考工作流的实际输入。",
-                "参考用 character:<Bible ID>、environment 或 style；无人道具插入使用 environment。状态键和值在同场景跨反打复用；仅有意跳转时填写 intentional_jump 原因。",
+                "参考用 character:<Bible ID>、prop:<Bible props ID>、environment 或 style；重复出现的道具建立 bible.props，插入特写优先选 prop。视觉设定只写外观，style 的声音/表演字段不用于参考图。状态键和值在同场景跨反打复用；仅有意跳转时填写 intentional_jump 原因。",
                 "完整包须包含 title、logline、bible 和每镜 prompts；草稿可缺项。",
                 "ai_parameters 只填写导出的 AI owner 字段，prompt 由阶段提示词提供。",
                 "H3 声音格式由 audio_prompt_format 明确指定；视频提示词是实际声音执行来源。",
