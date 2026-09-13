@@ -4,6 +4,7 @@ from copy import deepcopy
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
+from app.agents.audio import preserve_audio
 from app.agents.directing import Directors, qa_shot_context
 from app.agents.optimization import (
     optimization_schema,
@@ -74,6 +75,7 @@ def validate_changes(episode, shot, profiles, changes):
             raise AppError("OPTIMIZATION_INVALID", "优化返回了未改变的提示词，请重新分析")
         if field == "video_prompt":
             try:
+                preserve_audio(shot["prompts"][field], change["prompt"])
                 validate_optimized_timing(
                     change["prompt"],
                     shot["duration"],

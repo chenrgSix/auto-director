@@ -42,6 +42,14 @@
 
 两套视频从 C50 起保存原生声音：同一次 `SamplerCustomAdvanced` 的联合 latent 分别送入视频与音频解码，`VAEDecodeAudio` 使用已安装的 `minimax_h3_audio_vae_fp32.safetensors`，输出连接 `CreateVideo.audio` 后保存 MP4。仍为一次 8 步采样；增加的加载、解码和显存换入换出开销以 C50 实测为准。
 
-视频提示词可描述环境声、动作声或对白；是否出现以及听感由模型决定，未配置独立 TTS，旁白脚本不会自动朗读。拼接沿用片段音轨，只有无音轨片段才补静音。更新工作流不会给旧 MP4 自动补声，也不会删除或重跑旧成片。没有安装新模型、自定义节点或云端 API 节点。
+C52 起，两份视频导入配置显式声明 `capabilities.audio_prompt_format=minimax_h3`。新分镜的 Shot Agent 会按 Idea / 剧本在视频提示词中编写人物对白或画外旁白，台词保留用户语言，使用 `<d>[Chinese] 台词</d>` 与说话人 ID，并区分闭嘴旁白、环境声和音乐。无台词的镜头可保持环境声。声音由 H3 原生生成，无独立 TTS；实际内容以可编辑视频提示词为准，`narration_text` 仅为旁白参考副本，不覆盖用户修改。拼接沿用片段音轨，只有无音轨片段才补静音。更新工作流不会给旧 MP4 自动补声，也不会删除或重跑旧成片。没有安装新模型、自定义节点或云端 API 节点。
 
 依据：[ComfyUI 官方 H3 节点与模型指南](https://docs.comfy.org/tutorials/video/minimax/minimax-h3-native)、[官方帧数规则](https://github.com/Comfy-Org/embedded-docs/blob/main/comfyui_embedded_docs/docs/MiniMaxH3ImageToVideo/en.md)、[原生 attention 实现](https://github.com/Comfy-Org/ComfyUI/blob/master/comfy_extras/nodes_model_advanced.py)、[Image Studio 作者说明](https://github.com/astropuzzo/ComfyUI-MiniMax-H3-Image-Studio)。初次适配验收保留在 C47，本次计算路径优化记录在 C48。
+
+## 自动声音提示词（C52）
+
+工作流编辑页的“原生声音提示词”可选择普通或 MiniMax H3，只有已连接原生音频输出的 H3 视频图才启用。系统不根据节点名猜测。已有工作流默认 `none`；旧分镜不会自动改写，使用“重新生成提示词”才应用新规则。
+
+H3 格式沿用官方三个区块：`integrated_multimodal_description`、`overall_soundscape`、`non_diegetic_music`。画面区块内单独的 `Speech performance` 段保存说话人、语气与原文台词；动作时间线仍在最后。系统按实际帧数换算的时长绑定 Picture 1/2，I2V 仅 Picture 1，高级用户完整提示词覆盖优先。
+
+视觉复核只能调整画面/动作，不能改动声音段。有台词的镜头 OOM 先降分辨率，再尝试已配置且能容纳整镜的原生声音低显存工作流；不复制整句到多个短片段。最终语音内容、音量、时间安排与口型由模型决定，视觉抽帧无法验证听感。

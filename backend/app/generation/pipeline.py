@@ -5,6 +5,7 @@ import logging
 import math
 from copy import deepcopy
 
+from app.agents.audio import H3, SPEECH
 from app.agents.directing import Directors, anchored_prompt, generation_budget
 from app.agents.provider import LLMProvider
 from app.agents.timing import segment_prompt
@@ -1704,9 +1705,41 @@ class GenerationService:
             if exc.code != "OUT_OF_MEMORY" or retries["remaining"] == 0:
                 raise
             retries["remaining"] -= 1
+        effective_prompt = role_overrides(video, parameter_overrides(episode, video)).get(
+            "prompt", shot["prompts"]["video_prompt"]
+        )
+        # Each temporal segment would otherwise speak the same whole sentence again.
+        spoken_audio = video["capabilities"].get("audio_prompt_format") == H3 and SPEECH.search(
+            effective_prompt
+        )
         alternative = video["capabilities"].get("low_memory_workflow_id")
         if alternative:
             video = self.router.select("video", alternative)
+        if spoken_audio:
+            if (
+                alternative
+                and video["capabilities"].get("audio_prompt_format") == H3
+                and duration <= video["capabilities"]["max_duration"]
+                and (
+                    video["capability"] != WorkflowCapability.FIRST_LAST_TO_VIDEO
+                    or inputs.get("end_frame")
+                )
+            ):
+                if video["capability"] == WorkflowCapability.IMAGE_TO_VIDEO:
+                    inputs.pop("end_frame", None)
+                return await self.render(
+                    episode,
+                    video,
+                    "SHOT_VIDEO",
+                    smaller,
+                    inputs,
+                    stamp + ":video:audio-fallback",
+                    sid,
+                )
+            raise AppError(
+                "OUT_OF_MEMORY",
+                "含台词的视频降分辨率后仍显存不足；为避免分段重复台词，请降低尺寸或配置支持原生声音且容纳整镜的低显存工作流",
+            )
         max_segment = min(2, video["capabilities"]["max_duration"])
         count = math.ceil(duration / max_segment)
         if count == 1 and not alternative:

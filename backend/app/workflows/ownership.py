@@ -56,6 +56,8 @@ def canonicalize(profile: dict) -> dict:
         raise AppError("WORKFLOW_INVALID", "capability 与 media_type 不匹配")
     profile.update(media_type=media, type=media, capability=capability.value)
     caps = dict(profile.get("capabilities", {}))
+    if media != "video" and caps.get("audio_prompt_format", "none") != "none":
+        raise AppError("WORKFLOW_INVALID", "原生声画提示词仅适用于视频工作流")
     caps.update(
         supports_start_frame=media == "video",
         supports_end_frame=capability == WorkflowCapability.FIRST_LAST_TO_VIDEO,

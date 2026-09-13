@@ -38,6 +38,7 @@ def test_codex_pack_import_patch_and_user_override(tmp_path, path):
     assert all(roles[role]["owner"] == "asset_resolver" for role in assets)
     automatic = {"prompt": "AI scene", "width": 640, "height": 384, "seed": 42}
     if profile["media_type"] == "video":
+        assert profile["capabilities"]["audio_prompt_format"] == "minimax_h3"
         assert roles["duration"]["owner"] == "director"
         automatic.update(duration=5, fps=16)
     values, resolved_assets, raw, sources = resolve_parameters(
@@ -55,6 +56,18 @@ def test_codex_pack_import_patch_and_user_override(tmp_path, path):
         assert graph[item["node_id"]]["inputs"][item["field"]] == 124
         assert values["fps"] == 24
         assert values["timeline_duration"] == 5
+        native_values, _, _, _ = resolve_parameters(
+            profile,
+            {**automatic, "prompt": "integrated_multimodal_description: [Shot 1] Scene"},
+            assets,
+            {},
+            False,
+            None,
+        )
+        if profile["capability"] == "FIRST_LAST_TO_VIDEO":
+            assert (
+                "5.17-second mark" in native_values["prompt"]
+            )  # 124 / 24, not the 5s edit timeline.
         loads = [n for n in graph.values() if n["class_type"] == "LoadImage"]
         assert len(loads) == (2 if profile["capability"] == "FIRST_LAST_TO_VIDEO" else 1)
         assert ("end_frame" in roles) == (len(loads) == 2)

@@ -319,3 +319,9 @@ ComfyUI AUTOGROW 容器的必需输入检查识别其 template.names / prefix �
 `normalize_plan` 先求按权重缩放且落在上下限内的精确分配，再以最大余数法分配剩余百分之一秒；使用 Fraction 避免先后顺序扣减和浮点边界偏差。合法原比例保持，均匀权重最多相差 0.01 秒，受约束的片段仍精确覆盖总时间线。时间线秒数与模型实际渲染帧数/最短时长的适配仍由既有 ParameterResolver 完成。
 
 仅没有计划的 Episode 调用新规划。已有计划、镜头、资产、试跑及默认 workflow 均不迁移或静默重拍；旧 1.x 秒镜头仍可恢复、裁切及合成。
+
+## C52 原生声画提示词
+
+`Capabilities.audio_prompt_format` 为显式可选契约：`none`（兼容旧配置）或 `minimax_h3`，后者仅用于视频。`ai_parameters()` 把声明传给视频 prompt role；单镜/批次共用 `audio_output` 和动作时间约束。三个 H3 区块与其中 `Speech performance` 段校验后进入唯一可编辑的 `video_prompt`，旁白副本必须原文入标签，图片不允许台词标签。无新持久字段、无故事迁移。
+
+ParameterResolver 在时长帧数适配后补 Picture 时间引用，重复解析幂等，用户高级 prompt override 保持原值。视觉优化原样保留声音段；有声对白 OOM 降分辨率后只允许整镜原生声音 fallback，避免盲目短分段重复台词。旧提示词和旧素材保持，只有新的提示词生成采用此契约。

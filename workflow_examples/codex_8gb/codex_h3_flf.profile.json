@@ -304,7 +304,8 @@
     "video": "14"
   },
   "capabilities": {
-    "max_duration": 5
+    "max_duration": 5,
+    "audio_prompt_format": "minimax_h3"
   },
   "parameter_rules": {
     "5.prompt": {

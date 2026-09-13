@@ -5,6 +5,7 @@ from fractions import Fraction
 
 from pydantic import Field, create_model
 
+from app.agents.audio import VISUAL, audio_output
 from app.agents.parameters import constrained_output
 from app.agents.provider import LLMProvider
 from app.agents.schemas import (
@@ -16,7 +17,7 @@ from app.agents.schemas import (
     Transition,
     VisualBible,
 )
-from app.agents.shot_batch import SHOT_INSTRUCTION, batch_context, prompt_batch_schema
+from app.agents.shot_batch import batch_context, prompt_batch_schema, shot_instruction, shot_output
 from app.agents.timing import TIMING_REQUIRED_SECONDS, compile_timing, timed_output
 from app.core.cancellation import run_cancellable
 from app.core.errors import AppError
@@ -349,7 +350,7 @@ class Directors:
     ) -> ShotPrompts:
         duration = shot["duration"]
         result = await self.generate_json(
-            SHOT_INSTRUCTION,
+            shot_instruction(workflow_parameters or []),
             {
                 "idea": idea,
                 "bible": bible,
@@ -361,11 +362,13 @@ class Directors:
                     "required": duration >= TIMING_REQUIRED_SECONDS,
                 },
             },
-            timed_output(constrained_output(ShotPrompts, workflow_parameters or []), duration),
+            shot_output(workflow_parameters or [], duration),
         )
         try:
             # Check timing even when a custom provider returns a plain ShotPrompts instance.
-            checked = timed_output(ShotPrompts, duration).model_validate(result.model_dump())
+            checked = timed_output(
+                audio_output(ShotPrompts, workflow_parameters or []), duration
+            ).model_validate(result.model_dump())
             return compile_timing(checked)
         except ValueError as exc:
             raise AppError("LLM_INVALID_OUTPUT", "分镜动作时间线格式不正确", status=502) from exc
@@ -376,7 +379,7 @@ class Directors:
         specifications = workflow_parameters or []
         schema = prompt_batch_schema(shots, specifications)
         result = await self.generate_json(
-            SHOT_INSTRUCTION
+            shot_instruction(specifications)
             + " Generate the supplied adjacent shots as ONE ordered batch. Return every shot_id "
             "exactly once in input order, using each shot's own fixed duration. Do not merge shots. "
             "For the first shot use the supplied continuity. For each subsequent shot use the "
@@ -498,6 +501,8 @@ def qa_shot_context(shot: dict) -> dict:
 
 
 def anchored_prompt(bible: dict, prompt: str, continuity: dict, *, stage: str = "image") -> str:
+    if stage == "video" and prompt.startswith(VISUAL):
+        return prompt  # Keep the native three-field prompt directly after the frame header.
     # The Shot Agent already selects Bible identity, lifecycle and style for the
     # reviewed target. Replaying the entire catalog here adds unrelated cast and scenes.
     parts = [

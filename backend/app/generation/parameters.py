@@ -2,12 +2,13 @@
 
 from copy import deepcopy
 
+from app.agents.audio import H3, VISUAL, reference_header
 from app.core.errors import AppError
 from app.core.limits import MAX_BATCH, MAX_DIMENSION, MAX_FPS, MAX_SHOT_SECONDS, MIN_DIMENSION
 from app.workflows.analyzer import check_value, validate_ai_parameters
 from app.workflows.dimensions import fit_dimensions
 from app.workflows.duration import fit_duration, render_maximum
-from app.workflows.frame_timing import frame_seconds, generation_fps
+from app.workflows.frame_timing import frame_count, frame_seconds, generation_fps
 from app.workflows.ownership import decorate_parameters, is_asset_role
 
 
@@ -29,6 +30,9 @@ def ai_parameters(*profiles: dict) -> list[dict]:
             "workflow_id": profile["id"],
             "media_type": profile.get("media_type", profile.get("type")),
             "capability": profile.get("capability"),
+            "audio_prompt_format": profile.get("capabilities", {}).get(
+                "audio_prompt_format", "none"
+            ),
             "source": "stage_prompt" if item.get("role") == "prompt" else "ai_parameters",
             **{
                 key: item.get(key)
@@ -243,6 +247,18 @@ def resolve_parameters(
         maximum = render_maximum(profile, {**(budget or {}), "fps": fps})
         values["duration"] = fit_duration(profile, timeline, maximum, fps=fps)
         values["timeline_duration"] = timeline
+        if (
+            profile["capabilities"].get("audio_prompt_format") == H3
+            and "prompt" not in roles
+            and VISUAL in values.get("prompt", "")
+        ):
+            binding = profile.get("bindings", {}).get("duration", {})
+            header_duration = values["duration"]
+            if binding.get("transform") == "duration_to_frames":
+                header_duration = frame_count(binding, header_duration, fps) / fps
+            values["prompt"] = reference_header(
+                values["prompt"], profile["capability"], header_duration
+            )
     sources = {}
     for item in profile["parameters"]:
         role = item.get("role")

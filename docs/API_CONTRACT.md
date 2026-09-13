@@ -257,3 +257,9 @@ C04 路由不增加必填请求字段：显式 image/video/reference_workflow_id
 旧 `POST /workflows/{id}/auto-bind` 返回 410 / WORKFLOW_RULES_REMOVED，提示改用 AI 识别或手动绑定。AI 未配置返回 409 / CONFIGURATION_REQUIRED；超过当前 llm_timeout 返回 504 / WORKFLOW_AI_TIMEOUT（details.timeout_seconds 为本次等待上限）；超过上下文限制返回 422 / WORKFLOW_TOO_LARGE_FOR_AI；非法模型输出沿用一次纠正机会，仍非法返回 LLM_INVALID_OUTPUT。没有规则回退，取消识别不写数据。
 
 AI 建议经用户确认后，通过普通 import/PATCH 保存；依赖检查仍为 `/workflows/{id}/validate`，试跑前继续验证。绑定完成、依赖满足和试跑成功是独立状态，导入返回不代表工作流可运行。
+
+## C52 工作流原生声音声明
+
+WorkflowImport / WorkflowPatch 的 `capabilities.audio_prompt_format` 接受 `none`（默认）或 `minimax_h3`，图像 workflow 不可启用后者。保留原字段即可通过现有 PATCH 更新，修改计入配置版本；不依据节点名自动识别，也不修改已有 Episode。H3 必须自行具备音频解码及保存链路。
+
+新 Shot Agent 输出仍保存为 `ShotPrompts.video_prompt`；`narration_text` 是展示副本。默认/高级参数优先级、预览编辑 API 与素材输出协议不变，无强制数据迁移。

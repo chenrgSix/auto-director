@@ -52,6 +52,7 @@ class Binding(BaseModel):
 
 class Capabilities(BaseModel):
     model_config = ConfigDict(extra="forbid")
+    audio_prompt_format: Literal["none", "minimax_h3"] = "none"
     supports_start_frame: bool = True
     supports_end_frame: bool = True
     supports_video_reference: bool = False

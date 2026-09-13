@@ -11,6 +11,7 @@ from pydantic import (
     model_validator,
 )
 
+from app.agents.audio import preserve_audio
 from app.agents.schemas import StrictModel
 from app.agents.timing import TIMING_HEADER, read_timing
 from app.core.errors import AppError
@@ -41,7 +42,9 @@ class PromptOptimization(StrictModel):
         return self
 
 
-def optimization_schema(editable: list[str], *, duration=None, timed_video=False):
+def optimization_schema(
+    editable: list[str], *, duration=None, timed_video=False, original_video=None
+):
     @field_validator("changes")
     @classmethod
     def validate(cls, changes):
@@ -49,6 +52,8 @@ def optimization_schema(editable: list[str], *, duration=None, timed_video=False
             raise ValueError("不能改写已锁定或当前工作流不使用的提示词")
         if "video_prompt" in changes and duration is not None:
             validate_optimized_timing(changes["video_prompt"].prompt, duration, timed_video)
+        if "video_prompt" in changes and original_video is not None:
+            preserve_audio(original_video, changes["video_prompt"].prompt)
         return changes
 
     return create_model(
@@ -80,6 +85,7 @@ async def optimize_prompts(agents, context: dict, paths: list, editable: list[st
         editable,
         duration=context["fixed_duration_seconds"],
         timed_video=TIMING_HEADER in context["effective_prompts"]["video_prompt"],
+        original_video=context["effective_prompts"]["video_prompt"],
     )
     result = await agents.generate_json(
         "Act as a visual prompt repair specialist. Observe the supplied actual images first. "
@@ -101,7 +107,9 @@ async def optimize_prompts(agents, context: dict, paths: list, editable: list[st
         "without gaps or overlaps, max two decimal places. Never silently remove the timeline. "
         "Never remove a required story beat to obtain a better QA score. If the story needs a "
         "different duration, changed action, different workflow or locked input, use manual and "
-        "explain the limitation. Do not change narration, story, settings or dynamic AI parameters. "
+        "explain the limitation. Preserve the entire Speech performance paragraph and "
+        "overall_soundscape/non_diegetic_music sections verbatim when present. These are audio "
+        "instructions, not visible evidence. Do not change narration, story, settings or dynamic AI parameters. "
         "Only use editable_fields; include each changed field's complete replacement prompt and "
         "a specific reason. Do not return unchanged prompts. Summary, reasons and limitations "
         "must be in Chinese, and acknowledge that sampled evidence has limits.",

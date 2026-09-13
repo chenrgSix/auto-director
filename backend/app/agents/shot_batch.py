@@ -5,6 +5,7 @@ from typing import Literal
 
 from pydantic import Field, create_model
 
+from app.agents.audio import H3_INSTRUCTION, audio_output, uses_h3_audio
 from app.agents.parameters import constrained_output
 from app.agents.schemas import ShotPlan, ShotPrompts, StrictModel
 from app.agents.timing import timed_output
@@ -26,7 +27,7 @@ class ShotPromptBatch(StrictModel):
 def prompt_batch_schema(shots, specifications):
     entries = []
     for index, shot in enumerate(shots):
-        prompts = timed_output(constrained_output(ShotPrompts, specifications), shot["duration"])
+        prompts = shot_output(specifications, shot["duration"])
         entries.append(
             create_model(
                 f"PromptBatchItem{index}",
@@ -73,7 +74,7 @@ def select_prompt_batch(bible, pending, continuity, specifications, idea, maximu
         size = (
             len(json.dumps(context, ensure_ascii=False))
             + len(json.dumps(prompt_batch_schema(candidate, specifications).model_json_schema()))
-            + len(SHOT_INSTRUCTION)
+            + len(shot_instruction(specifications))
             + 1500
         )
         if selected and (
@@ -83,6 +84,16 @@ def select_prompt_batch(bible, pending, continuity, specifications, idea, maximu
             break
         selected = candidate
     return selected
+
+
+def shot_output(specifications, duration):
+    return timed_output(
+        audio_output(constrained_output(ShotPrompts, specifications), specifications), duration
+    )
+
+
+def shot_instruction(specifications):
+    return SHOT_INSTRUCTION + (" " + H3_INSTRUCTION if uses_h3_audio(specifications) else "")
 
 
 SHOT_INSTRUCTION = (
@@ -118,9 +129,10 @@ SHOT_INSTRUCTION = (
     "ai_parameters[workflow_id][parameter_key] for the listed parameters only. Inputs with "
     "source=stage_prompt are supplied automatically from start_frame_prompt, end_frame_prompt "
     "or video_prompt according to the render stage; never put these prompt-role inputs in "
-    "ai_parameters. Respect each workflow's media_type and capability. Visual prompts must "
+    "ai_parameters. Respect each workflow's media_type and capability. Image prompts must "
     "describe visible subjects, scene and motion, never spoken narration or a narrator's voice. "
-    "If the idea requests narration, put the spoken script only in narration_text, in the "
+    "For video without explicit native audio support, if the idea requests narration, "
+    "put the spoken script only in narration_text, in the "
     "user's language, short enough for this shot's duration. A silent shot may have empty "
     "narration_text but must still have complete visual prompts. continuity_state describes the "
     "expected subject position, direction, environment and time at the end. "
