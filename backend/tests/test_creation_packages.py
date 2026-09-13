@@ -104,6 +104,16 @@ def test_versions_roundtrip_cas_and_idempotent_writes(system):
     )
     assert client.get(f"{BASE}/{project}/export?revision=1").json() == exported
     assert client.get(f"{BASE}/{project}/export").json()["title"] == "第二版"
+    downloaded = client.get(f"{BASE}/{project}/export?revision=1&download=true")
+    assert downloaded.json() == exported
+    assert downloaded.headers["content-disposition"] == (
+        f'attachment; filename="creation-{project}-v1.json"'
+    )
+    context = client.get(f"{BASE}/{project}/context?download=true")
+    assert context.json()["revision"] == 2 and context.json()["constraints_hash"]
+    assert context.headers["content-disposition"] == (
+        f'attachment; filename="creation-context-{project}-v2.json"'
+    )
     assert len(app.state.store.list("creation_revision", project)) == 2
     assert not comfy.calls and not app.state.store.list("episode")
 

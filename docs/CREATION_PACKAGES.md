@@ -34,7 +34,7 @@ MCP 不负责唤醒 Codex；首版提供用户会话的连接说明。自动启�
 - 客户端断开时服务、版本与受理任务保持，显式取消可用。
 - 完整 make check；真实 Codex 创作质量、真实模型渲染、CI 和生产验收单独记录。
 
-状态：后端、MCP 与网页已实现；验收结果见 [C53 验证记录](ACCEPTANCE.md#c53-分阶段验证)。
+状态：第一期本地交付完成，后端、MCP、网页与隔离验收通过；验证范围与限制见 [C53 验证记录](ACCEPTANCE.md#c53-分阶段验证)。
 
 ## 创作包与 HTTP 契约
 
@@ -57,6 +57,8 @@ MCP 不负责唤醒 Codex；首版提供用户会话的连接说明。自动启�
 | `POST /projects/{id}/productions/{episode_id}/cancel` | 显式取消此项目的制作 |
 
 request_id 必须为 UUID；同一逻辑请求重试保持 ID 和内容，ID 对应不同内容返回 IDEMPOTENCY_CONFLICT。版本与提交收据在一个 SQLite 事务保存；确认收据与 QUEUED 状态原子保存，启动恢复既有队列。提交只准备预览，不请求 ComfyUI；制作时再执行实时依赖和媒体检查。外部创作拒绝内部“重新生成提示词”，需提交包新版本。
+
+`context` 与 `export` 支持 `download=true`，返回 UTF-8 JSON 附件及带实际版本号的文件名；省略时保持 JSON API 响应。网页的已保存包、历史版本和上下文使用直接附件链接，编辑中的草稿仍从本页导出并可复制 JSON。
 
 ## 网页工作台
 

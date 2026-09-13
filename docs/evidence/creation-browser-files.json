@@ -1,0 +1,16 @@
+{
+  "environment": "isolated 8011; browser import and download, official HTTP contract checks",
+  "imported_project_id": "21c7c251-d7cd-5c53-a94c-c16a92465a12",
+  "downloaded_draft_reimport_matches_revision": true,
+  "downloaded_draft_sha256": "fa46324acf79b0018c88b5c190518cde3cfc346e69a87638ec9799483454d97c",
+  "browser_context_download_event": true,
+  "context_file_matches_response_bytes": true,
+  "context_file_sha256": "37a7b94b24dd25dcaf72d0140bd85240e7939baf36ff0728b0d48ad6f9c66fbb",
+  "revision_download_status": 200,
+  "revision_download_header": "attachment; filename=\"creation-21c7c251-d7cd-5c53-a94c-c16a92465a12-v1.json\"",
+  "revision_download_matches_imported_file": true,
+  "context_revision": 1,
+  "browser_revision_download_event": true,
+  "revision_file_matches_response_bytes": true,
+  "revision_file_sha256": "adbfde9594f25b2fd37da20ad6e595fb28994757f70139f4b0895dc2963f8a78"
+}

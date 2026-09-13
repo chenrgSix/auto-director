@@ -420,7 +420,10 @@ summary { cursor: pointer; font-size: 12px; color: #c0c8ac; line-height: 1.8; }
 .creation-json button { margin-right: 10px; }
 .creation-history-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 14px 0; border-bottom: 1px solid var(--border); font-size: 13px; overflow-wrap: anywhere; }
 .creation-history-row small { display: block; color: var(--muted); font-size: 11px; margin-top: 6px; }
-.creation-history-row button { flex-shrink: 0; }
+.creation-history-row button, .creation-history-row .creation-download { flex-shrink: 0; }
+.creation-download { color: #dadbd5; background: #232621; border: 1px solid #383d34; padding: 10px 15px; border-radius: 7px; display: inline-flex; align-items: center; justify-content: center; gap: 7px; font-size: 12px; }
+.creation-download:hover { background: #30362c; border-color: #656d5a; }
+.creation-download[aria-disabled="true"] { opacity: .4; pointer-events: none; }
 .creation-entry { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-bottom: 24px; }
 .creation-entry span { font-size: 12px; }
 .creation-provenance { line-height: 1.9; }

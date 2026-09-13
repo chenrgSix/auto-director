@@ -1,4 +1,7 @@
+import json
+
 from fastapi import APIRouter, Query, Request
+from fastapi.responses import Response
 
 from app.creation.schemas import (
     ConfirmProduction,
@@ -9,6 +12,14 @@ from app.creation.schemas import (
 )
 
 router = APIRouter(prefix="/api/v1/creation", tags=["creation"])
+
+
+def attachment(value, filename):
+    return Response(
+        json.dumps(value, ensure_ascii=False, indent=2),
+        media_type="application/json",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 @router.get("/schema")
@@ -38,13 +49,24 @@ def detail(request: Request, id: str):
 
 
 @router.get("/projects/{id}/context")
-def context(request: Request, id: str):
-    return request.app.state.creation.context(id)
+def context(request: Request, id: str, download: bool = False):
+    value = request.app.state.creation.context(id)
+    if download:
+        return attachment(value, f"creation-context-{id}-v{value['revision']}.json")
+    return value
 
 
 @router.get("/projects/{id}/export")
-def export(request: Request, id: str, revision: int | None = Query(default=None, ge=1)):
-    return request.app.state.creation.revision(id, revision)["document"]
+def export(
+    request: Request,
+    id: str,
+    revision: int | None = Query(default=None, ge=1),
+    download: bool = False,
+):
+    saved = request.app.state.creation.revision(id, revision)
+    if download:
+        return attachment(saved["document"], f"creation-{id}-v{saved['revision']}.json")
+    return saved["document"]
 
 
 @router.post("/projects/{id}/revisions")

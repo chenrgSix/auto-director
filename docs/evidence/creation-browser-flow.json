@@ -1,0 +1,15 @@
+{
+  "environment": "isolated 8011; browser buttons, FakeComfy and real FFmpeg",
+  "episode_id": "1e066ec4-1853-5dba-9358-445d1856060f",
+  "source": {
+    "project_id": "c215bf4a-4c5b-536f-8d1a-f3c2bcb98d6c",
+    "revision": 3,
+    "content_hash": "7dce5fd77388fccc44ed4e9ca877324a02b2fe8b4a0827a2c25d61779826b546",
+    "constraints_hash": "bf90041f290fc9b5a9a2850e224d85fa33b06a94a4e01e9466cc1d0e35a07130"
+  },
+  "status": "COMPLETED",
+  "duration": 5.0,
+  "llm_calls": 0,
+  "confirmation_receipts": 1,
+  "preview_edit_did_not_change_creation_revision": true
+}
