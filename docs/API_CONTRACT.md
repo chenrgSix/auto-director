@@ -10,7 +10,7 @@
 - `GET .../continuity-review/frames/{index}?key=...`：按来源校验的 JPEG 采样；旧 key 返回 409，不把新素材显示成旧复核依据。
 - `POST .../continuity-review`：`{request_id, expected_version, review_key, verdict: passed|needs_changes, notes}`。必须记录观察依据；版本、前镜、当前媒体或目标变化返回 `REVIEW_STALE`。重复相同请求不推进版本，UUID 内容冲突返回 409；不生成或更改素材。
 
-镜头 `continuity_review` / `continuity_review_history` 保留外部视觉结论；查询的 `continuity_review_status` 为 passed/needs_changes/stale，未记录为 pending。结论绑定当前镜头与前镜的素材/目标，重排、重跑或改目标后旧结论失效。此结论不改写模型 QA 历史，视频采样不能证明音频或完整运动质量。
+镜头 `continuity_review` / `continuity_review_history` 保留外部视觉结论；查询的 `continuity_review_status` 为 passed/needs_changes/stale，未记录为 pending。结论绑定当前镜头与前镜的素材/目标，重排、重跑或改目标后旧结论失效。C59 在原边界及目标图后追加本镜 35%/50%/75% 实际视频采样，摘要契约升级为 2；旧复核请求需重新读取后再记录，不删除历史或重跑素材。此结论不改写模型 QA 历史，视频采样不能证明音频或完整运动质量。
 
 新增 MCP：`inspect_shot_continuity` 返回相同来源和实际图像；`record_shot_continuity_review` 复用写入契约；`rerun_production_shots` 要求项目归属、显式 shot_ids、scope=video|keyframes、expected_version、request_id、confirm=true。复用已有局部重跑/连续链失效/UNKNOWN 保护；重复 UUID 不重复排队。剧情和参考契约调整仍保存创作包新版本。
 

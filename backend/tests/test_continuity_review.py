@@ -1,6 +1,10 @@
 from copy import deepcopy
+from io import BytesIO
 from uuid import uuid4
 
+from PIL import Image
+
+from app.media.service import run_process
 from tests.test_api_pipeline import wait_episode
 from tests.test_creation_mcp import call, connect
 from tests.test_creation_packages import BASE, create, submit
@@ -82,7 +86,7 @@ def test_mcp_labeled_review_ownership_and_idempotent_local_rerun(system):
                 {"project_id": project, "episode_id": eid, "shot_id": sid},
             )
             assert not inspected.isError
-            assert len([item for item in inspected.content if item.type == "image"]) == 7
+            assert len([item for item in inspected.content if item.type == "image"]) == 10
             context = inspected.structuredContent
             denied = await session.call_tool(
                 "inspect_shot_continuity",
@@ -131,3 +135,51 @@ def test_mcp_labeled_review_ownership_and_idempotent_local_rerun(system):
     assert done["shots"][1]["video_asset_id"] != final["shots"][1]["video_asset_id"]
     assert done["shots"][1]["continuity_review_status"]["status"] == "stale"
     assert app.state.assets.path(final["final_video_asset_id"]).is_file()
+
+
+def test_interior_review_exposes_a_cut_when_both_endpoints_match(system):
+    client, app, _ = system
+    _, final = complete_creation(system)
+    eid, sid = final["id"], final["shots"][0]["id"]
+
+    async def make_clip():
+        path = app.state.assets.allocate(eid, ".mp4")
+        await run_process(
+            "ffmpeg",
+            "-v",
+            "error",
+            "-y",
+            "-f",
+            "lavfi",
+            "-i",
+            "color=c=red:s=64x64:r=24:d=3",
+            "-vf",
+            "drawbox=color=blue:t=fill:enable='between(t,1,2)'",
+            "-c:v",
+            "libx264",
+            "-pix_fmt",
+            "yuv420p",
+            str(path),
+        )
+        return await app.state.assets.register(path, eid, "SHOT_VIDEO", sid)
+
+    asset = client.portal.call(make_clip)
+
+    def replace(episode):
+        episode["shots"][0]["video_asset_id"] = asset["id"]
+
+    app.state.store.update("episode", eid, replace)
+    context = client.get(f"/api/v1/episodes/{eid}/shots/{sid}/continuity-review").json()
+    observed = {}
+    for frame in context["frames"]:
+        if frame["fraction"] in (0, 0.5, 1):
+            response = client.get(frame["url"])
+            assert response.status_code == 200
+            observed[frame["fraction"]] = (
+                Image.open(BytesIO(response.content)).convert("RGB").getpixel((20, 20))
+            )
+    for endpoint in (0, 1):
+        red, _, blue = observed[endpoint]
+        assert red > 200 and blue < 30
+    red, _, blue = observed[0.5]
+    assert blue > 200 and red < 30

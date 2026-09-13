@@ -12,7 +12,7 @@ type ReviewContext = {
 export function ContinuityReview({ episode, shot, refresh }: { episode: Episode; shot: Shot; refresh: () => void }) {
   const [open, setOpen] = useState(false);
   return <details className="panel details-panel" onToggle={event => setOpen(event.currentTarget.open)}>
-    <summary>镜头衔接复核 · {({ passed: '已复核', needs_changes: '需要修改', stale: '素材已变化，需重看' } as Record<string, string>)[shot.continuity_review_status?.status ?? ''] ?? '待复核'}</summary>
+    <summary>镜头衔接复核 · {({ passed: '已复核', needs_changes: '需要修改', stale: '复核依据已变化，需重看' } as Record<string, string>)[shot.continuity_review_status?.status ?? ''] ?? '待复核'}</summary>
     {open && <ReviewForm key={`${shot.id}:${shot.video_asset_id}:${shot.start_frame_asset_id}`} episode={episode} shot={shot} refresh={refresh} />}
   </details>;
 }
@@ -36,7 +36,7 @@ function ReviewForm({ episode, shot, refresh }: { episode: Episode; shot: Shot; 
     finally { setBusy(false); }
   }
   return <div className="continuity-review">
-    <p>对照前镜结尾与本镜开头，检查人物站位、视线方向、道具归属和动作是否接上。切换景别可以改变构图，人物与道具状态仍应合理。</p>
+    <p>对照前镜结尾、本镜开头与中段，检查站位、视线、道具和动作衔接，以及视频中途是否出现意外切镜。播放原视频可进一步检查完整运动和声音。</p>
     {(resource.error || error) && <ErrorNotice>{error ?? resource.error}</ErrorNotice>}
     {context && <><div className="continuity-frames">{context.frames.map(frame => <figure key={frame.url}><img src={frame.url} alt={frame.label} loading="lazy" /><figcaption>{frame.label}</figcaption></figure>)}</div>
       <small className="muted">{context.limitations}</small>

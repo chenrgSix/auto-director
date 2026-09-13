@@ -59,7 +59,7 @@ def review_key(episode, shot, previous):
         }
 
     payload = {
-        "contract": 1,
+        "contract": 2,
         "episode": episode["id"],
         "shot": source(shot),
         "previous": source(previous),
@@ -101,6 +101,14 @@ def review_context(store, episode_id, shot_id):
     add("本镜实际末帧", shot.get("video_asset_id"), 1)
     add("本镜首帧目标图", shot.get("start_frame_asset_id"))
     add("本镜尾帧目标图", shot.get("end_frame_asset_id"))
+    # Endpoint agreement cannot reveal an unrelated cut inside a generated clip.
+    # Append samples to keep existing frame positions stable for callers.
+    for label, fraction in (
+        ("本镜中前段 35%", 0.35),
+        ("本镜中段 50%", 0.5),
+        ("本镜中后段 75%", 0.75),
+    ):
+        add(label, shot.get("video_asset_id"), fraction)
     key = review_key(episode, shot, previous)
     for i, frame in enumerate(frames):
         frame["url"] = (
@@ -116,7 +124,7 @@ def review_context(store, episode_id, shot_id):
         "previous_target": qa_shot_context(previous) if previous else None,
         "reference_selection": shot.get("reference_selection"),
         "frames": frames,
-        "limitations": "边界帧可核对站位、视线、景别、道具与动作终点；采样无法证明完整运动或声音质量。",
+        "limitations": "边界与中段采样可核对站位、道具、动作终点及中途切镜；采样仍可能漏掉短暂异常，完整运动和声音须播放原视频检查。",
     }
 
 

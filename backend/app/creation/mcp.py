@@ -205,7 +205,7 @@ def create_mcp(app, config):
     async def inspect_shot_continuity(
         project_id: str, episode_id: str, shot_id: str
     ) -> CallToolResult:
-        """Inspect actual adjacent clip boundaries and endpoint targets. Returns source-fenced review_key, version and labeled images."""
+        """Inspect actual adjacent boundaries, interior video samples and endpoint targets. Returns source-fenced review_key, version and labeled images; samples cannot certify full motion or sound."""
 
         async def read():
             app.state.creation.feedback(project_id, episode_id)
