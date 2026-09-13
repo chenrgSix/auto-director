@@ -4,6 +4,7 @@
 
 | 文档 | 职责 |
 | --- | --- |
+| [镜头参考与连续性](SHOT_CONTINUITY.md) | C57 角色参考、空间/动作状态、制作前检查与画面复核 |
 | [创作包与 MCP](CREATION_PACKAGES.md) | C53 外部持续创作、版本交付、MCP 和验收目标 |
 | [开发任务](DEVELOPMENT_TASKS.md) | 冻结目标、任务、状态、验收门禁与后续范围 |
 | [模块设计](MODULE_DESIGN.md) | 模块边界、数据、运行时与失败恢复 |
