@@ -1,5 +1,9 @@
 # 工作流配置指南
 
+## Ref2VA 多参考视频
+
+[`workflow_examples/h3_ref2va`](../workflow_examples/h3_ref2va/README.md) 提供原生 Ref2VA Turbo4 的单镜 API/profile 与独立两段 Motion Context 示例。项目使用单镜 profile：首帧为独立 Guide，人物/环境/道具按 Picture 顺序进入参考输入。第二至九张按需选择；Autogrow 槽位须符合实际节点的 IMAGE 类型、前缀和数量限制。两段示例用于 ComfyUI 直接验证，不作为项目单镜 profile 导入。
+
 ## 可直接使用的 codex 工作流包
 
 [`workflow_examples/codex_8gb`](../workflow_examples/codex_8gb/README.md) 提供 Z-Image 文生图、H3 图生图、H3 首帧及首尾帧视频四套原生 ComfyUI 画布、API 图和完整绑定配置。针对已安装的 INT8 / FP8 / NVFP4 模型准备，无需 AI 识别。工作流包按需导入，不随重启自动恢复；设置默认项仍由用户选择。
