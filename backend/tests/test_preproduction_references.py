@@ -147,3 +147,25 @@ def test_engine_submits_only_selected_optional_images(system):
     assert starts[1]["asset_bindings"]["reference_image_2"] == final["references"]["environment"]
     assert "UNUSED-PLACEHOLDER" not in json.dumps(starts[1]["patched_workflow"])
     assert "<Picture 2> supplies environment" in starts[1]["input_values"]["prompt"]
+
+
+def test_reference_hints_follow_asset_overrides_and_keep_explicit_prompt_exact():
+    from app.generation.continuity import ordered_reference_prompt
+
+    profile, _ = multi_profile()
+    assets = {"reference_image": "PERSON", "reference_image_2": "ROOM"}
+    references = {"character:actor": "PERSON", "environment": "ROOM"}
+    prompt = ordered_reference_prompt(
+        profile, "Target", assets, references, {"reference_image": "UPLOAD"}
+    )
+    assert "<Picture 1> supplies the supplied visual reference" in prompt
+    assert "character:actor" not in prompt
+    assert "<Picture 2> supplies environment" in prompt
+    assert (
+        ordered_reference_prompt(profile, "Exact", assets, references, {"prompt": "Exact"})
+        == "Exact"
+    )
+    end = ordered_reference_prompt(
+        profile, "Endpoint", {**assets, "reference_image": "START"}, references, {}, "START"
+    )
+    assert "this shot's start state" in end and "approved" not in end

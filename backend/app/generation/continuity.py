@@ -216,3 +216,25 @@ def reference_description(role, description):
         + " Render the following as visual qualities, never as printed text: "
         + visual_prose(description)
     )
+
+
+def ordered_reference_prompt(profile, prompt, assets, references, overrides, start_frame=None):
+    """Describe the actual ordered inputs after user ownership, never an earlier selection."""
+    if not profile.get("capabilities", {}).get("supports_multi_reference") or "prompt" in overrides:
+        return prompt
+    selected = {**assets, **overrides}
+    names = {asset: role for role, asset in references.items()}
+    hints = []
+    for index, role in enumerate(reference_slots(profile)):
+        asset = selected.get(role)
+        if not asset:
+            continue
+        name = (
+            "this shot's start state"
+            if asset == start_frame
+            else names.get(asset, "the supplied visual reference")
+        )
+        hints.append(
+            f"<Picture {index + 1}> supplies {name}; use the requested traits while following the target composition."
+        )
+    return prompt + ("\n\n" + "\n".join(hints) if hints else "")

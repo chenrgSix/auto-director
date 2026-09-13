@@ -15,7 +15,12 @@ from app.core.limits import MAX_EPISODE_SHOTS
 from app.creation.provider import ExternalCreationProvider
 from app.db.store import Store, now, uid
 from app.generation.async_reviews import AdvisoryReviews, visual_qa_enabled
-from app.generation.continuity import continuity_report, reference_description, require_continuity
+from app.generation.continuity import (
+    continuity_report,
+    ordered_reference_prompt,
+    reference_description,
+    require_continuity,
+)
 from app.generation.continuity_review import current_review
 from app.generation.engine import RenderEngine
 from app.generation.parameters import (
@@ -984,6 +989,20 @@ class GenerationService:
             self.check_cancel(episode["id"])
             return results[0]
         parameters = parameter_overrides(episode, profile)
+        if type in {"SHOT_START_FRAME", "SHOT_END_FRAME"}:
+            values = {
+                **values,
+                "prompt": ordered_reference_prompt(
+                    profile,
+                    values["prompt"],
+                    assets,
+                    episode["references"],
+                    role_overrides(profile, parameters),
+                    self.shot(episode["id"], shot_id).get("start_frame_asset_id")
+                    if type == "SHOT_END_FRAME"
+                    else None,
+                ),
+            }
         output = (
             self.shot(episode["id"], shot_id).get("prompts") if shot_id else episode.get("bible")
         ) or {}
@@ -1409,13 +1428,6 @@ class GenerationService:
         video_inputs = ContinuityManager.video_reference(previous, video)
         if previous and shot["transition_from_previous"] == "CONTINUE_VIDEO" and not video_inputs:
             self.warn(id, "视频工作流不支持 reference_video，CONTINUE_VIDEO 已降级为帧连续。")
-        picture_hints = ""
-        if image.get("capabilities", {}).get("supports_multi_reference"):
-            names = {asset: role for role, asset in episode["references"].items()}
-            picture_hints = "\n" + "\n".join(
-                f"<Picture {i + 1}> supplies {names.get(asset, 'the previous shot state')}; use only the requested visual traits, not its composition."
-                for i, asset in enumerate(ref_inputs.values())
-            )
         base = {
             **budget,
             "seed": (episode["seed"] + shot["index"] * 100 + shot.get("seed_offset", 0))
@@ -1493,7 +1505,7 @@ class GenerationService:
                                     "prompt": corrected_prompt(
                                         anchored_prompt(
                                             episode["bible"],
-                                            prompts["start_frame_prompt"] + picture_hints,
+                                            prompts["start_frame_prompt"],
                                             continuity,
                                             stage="start_frame",
                                             visual_continuity=prompts.get("visual_continuity"),
@@ -1555,13 +1567,7 @@ class GenerationService:
                             "prompt": corrected_prompt(
                                 anchored_prompt(
                                     episode["bible"],
-                                    prompts["end_frame_prompt"]
-                                    + (
-                                        "\n<Picture 1> is the approved shot start; edit it toward the requested end. "
-                                        + "\n".join(picture_hints.splitlines()[2:])
-                                        if picture_hints
-                                        else ""
-                                    ),
+                                    prompts["end_frame_prompt"],
                                     {},
                                     stage="end_frame",
                                     visual_continuity=prompts.get("visual_continuity"),
