@@ -9,6 +9,7 @@ from app.agents.schemas import ShotPlan
 from app.agents.shot_batch import select_prompt_batch
 from app.core.errors import AppError
 from app.db.store import now, uid
+from app.generation.continuity import planning_state
 from app.generation.parameters import ai_parameters
 
 
@@ -147,6 +148,7 @@ async def prepare_prompts(service, episode_id, agents, profiles):
                 continuity = shot["prompts"].get("continuity_state", {})
                 index += 1
                 continue
+            continuity = {**continuity, "scene_states": planning_state(episode["shots"][:index])}
             batch = select_prompt_batch(
                 episode["bible"],
                 episode["shots"][index:],
@@ -191,6 +193,10 @@ async def prepare_prompts(service, episode_id, agents, profiles):
                     current["shots"][index : index + len(batch)], prompts, strict=True
                 ):
                     shot["prompts"] = result.model_dump(mode="json")
+                    if "pending_static_end_frame" in shot:
+                        shot["prompts"]["allow_static_end_frame"] = shot.pop(
+                            "pending_static_end_frame"
+                        )
                 record(current, "completed")
 
             episode = store.update("episode", episode_id, commit)

@@ -8,6 +8,7 @@ from app.agents.schemas import ShotPlan
 from app.agents.timing import read_timing, retime_prompt
 from app.core.errors import AppError
 from app.core.limits import MIN_SHOT_SECONDS
+from app.generation.continuity import continuity_report
 from app.generation.parameters import (
     duration_seconds,
     fit_budget_dimensions,
@@ -151,6 +152,7 @@ def validate_timing(episode, video):
 
 
 def prepare_review(episode, image, video, reference):
+    episode["continuity_report"] = continuity_report(episode, image)
     for shot in episode["shots"]:
         shot["preview_prompt_view"] = prompt_view(episode, shot, image, video)
     episode["preview"] = {
@@ -207,11 +209,17 @@ def apply_edits(episode, request, image, video):
             if item.allow_static_end_frame != shot["prompts"].get("allow_static_end_frame", False):
                 edited.add("allow_static_end_frame")
             shot["prompts"]["allow_static_end_frame"] = item.allow_static_end_frame
+        if "visual_continuity" in item.model_fields_set:
+            shot["prompts"]["visual_continuity"] = (
+                item.visual_continuity.model_dump(mode="json") if item.visual_continuity else None
+            )
+            edited.add("visual_continuity")
         shot.update(title=item.title, duration=item.duration, preview_edited_fields=sorted(edited))
         archive_duplicate_prompts(shot, image, video)
         shot["preview_prompt_view"] = prompt_view(episode, shot, image, video)
     validate_timing(episode, video)
     validate_review_prompts(episode, image, video)
+    episode["continuity_report"] = continuity_report(episode, image)
     episode["plan"]["shots"] = [
         {key: deepcopy(shot[key]) for key in ShotPlan.model_fields} for shot in episode["shots"]
     ]

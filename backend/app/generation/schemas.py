@@ -2,7 +2,7 @@ from typing import Any, Literal
 
 from pydantic import Field, model_validator
 
-from app.agents.schemas import StrictModel
+from app.agents.schemas import StrictModel, VisualContinuity
 from app.core.limits import (
     LEGACY_MAX_SHOTS,
     MAX_DIMENSION,
@@ -100,6 +100,7 @@ class EpisodeRerun(StrictModel):
 
 
 class PreviewShotUpdate(StrictModel):
+    visual_continuity: VisualContinuity | None = None
     id: str = Field(min_length=1)
     title: str = Field(min_length=1, max_length=200)
     duration: float = Field(ge=1, le=MAX_SHOT_SECONDS)

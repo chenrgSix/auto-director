@@ -90,5 +90,10 @@ codex mcp add autodirector --url http://127.0.0.1:8000/mcp/
 | `confirm_production` | 携带当前 expected_version、UUID request_id、confirm=true 受理制作 |
 | `get_production_feedback` / `cancel_production` | 查询镜头/作业/素材 / 显式取消制作 |
 | `inspect_production_media` | 返回项目内图片或视频的五点抽帧，供 Codex 实际查看 |
+| `inspect_shot_continuity` | 对照前镜尾部、本镜开头与目标图，返回素材指纹和实际图像 |
+| `record_shot_continuity_review` | 保存观察依据及通过/需修改结论，拒绝过期素材 |
+| `rerun_production_shots` | 用户授权后按显式镜头范围局部重跑，保留旧素材与幂等回执 |
+
+C57 新创作需声明每镜 `visual_continuity`，先确定出场角色和参考顺序，再编写符合相同空间/动作状态的提示词。单参考只使用第一项，多角色或道具不能默认套用 Bible 第一个角色。读取上下文中的最新 schema/能力限制，检查跨反打状态；规则和实际画面分别复核。详见 [镜头参考与连续性](SHOT_CONTINUITY.md)。
 
 读写工具调用同一 CreationService；工具失败返回 `isError` 与结构化错误，冲突后先读取并合并。协议层采用官方 Python SDK v1 维护线、无状态 HTTP；业务版本和幂等收据存于 SQLite，既有 GenerationService 持有后台任务。断开或重连 MCP 不持有、不释放 Codex 会话锁，也不取消制作。视频抽帧不能证明完整运动、对白或口型质量；声音仍需实际播放复核。

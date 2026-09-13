@@ -84,6 +84,18 @@ class FakeProvider:
             data = {"shots": items}
         elif issubclass(schema, ShotPrompts):
             data = {
+                "visual_continuity": {
+                    "scene_id": "fixture_scene",
+                    "visible_character_ids": [
+                        c["id"] for c in context.get("bible", {}).get("characters", [])
+                    ],
+                    "reference_roles": [f"character:{context['bible']['characters'][0]['id']}"]
+                    if context.get("bible", {}).get("characters")
+                    else ["environment"],
+                    "framing": "wide",
+                    "state_in": {"direction": "right"},
+                    "state_out": {"direction": "right"},
+                },
                 "image_prompt": "A lion",
                 "start_frame_prompt": "Lion starts walking",
                 "end_frame_prompt": "Lion has walked forward",

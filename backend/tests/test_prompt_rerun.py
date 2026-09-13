@@ -3,6 +3,7 @@ from copy import deepcopy
 import pytest
 
 from app.agents.schemas import ShotPrompts
+from app.agents.shot_batch import ShotPromptBatch
 from app.core.errors import AppError
 from tests.fakes import FakeProvider
 from tests.test_ai_parameters import configure_ai_parameters
@@ -16,6 +17,8 @@ class Rewriter(FakeProvider):
         self.contexts = []
 
     async def generate_json(self, system, context, schema, *, images=None):
+        if issubclass(schema, ShotPromptBatch):
+            return await super().generate_json(system, context, schema, images=images)
         assert issubclass(schema, ShotPrompts), "Rerun must not regenerate the plan or Bible"
         self.contexts.append(deepcopy(context))
         result = await super().generate_json(system, context, schema, images=images)

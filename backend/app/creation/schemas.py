@@ -5,7 +5,7 @@ from pydantic import Field, field_validator
 
 from app.agents.schemas import ShotPlan, ShotPrompts, StrictModel, VisualBible
 from app.core.limits import MAX_EPISODE_SECONDS, MAX_EPISODE_SHOTS, MAX_SHOT_SECONDS
-from app.generation.schemas import EpisodeCreate
+from app.generation.schemas import EpisodeCreate, EpisodeRerun
 
 
 class CreationBrief(StrictModel):
@@ -74,3 +74,10 @@ class ConfirmProduction(StrictModel):
     request_id: UUID
     expected_version: int = Field(ge=1)
     confirm: Literal[True]
+
+
+class RerunProduction(EpisodeRerun):
+    request_id: UUID
+    confirm: Literal[True]
+    scope: Literal["video", "keyframes"]
+    shot_ids: list[str] = Field(min_length=1, max_length=MAX_EPISODE_SHOTS)

@@ -5,7 +5,7 @@ from fractions import Fraction
 
 from pydantic import Field, create_model
 
-from app.agents.audio import VISUAL, audio_output
+from app.agents.audio import PERFORMANCE, VISUAL, audio_output
 from app.agents.parameters import constrained_output
 from app.agents.provider import LLMProvider
 from app.agents.schemas import (
@@ -497,6 +497,7 @@ def qa_shot_context(shot: dict) -> dict:
             "camera_motion",
             "motion_strength",
             "allow_static_end_frame",
+            "visual_continuity",
         )
         if key in prompts
     }
@@ -505,7 +506,26 @@ def qa_shot_context(shot: dict) -> dict:
     return target
 
 
-def anchored_prompt(bible: dict, prompt: str, continuity: dict, *, stage: str = "image") -> str:
+def anchored_prompt(
+    bible: dict, prompt: str, continuity: dict, *, stage: str = "image", visual_continuity=None
+) -> str:
+    if visual_continuity:
+        fields = ["framing", "visible_character_ids"]
+        fields += (
+            ["state_out"]
+            if stage == "end_frame"
+            else ["state_in", "state_out"]
+            if stage == "video"
+            else ["state_in"]
+        )
+        constraint = "\n\nVisible shot constraints: " + json.dumps(
+            {key: visual_continuity[key] for key in fields}, ensure_ascii=False
+        )
+        if stage == "video" and prompt.startswith(VISUAL):
+            # Keep native speech/music and their exact text untouched.
+            prompt = prompt.replace(PERFORMANCE, constraint + "\n\n" + PERFORMANCE, 1)
+        else:
+            prompt += constraint
     if stage == "video" and prompt.startswith(VISUAL):
         return prompt  # Keep the native three-field prompt directly after the frame header.
     # The Shot Agent already selects Bible identity, lifecycle and style for the

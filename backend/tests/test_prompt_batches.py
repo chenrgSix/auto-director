@@ -209,7 +209,8 @@ async def test_long_preview_batches_preserve_story_and_sequential_checkpoints(
     assert state["status"] == "completed" and len(state["recent_batches"]) <= 30
     for i, context in enumerate(provider.requests):
         previous = {} if i == 0 else {"lion_a": f"end of shot-{i * maximum - 1}"}
-        assert context["continuity"] == previous
+        assert {k: v for k, v in context["continuity"].items() if k != "scene_states"} == previous
+        assert "scene_states" in context["continuity"]
     for key in ("bible", "plan", "references", "final_video_asset_id"):
         assert episode[key] == before[key]
     assert [s["duration"] for s in episode["shots"]] == durations
@@ -230,7 +231,9 @@ async def test_saved_islands_split_batches_and_supply_their_continuity(tmp_path)
     provider = TrackingProvider()
     await prepare_prompts(service, id, Directors(provider), ())
     assert [len(c.get("shots", [c.get("shot")])) for c in provider.requests] == [1, 3, 3]
-    assert [c["continuity"] for c in provider.requests] == [
+    assert [
+        {k: v for k, v in c["continuity"].items() if k != "scene_states"} for c in provider.requests
+    ] == [
         {},
         {"lion_a": "saved-1"},
         {"lion_a": "saved-5"},
@@ -256,7 +259,9 @@ async def test_failure_keeps_completed_batch_and_resume_requests_only_missing_sh
     resumed = TrackingProvider()
     await prepare_prompts(service, id, Directors(resumed), ())
     assert resumed.request_count == 2
-    assert resumed.requests[0]["continuity"] == {"lion_a": "end of shot-2"}
+    assert {k: v for k, v in resumed.requests[0]["continuity"].items() if k != "scene_states"} == {
+        "lion_a": "end of shot-2"
+    }
     assert service.store.get("episode", id)["shots"][:3] == partial["shots"][:3]
 
 

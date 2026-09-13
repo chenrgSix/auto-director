@@ -1,6 +1,7 @@
 """Codex calls AutoDirector; this server never loads or resumes a Codex session."""
 
 import asyncio
+import base64
 import inspect
 import json
 import logging
@@ -17,8 +18,15 @@ from app.core.errors import AppError
 from app.creation.schemas import (
     ConfirmProduction,
     CreateProject,
+    RerunProduction,
     SaveRevision,
     SubmitRevision,
+)
+from app.generation.continuity_review import (
+    ContinuityReview,
+    frame_bytes,
+    review_context,
+    save_review,
 )
 from app.media.service import extract_frame
 
@@ -31,6 +39,8 @@ INSTRUCTIONS = (
     "响应丢失时使用完全相同的 ID 和参数重试，冲突时读取最新版本并合并。"
     "任务受理后独立运行，关闭会话不会取消；查询反馈或显式取消。"
     "不需要 API Key，不要修改 Codex 会话库或配置，不要将本地校验宣称为画质验收。"
+    "每镜声明 visual_continuity 并按主体选择参考；制作后调用 inspect_shot_continuity 对照真实边界帧，"
+    "记录观察依据。用户授权局部重跑时调用 rerun_production_shots；修改剧情/参考契约先保存新包版本。"
 )
 READ = ToolAnnotations(
     readOnlyHint=True, destructiveHint=False, idempotentHint=True, openWorldHint=False
@@ -186,5 +196,56 @@ def create_mcp(app, config):
             return CallToolResult(content=content)
 
         return await invoke(read)
+
+    @server.tool(annotations=READ)
+    async def inspect_shot_continuity(
+        project_id: str, episode_id: str, shot_id: str
+    ) -> CallToolResult:
+        """Inspect actual adjacent clip boundaries and endpoint targets. Returns source-fenced review_key, version and labeled images."""
+
+        async def read():
+            app.state.creation.feedback(project_id, episode_id)
+            context = review_context(app.state.store, episode_id, shot_id)
+            content = [TextContent(type="text", text=json.dumps(context, ensure_ascii=False))]
+            for frame in context["frames"]:
+                content.append(TextContent(type="text", text=frame["label"]))
+                content.append(
+                    ImageContent(
+                        type="image",
+                        mimeType="image/jpeg",
+                        data=base64.b64encode(await frame_bytes(app.state.assets, frame)).decode(),
+                    )
+                )
+            return CallToolResult(content=content, structuredContent=context)
+
+        return await invoke(read)
+
+    @server.tool(annotations=WRITE)
+    async def record_shot_continuity_review(
+        project_id: str, episode_id: str, shot_id: str, request: ContinuityReview
+    ) -> CallToolResult:
+        """Record observed visual evidence as passed or needs_changes. Stale media/targets/version are rejected; this never regenerates media."""
+
+        def save():
+            app.state.creation.feedback(project_id, episode_id)
+            return save_review(app.state.store, episode_id, shot_id, request)
+
+        return await invoke(save)
+
+    @server.tool(annotations=WRITE)
+    async def rerun_production_shots(
+        project_id: str, episode_id: str, request: RerunProduction
+    ) -> CallToolResult:
+        """Rerun explicitly selected shots only with user authorization (confirm=true). Reuses existing production protections and preserves old media. Keep UUID for retries."""
+
+        async def rerun():
+            episode = app.state.creation.rerun(project_id, episode_id, request)
+            return {
+                "episode_id": episode_id,
+                "status": episode["status"],
+                "version": episode["version"],
+            }
+
+        return await invoke(rerun)
 
     return server

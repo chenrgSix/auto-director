@@ -122,6 +122,14 @@ async def test_real_provider_serializes_schema_and_uses_existing_repair_budget(
     def handle(request):
         calls.append(json.loads(request.content))
         output = {**prompts, "action_beats": beats()}
+        output["visual_continuity"] = {
+            "scene_id": "room",
+            "visible_character_ids": [],
+            "reference_roles": ["environment"],
+            "framing": "insert",
+            "state_in": {"cup.position": "table"},
+            "state_out": {"cup.position": "raised"},
+        }
         if len(calls) == 1 or not correct_on_retry:
             output["action_beats"][1]["end"] = 6
         return httpx.Response(200, json={"choices": [{"message": {"content": json.dumps(output)}}]})

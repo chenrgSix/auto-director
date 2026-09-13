@@ -15,6 +15,7 @@ from app.creation.mcp import create_mcp
 from app.creation.routes import router as creation_router
 from app.creation.service import CreationService
 from app.db.store import Store
+from app.generation.continuity_routes import router as continuity_router
 from app.generation.engine import RenderEngine
 from app.generation.pipeline import GenerationService
 from app.media.service import Assets
@@ -109,6 +110,7 @@ def create_app(
 
     app.include_router(router)
     app.include_router(creation_router)
+    app.include_router(continuity_router)
     app.state.mcp = create_mcp(app, config)
     app.mount("/mcp", app.state.mcp.streamable_http_app())
     frontend = ROOT / "frontend" / "dist"

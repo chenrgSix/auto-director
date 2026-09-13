@@ -7,7 +7,7 @@ from pydantic import Field, create_model
 
 from app.agents.audio import H3_INSTRUCTION, audio_output, uses_h3_audio
 from app.agents.parameters import constrained_output
-from app.agents.schemas import ShotPlan, ShotPrompts, StrictModel
+from app.agents.schemas import ShotPlan, ShotPrompts, StrictModel, VisualContinuity
 from app.agents.timing import timed_output
 
 # Planning estimates, not provider token limits. Oversized requests use the legacy single call.
@@ -87,8 +87,13 @@ def select_prompt_batch(bible, pending, continuity, specifications, idea, maximu
 
 
 def shot_output(specifications, duration):
+    base = create_model(
+        "ContinuousShotPrompts",
+        __base__=ShotPrompts,
+        visual_continuity=(VisualContinuity, Field()),
+    )
     return timed_output(
-        audio_output(constrained_output(ShotPrompts, specifications), specifications), duration
+        audio_output(constrained_output(base, specifications), specifications), duration
     )
 
 
@@ -97,6 +102,18 @@ def shot_instruction(specifications):
 
 
 SHOT_INSTRUCTION = (
+    "Declare visual_continuity for every shot: stable scene_id, visible_character_ids from the Bible "
+    "(empty for unoccupied environment or object inserts), reference_roles in priority order using "
+    "character:<id>, environment or style, framing, state_in and state_out. The FIRST reference is "
+    "the actual source for a single-reference workflow, so never select an unrelated character. "
+    "Use environment first for an object insert; exclude faces and irrelevant furniture from its "
+    "image prompts. Keep canonical state keys and values identical across shots in the same scene "
+    "until an action changes them: positions, screen directions, prop holders and camera axis. "
+    "Read continuity.scene_states across reverse shots; an offscreen character's state persists. "
+    "Declare intentional_jump with a reason only for a deliberate discontinuity. CONTINUE_FRAME/VIDEO "
+    "reuse the actual preceding frame and require the same scene and framing; use a cut for a new "
+    "viewpoint. Include framing and the relevant state_in/state_out directly in the respective "
+    "image prompts. Do not paste the entire room layout into a close-up or insert. "
     "Act as Shot Agent. Build actionable image/start/end/video/negative prompts. Use the Bible "
     "for stable identity and style. Follow this shot's start_state and end_state; previous "
     "continuity is historical context, not a requirement to repeat the previous scene. Describe "

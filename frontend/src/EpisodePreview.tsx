@@ -1,3 +1,4 @@
+import { ShotContinuity } from './ShotContinuity';
 import { useRef, useState, type FormEvent } from 'react';
 import { Check, Play, Save } from 'lucide-react';
 import { api } from './api';
@@ -42,6 +43,7 @@ function editableShots(episode: Episode): PreviewShotEdit[] {
     end_frame_prompt: shot.preview_prompt_view?.values.end_frame_prompt ?? shot.prompts?.end_frame_prompt ?? '',
     video_prompt: shot.preview_prompt_view?.values.video_prompt ?? shot.prompts?.video_prompt ?? '',
     allow_static_end_frame: shot.prompts?.allow_static_end_frame ?? false,
+    visual_continuity: shot.prompts?.visual_continuity ?? null,
   }));
 }
 
@@ -72,7 +74,7 @@ export function EpisodePreview({ episode, busy, setBusy, refresh, notify }: {
   const issues = previewIssues(base, edits, total);
   const valid = issues.length === 0;
   const needsReview = base.script_review?.status === 'needs_attention';
-  const canStart = valid && (!needsReview || reviewAccepted);
+  const canStart = valid && (!needsReview || reviewAccepted) && (dirty || base.continuity_report?.valid !== false);
   const invalidField = (field: keyof PreviewShotEdit) => issues.some(issue => issue.index === selected && issue.field === field);
   const edit = edits[selected];
   const shot = base.shots[selected];
@@ -118,6 +120,7 @@ export function EpisodePreview({ episode, busy, setBusy, refresh, notify }: {
     <p className="muted preview-note">当前是文字分镜预览，尚未生成图片或视频。提示词会结合视觉设定和实际连续帧使用；修改时长后，请同步检查动作是否适合新的节奏。</p>
     <ScriptReviewNotice review={base.script_review} selectShot={setSelected} busy={busy} />
     {error && <ErrorNotice>{error}</ErrorNotice>}
+    {base.continuity_report && <div className="notice"><strong>镜头连续性预检</strong>{base.continuity_report.issues.map((issue, index) => <p key={index}>第 {issue.shot_index + 1} 镜：{issue.message}</p>)}{!!base.continuity_report.warnings.length && <details><summary>参考素材与旧镜头提示 · {base.continuity_report.warnings.length}</summary>{base.continuity_report.warnings.map((issue, index) => <p key={index}>第 {issue.shot_index + 1} 镜：{issue.message}</p>)}</details>}<small>这是已保存分镜的检查结果；修改并保存后会更新。规则通过后仍需复核实际画面。</small></div>}
     {!!issues.length && <div className="notice preview-validation" role="alert"><strong>开始前请处理以下问题</strong><ul>{issues.map((issue, index) => <li key={index}>{issue.index == null ? issue.message : <button className="text-button" type="button" onClick={() => setSelected(issue.index!)}>{issue.message} 查看此镜</button>}</li>)}</ul></div>}
     {stale && <div className="notice">分镜已在其他页面更新。当前编辑仍保留，请重新载入后确认。<button disabled={busy} onClick={reload}>放弃本页修改并载入最新分镜</button></div>}
     <form onSubmit={submit}>
@@ -126,6 +129,7 @@ export function EpisodePreview({ episode, busy, setBusy, refresh, notify }: {
           <div className="fields two"><div className="field"><label htmlFor="preview-title">镜头标题</label><input id="preview-title" value={edit.title} required maxLength={200} aria-invalid={invalidField('title')} disabled={busy} onChange={event => change({ title: event.target.value })} /></div><div className="field"><label htmlFor="preview-duration">镜头时长（秒）</label><input id="preview-duration" type="number" min={preview.min_duration} max={preview.max_duration} step="0.01" required value={Number.isFinite(edit.duration) ? edit.duration : ''} aria-invalid={invalidField('duration')} disabled={busy || preview.fixed_duration != null} onChange={event => change({ duration: event.target.value === '' ? NaN : Number(event.target.value) })} /></div></div>
           <div className="preview-direction"><p><strong>画面动作</strong>{shot.action}</p><p><strong>镜头语言</strong>{shot.camera}</p><small>这是当前剧本的镜头设计。调整画面或运镜，请修改下方提示词。</small></div>
           <div className="preview-direction"><strong>镜内动作节奏</strong>{timing ? <ol aria-label="镜内动作时间线">{timing.beats.map((beat, index) => <li key={index}><strong>{beat.start}–{beat.end} 秒</strong> {beat.action}</li>)}</ol> : <p>当前未单独分段。短镜头可只写一个清晰动作；已有提示词保持原样。</p>}<small>4 秒以上的新分镜按动作需要分段。可在下方视频提示词末尾修改时间和动作；调整时长会同步缩放已有时间段。时间是生成指引，实际动作节奏取决于视频模型。</small></div>
+          <ShotContinuity episode={base} value={edit.visual_continuity} disabled={busy} onChange={visual_continuity => change({ visual_continuity })} />
           {fields.map(({ field, label }) => <div className="field" key={field}><label htmlFor={`preview-${field}`}>{label}</label><textarea id={`preview-${field}`} value={edit[field]} required maxLength={6000} rows={5} aria-invalid={invalidField(field)} disabled={busy || !!shot.preview_prompt_view?.locked[field]} onChange={event => change({ [field]: event.target.value })} />{shot.preview_prompt_view?.locked[field] && <small>{shot.preview_prompt_view.locked[field]}</small>}{shot.preview_prompt_view?.hints?.[field] && <small>{shot.preview_prompt_view.hints[field]}</small>}</div>)}
           {preview.capability === 'FIRST_LAST_TO_VIDEO' && <label className="check"><input type="checkbox" checked={edit.allow_static_end_frame} disabled={busy} onChange={event => change({ allow_static_end_frame: event.target.checked })} />允许静止首尾帧（仅用于有意定格的镜头）</label>}
           {shot.prompts?.narration_text && <div className="preview-extra"><strong>旁白脚本参考</strong><p>{shot.prompts.narration_text}</p><small>支持原生声音的工作流根据视频提示词生成台词；实际使用的内容以可编辑视频提示词为准。旧脚本不会自动补声。</small></div>}

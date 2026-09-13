@@ -1,5 +1,19 @@
 # API 与工作流契约
 
+## C57 镜头参考与衔接复核
+
+`ShotPrompts.visual_continuity` 新增可选结构化契约，字段及语义见 [镜头连续性](SHOT_CONTINUITY.md)。新 API 模型输出必须提供；旧包可读，只有唯一角色/明确稳定角色 ID 时允许推导旧单参考选择，多角色歧义返回 `SHOT_REFERENCE_REQUIRED`。`PreviewShotUpdate.visual_continuity` 可编辑，省略保持原值；保存可保留待修的跨镜头矛盾，批准和直接制作在任何素材提交前校验并返回具体镜号。`continuity_report` 包含 issues/warnings/selections；能力不足不伪装为完整参考支持。`reference_selection` 记录选中首帧的实际作业和有效素材绑定，或前镜真实尾帧来源。
+
+普通 API 与创作包共享以下复核端点：
+
+- `GET /episodes/{episode_id}/shots/{shot_id}/continuity-review`：实际相邻素材、目标、带标签的 frames、version/review_key、既有结论。
+- `GET .../continuity-review/frames/{index}?key=...`：按来源校验的 JPEG 采样；旧 key 返回 409，不把新素材显示成旧复核依据。
+- `POST .../continuity-review`：`{request_id, expected_version, review_key, verdict: passed|needs_changes, notes}`。必须记录观察依据；版本、前镜、当前媒体或目标变化返回 `REVIEW_STALE`。重复相同请求不推进版本，UUID 内容冲突返回 409；不生成或更改素材。
+
+镜头 `continuity_review` / `continuity_review_history` 保留外部视觉结论；查询的 `continuity_review_status` 为 passed/needs_changes/stale，未记录为 pending。结论绑定当前镜头与前镜的素材/目标，重排、重跑或改目标后旧结论失效。此结论不改写模型 QA 历史，视频采样不能证明音频或完整运动质量。
+
+新增 MCP：`inspect_shot_continuity` 返回相同来源和实际图像；`record_shot_continuity_review` 复用写入契约；`rerun_production_shots` 要求项目归属、显式 shot_ids、scope=video|keyframes、expected_version、request_id、confirm=true。复用已有局部重跑/连续链失效/UNKNOWN 保护；重复 UUID 不重复排队。剧情和参考契约调整仍保存创作包新版本。
+
 ## C56 完整拼接与实际时长
 
 `target_duration` 与 `shots[].duration` 继续用于规划/预览和工作流输入，不是导出裁切点。有效模型视频即使短于参考时长也可使用；损坏或没有有效画面的媒体仍拒绝。导出包含各启用片段的完整视频及原有声音，`final_duration` 以 ffprobe 实测为准，允许偏离参考总时长。

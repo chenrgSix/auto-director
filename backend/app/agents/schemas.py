@@ -76,7 +76,38 @@ class VisualBible(StrictModel):
     motion_strength: float = Field(ge=0, le=1)
 
 
+StateText = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=300)]
+ReferenceRole = Annotated[
+    str, StringConstraints(pattern=r"^(character:[a-zA-Z0-9_-]{1,64}|environment|style)$")
+]
+
+
+class VisualContinuity(StrictModel):
+    scene_id: str = Field(pattern=r"^[a-zA-Z0-9_-]{1,64}$")
+    visible_character_ids: list[str] = Field(max_length=10)
+    reference_roles: list[ReferenceRole] = Field(min_length=1, max_length=12)
+    framing: Literal["wide", "medium", "close_up", "insert"]
+    state_in: dict[StateText, StateText] = Field(min_length=1, max_length=40)
+    state_out: dict[StateText, StateText] = Field(min_length=1, max_length=40)
+    intentional_jump: str = Field(default="", max_length=1000)
+
+    @model_validator(mode="after")
+    def unique_selection(self):
+        if len(set(self.visible_character_ids)) != len(self.visible_character_ids):
+            raise ValueError("出场角色不能重复")
+        if len(set(self.reference_roles)) != len(self.reference_roles):
+            raise ValueError("参考角色不能重复")
+        selected = {role[10:] for role in self.reference_roles if role.startswith("character:")}
+        if selected - set(self.visible_character_ids):
+            raise ValueError("角色参考必须属于本镜出场角色；无人插入镜头使用 environment 或 style")
+        return self
+
+
 class ShotPrompts(StrictModel):
+    visual_continuity: VisualContinuity | None = Field(
+        default=None,
+        description="Explicit shot references and canonical scene state. Required for new creative output; null is legacy compatibility only.",
+    )
     ai_parameters: dict[str, dict[str, Any]] = Field(default_factory=dict)
     allow_static_end_frame: bool = Field(
         default=False,

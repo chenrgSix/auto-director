@@ -13,8 +13,10 @@ from app.agents.schemas import ShotPlan, ShotPrompts, VisualBible
 from app.agents.timing import read_timing
 from app.core.errors import AppError
 from app.creation.schemas import CreationPackage
+from app.generation.continuity import continuity_report, require_continuity
 from app.generation.parameters import ai_parameters
 from app.generation.preview import rebind_story
+from app.generation.schemas import EpisodeRerun
 
 
 def digest(value):
@@ -193,6 +195,8 @@ class CreationService:
                 "镜头 index 从 0 连续排列；id 在版本间保持稳定且不重复。",
                 "总时长必须与 brief.target_duration 一致；单镜时长保留最多两位小数。",
                 "首镜不能延续不存在的前镜；画面提示词只描述本镜。",
+                "新镜头填写 prompts.visual_continuity：scene_id、出场角色 ID、有序 reference_roles、景别及 state_in/state_out；第一项是单参考工作流的实际输入。",
+                "参考用 character:<Bible ID>、environment 或 style；无人道具插入使用 environment。状态键和值在同场景跨反打复用；仅有意跳转时填写 intentional_jump 原因。",
                 "完整包须包含 title、logline、bible 和每镜 prompts；草稿可缺项。",
                 "ai_parameters 只填写导出的 AI owner 字段，prompt 由阶段提示词提供。",
                 "H3 声音格式由 audio_prompt_format 明确指定；视频提示词是实际声音执行来源。",
@@ -326,6 +330,7 @@ class CreationService:
             rebind_story(episode, *profiles)
         except AppError as exc:
             raise AppError("PACKAGE_INVALID", exc.message, exc.details, status=422) from exc
+        require_continuity(episode, profiles[0])
         return episode
 
     def validate(self, project_id, revision=None):
@@ -334,7 +339,8 @@ class CreationService:
         constraints_hash = None
         try:
             constraints_hash = digest(self._constraints(document))
-            self._snapshot(document)
+            episode = self._snapshot(document)
+            report = continuity_report(episode, self._profiles(document)[1][0])
             issues = []
         except AppError as exc:
             issues = [exc.as_dict()]
@@ -343,6 +349,7 @@ class CreationService:
         return {
             "valid": not issues,
             "issues": issues,
+            "warnings": report["warnings"] if not issues else [],
             "revision": saved["revision"],
             "content_hash": saved["content_hash"],
             "constraints_hash": constraints_hash,
@@ -411,13 +418,14 @@ class CreationService:
         }
 
     def feedback(self, project_id, episode_id):
-        episode = self.store.get("episode", episode_id)
+        episode = self.generation.detail(episode_id)
         if (episode.get("creation_source") or {}).get("project_id") != project_id:
             raise AppError("NOT_FOUND", "此制作不属于当前创作项目", status=404)
         return {
             "episode_id": episode_id,
             "version": episode["version"],
             "status": episode["status"],
+            "continuity_report": episode.get("continuity_report"),
             "source": episode["creation_source"],
             "error": episode["error"],
             "final_video_asset_id": episode["final_video_asset_id"],
@@ -437,6 +445,9 @@ class CreationService:
                         "video_asset_id",
                         "qa",
                         "review_notes",
+                        "reference_selection",
+                        "continuity_review_status",
+                        "actual_end_frame_asset_id",
                     )
                 }
                 for s in episode["shots"]
@@ -450,6 +461,14 @@ class CreationService:
                 for j in self.store.list("job", episode_id)
             ],
         }
+
+    def rerun(self, project_id, episode_id, request):
+        self.feedback(project_id, episode_id)
+        return self.generation.rerun(
+            episode_id,
+            EpisodeRerun.model_validate(request.model_dump(exclude={"request_id", "confirm"})),
+            request_id=str(request.request_id),
+        )
 
     async def cancel(self, project_id, episode_id):
         self.feedback(project_id, episode_id)

@@ -16,6 +16,8 @@ from app.core.limits import MAX_EPISODE_SHOTS
 from app.creation.provider import ExternalCreationProvider
 from app.db.store import Store, now, uid
 from app.generation.async_reviews import AdvisoryReviews, visual_qa_enabled
+from app.generation.continuity import continuity_report, reference_description, require_continuity
+from app.generation.continuity_review import current_review
 from app.generation.engine import RenderEngine
 from app.generation.parameters import (
     ai_parameters,
@@ -409,6 +411,24 @@ class GenerationService:
                 refresh_timing_limits(episode, profiles[1])
                 for shot in episode["shots"]:
                     shot["preview_prompt_view"] = prompt_view(episode, shot, *profiles[:2])
+        if episode["status"] == "AWAITING_REVIEW" and episode.get("bible") and episode.get("shots"):
+            try:
+                episode["continuity_report"] = continuity_report(
+                    episode, self.preview_profiles(episode)[0]
+                )
+            except AppError:
+                pass  # Historical media stays readable when its workflow has been removed.
+        previous = None
+        for shot in episode["shots"]:
+            if shot.get("continuity_review"):
+                shot["continuity_review_status"] = current_review(episode, shot, previous)
+                verdict = shot["continuity_review_status"]["status"]
+                if verdict == "passed":
+                    shot["needs_review"] = False
+                elif verdict in {"needs_changes", "stale"}:
+                    shot["needs_review"] = True
+            if shot.get("enabled", True):
+                previous = shot
         return episode
 
     def has_current_jobs(self, episode):
@@ -506,6 +526,7 @@ class GenerationService:
                 require_current_preview(episode, profiles)
                 validate_timing(episode, profiles[1])
                 validate_review_prompts(episode, *profiles[:2])
+                require_continuity(episode, profiles[0])
                 require_review_acknowledgement(episode, accept_script_review)
                 if episode.get("creation_source"):
                     self.validate_external_prompts(episode, profiles)
@@ -768,7 +789,15 @@ class GenerationService:
             EpisodeRerun(expected_version=episode["version"], scope=scope, shot_ids=[shot_id]),
         )
 
-    def rerun(self, id: str, request: EpisodeRerun, *, optimization=None) -> dict:
+    def rerun(self, id: str, request: EpisodeRerun, *, optimization=None, request_id=None) -> dict:
+        payload = request.model_dump(mode="json")
+        if request_id:
+            current = self.store.get("episode", id)
+            receipt = current.get("rerun_requests", {}).get(request_id)
+            if receipt:
+                if receipt != payload:
+                    raise AppError("IDEMPOTENCY_CONFLICT", "请求编号已用于不同重跑内容", status=409)
+                return current
         if id in self.busy:
             raise AppError("CONFLICT", "请先等待或取消当前生成", status=409)
         if self.engine.unresolved():
@@ -783,6 +812,8 @@ class GenerationService:
                 raise AppError(
                     "CREATION_PACKAGE_REQUIRED", "请在创作项目中修改提示词并提交新版本", status=409
                 )
+            if request_id:
+                current.setdefault("rerun_requests", {})[request_id] = payload
             if current["version"] != request.expected_version:
                 raise AppError("CONFLICT", "短片已更新，请刷新后重新选择重跑范围", status=409)
             if current["status"] in ACTIVE:
@@ -1116,10 +1147,12 @@ class GenerationService:
                     episode, episode["plan"], ai_parameters(reference_profile)
                 )
                 episode = self.stage(id, "BUILDING_BIBLE", bible=bible.model_dump(mode="json"))
-            if preview_only:
+            if preview_only or any(s["enabled"] and not s.get("prompts") for s in episode["shots"]):
                 self.stage(id, "PREPARING_PROMPTS")
                 await prepare_prompts(self, id, agents, (image, video, reference_profile))
                 self.check_cancel(id)
+                episode = self.store.get("episode", id)
+            if preview_only:
                 self.store.update(
                     "episode",
                     id,
@@ -1127,6 +1160,7 @@ class GenerationService:
                 )
                 preview_complete = True
                 return
+            require_continuity(episode, image)
             visual_qa = visual_qa_enabled(episode, self.settings)
             if episode["qa_enabled"] and not visual_qa:
                 self.warn(
@@ -1172,7 +1206,9 @@ class GenerationService:
                     type,
                     {
                         **budget,
-                        "prompt": anchored_prompt(episode["bible"], prompt, {}),
+                        "prompt": anchored_prompt(
+                            episode["bible"], reference_description(key, prompt), {}
+                        ),
                         "negative": episode["bible"].get(
                             "negative_prompt", "text, watermark, artifacts"
                         ),
@@ -1329,7 +1365,15 @@ class GenerationService:
                 seed_offset=(shot.get("seed_offset", 0) + 10000) % 2147483648,
                 error=None,
             )
-        ref_inputs = ContinuityManager.references(episode)
+        require_continuity(self.store.get("episode", id), image)
+        ref_inputs = ContinuityManager.references(
+            episode,
+            shot,
+            image,
+            (previous or {}).get("actual_end_frame_asset_id")
+            if shot["transition_from_previous"] in CONTINUOUS
+            else None,
+        )
         video_inputs = ContinuityManager.video_reference(previous, video)
         if previous and shot["transition_from_previous"] == "CONTINUE_VIDEO" and not video_inputs:
             self.warn(id, "视频工作流不支持 reference_video，CONTINUE_VIDEO 已降级为帧连续。")
@@ -1382,6 +1426,10 @@ class GenerationService:
                             id,
                             sid,
                             start_frame_asset_id=previous["actual_end_frame_asset_id"],
+                            reference_selection={
+                                "source": "previous_actual_end",
+                                "bindings": {"start_frame": previous["actual_end_frame_asset_id"]},
+                            },
                             status="START_FRAME_READY",
                         )
                     else:
@@ -1409,6 +1457,7 @@ class GenerationService:
                                             prompts["start_frame_prompt"],
                                             continuity,
                                             stage="start_frame",
+                                            visual_continuity=prompts.get("visual_continuity"),
                                         ),
                                         shot,
                                         "start_frame",
@@ -1433,8 +1482,26 @@ class GenerationService:
                                 score = candidate_qa.score()
                             candidate_results.append((score, result["id"]))
                         best = max(candidate_results, key=lambda item: item[0])[1]
+                        source_job = next(
+                            j
+                            for j in self.store.list("job", id)
+                            if best in j.get("output_asset_ids", [])
+                        )
                         shot = self.update_shot(
-                            id, sid, start_frame_asset_id=best, status="START_FRAME_READY"
+                            id,
+                            sid,
+                            start_frame_asset_id=best,
+                            status="START_FRAME_READY",
+                            reference_selection={
+                                "source": "render_job",
+                                "job_id": source_job["id"],
+                                "workflow_id": source_job["workflow_id"],
+                                "bindings": {
+                                    role: asset
+                                    for role, asset in source_job["asset_bindings"].items()
+                                    if role in source_job["profile_snapshot"]["bindings"]
+                                },
+                            },
                         )
                 if needs_end and not shot["end_frame_asset_id"]:
                     self.update_shot(id, sid, status="GENERATING_END_FRAME")
@@ -1452,6 +1519,7 @@ class GenerationService:
                                     prompts["end_frame_prompt"],
                                     {},
                                     stage="end_frame",
+                                    visual_continuity=prompts.get("visual_continuity"),
                                 ),
                                 shot,
                                 "end_frame",
@@ -1708,6 +1776,7 @@ class GenerationService:
                 shot["prompts"]["video_prompt"],
                 shot["prompts"]["continuity_state"],
                 stage="video",
+                visual_continuity=shot["prompts"].get("visual_continuity"),
             ),
         }
         inputs = {

@@ -33,7 +33,7 @@ def test_official_client_discovers_tools_and_roundtrips_web_changes(system):
         async with connect(app) as session:
             tools = await session.list_tools()
             by_name = {tool.name: tool for tool in tools.tools}
-            assert len(by_name) == 12
+            assert len(by_name) == 15
             assert by_name["get_creation_context"].annotations.readOnlyHint
             assert not by_name["confirm_production"].annotations.readOnlyHint
             created = await call(

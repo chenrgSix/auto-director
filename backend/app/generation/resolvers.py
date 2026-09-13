@@ -1,25 +1,46 @@
 """Real-media ownership and continuity resolution, never template placeholder paths."""
 
 from app.core.errors import AppError
+from app.generation.continuity import reference_roles, reference_slots
 from app.workflows.ownership import is_asset_role, required_asset_roles
 
 
 class ContinuityManager:
     @staticmethod
-    def references(episode: dict, start_frame: str | None = None) -> dict:
+    def references(
+        episode: dict, shot: dict, profile: dict, start_frame: str | None = None
+    ) -> dict:
         references = episode["references"]
-        character = next(
-            (asset for role, asset in references.items() if role.startswith("character:")),
-            references.get("environment"),
-        )
-        values = {
-            "reference_image": start_frame or character,
-            "style_reference": references.get("style"),
-        }
-        values.update(
-            {f"reference_image_{i + 1}": asset for i, asset in enumerate(references.values())}
-        )
-        return {role: asset for role, asset in values.items() if asset}
+        slots = reference_slots(profile)
+        if not slots and "style_reference" not in profile["bindings"]:
+            return {}
+        try:
+            roles = reference_roles(episode.get("bible"), shot)
+        except AppError as exc:
+            if exc.code != "SHOT_REFERENCE_REQUIRED" or not shot.get("start_frame_asset_id"):
+                raise
+            # Video-only retries of legacy shots already have an unambiguous visual anchor.
+            # A fresh start-frame render still requires an explicit character selection.
+            roles = []
+            start_frame = start_frame or shot["start_frame_asset_id"]
+        assets = []
+        if start_frame:
+            assets.append(start_frame)
+        for role in roles:
+            if len(assets) >= len(slots):
+                break
+            if role not in references:
+                raise AppError(
+                    "SHOT_REFERENCE_MISSING",
+                    "本镜参考素材尚未生成",
+                    {"shot_id": shot["id"], "role": role},
+                    422,
+                )
+            assets.append(references[role])
+        values = dict(zip(slots, assets, strict=False))
+        if "style_reference" in profile["bindings"] and "style" in roles:
+            values["style_reference"] = references["style"]
+        return values
 
     @staticmethod
     def video_reference(previous: dict | None, profile: dict) -> dict:

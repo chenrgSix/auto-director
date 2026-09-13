@@ -37,9 +37,10 @@ export type ScriptReview = {
 };
 export type QA = { stage: string; character_consistency: number; scene_consistency: number; style_consistency: number; action_accuracy: number; transition_quality: number; artifact_score: number; explanation: string; retry_scope: string | null; disposition?: 'warning' | 'passed' | 'retry' };
 export type Shot = {
+  continuity_review_status?: { status: string; notes?: string };
   id: string; title: string; index: number; duration: number; actual_duration?: number; enabled: boolean; status: string; action: string; camera: string;
   transition_from_previous: string; start_frame_asset_id: string | null; end_frame_asset_id: string | null; video_asset_id: string | null;
-  prompts: { allow_static_end_frame?: boolean; start_frame_prompt: string; end_frame_prompt: string; video_prompt: string; negative_prompt: string; narration_text?: string; camera_motion?: string; motion_strength?: number; ai_parameters?: Record<string, Record<string, Value>> } | null;
+  prompts: { visual_continuity?: VisualContinuity | null; allow_static_end_frame?: boolean; start_frame_prompt: string; end_frame_prompt: string; video_prompt: string; negative_prompt: string; narration_text?: string; camera_motion?: string; motion_strength?: number; ai_parameters?: Record<string, Record<string, Value>> } | null;
   preview_prompt_view?: { values: Record<PreviewPromptField, string>; locked: Partial<Record<PreviewPromptField, string>>; hints?: Partial<Record<PreviewPromptField, string>> };
   visual_review?: { status: 'pending' | 'running' | 'completed' | 'failed' | 'skipped'; reason?: string; error?: Problem };
   error: Problem | null; qa: QA[]; needs_review?: boolean; review_notes?: ReviewNote[];
@@ -51,8 +52,10 @@ export type PromptOptimizationProposal = {
   original_prompts: Record<PreviewPromptField, string>; locked_fields: Partial<Record<PreviewPromptField, string>>;
   frames: ('start_frame' | 'end_frame')[]; affected_shot_ids: string[];
 };
-export type PreviewShotEdit = Pick<Shot, 'id' | 'title' | 'duration'> & Record<PreviewPromptField, string> & { allow_static_end_frame: boolean };
+export type VisualContinuity = { scene_id: string; visible_character_ids: string[]; reference_roles: string[]; framing: 'wide' | 'medium' | 'close_up' | 'insert'; state_in: Record<string, string>; state_out: Record<string, string>; intentional_jump: string };
+export type PreviewShotEdit = Pick<Shot, 'id' | 'title' | 'duration'> & Record<PreviewPromptField, string> & { allow_static_end_frame: boolean; visual_continuity: VisualContinuity | null };
 export type Episode = {
+  continuity_report?: { valid: boolean; issues: { shot_index: number; message: string }[]; warnings: { shot_index: number; message: string }[]; selections: { shot_id: string; roles: string[]; capacity: number; inherited: boolean }[] };
   creation_source?: { project_id: string; revision: number; content_hash: string; constraints_hash: string };
   qa_enabled?: boolean;
   creation_visual_review?: 'manual' | 'model';

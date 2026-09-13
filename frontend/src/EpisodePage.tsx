@@ -11,6 +11,7 @@ import { EpisodeQuality } from './EpisodeQuality';
 import { EpisodeQAPolicy } from './EpisodeQAPolicy';
 import { PromptOptimization } from './PromptOptimization';
 import { PromptPreparation } from './PromptPreparation';
+import { ContinuityReview } from './ContinuityReview';
 
 export function EpisodesPage({ notify }: { notify: Notify }) {
   const resource = useResource<Episode[]>('/episodes', 4000);
@@ -98,6 +99,7 @@ export function EpisodePage({ id, notify }: { id: string; notify: Notify }) {
           {shot.error && <ErrorNotice>{shot.error.message}</ErrorNotice>}
           {shot.needs_review && <details className="notice shot-review"><summary>画面待复核 · 查看问题</summary><span>视频已保留，可先播放，再决定是否重跑。</span>{(shot.review_notes ?? []).map((note, index) => <p key={index}><strong>{qaStageLabel(note.stage)}</strong> · {note.message}</p>)}</details>}
         </div>
+        <ContinuityReview key={`${shot.id}:continuity`} episode={episode} shot={shot} refresh={resource.refresh} />
         <details className="panel details-panel"><summary>分镜说明与首尾帧</summary><p className="shot-description">{shot.action}</p><small className="muted">{shot.camera}</small><div className="keyframe-grid"><Media id={shot.start_frame_asset_id} kind="image" label="首帧 / START" />{shot.end_frame_asset_id && <Media id={shot.end_frame_asset_id} kind="image" label="尾帧 / END" />}</div></details>
         {shot.prompts && <details className="panel details-panel"><summary>镜头提示词与质量记录</summary><label>视频提示词</label><pre>{shot.prompts.video_prompt}</pre><label>负面约束</label><pre>{shot.prompts.negative_prompt}</pre>{shot.qa.map((qa, index) => <div className="qa-result" key={index}><strong>{qaStageLabel(qa.stage)} · {qa.disposition === 'warning' ? '待复核 · 已保留结果' : qa.retry_scope ? '未通过 · 重试记录' : '通过阈值'}</strong><span>角色 {Math.round(qa.character_consistency * 100)} · 场景 {Math.round(qa.scene_consistency * 100)} · 动作 {Math.round(qa.action_accuracy * 100)}</span><p>{qa.explanation}</p></div>)}</details>}
         {!episode.creation_source && shot.enabled && shot.video_asset_id && shot.prompts && <PromptOptimization key={shot.id} episode={episode} shot={shot} locked={settingsLocked} busy={busy} setBusy={setBusy} refresh={() => { resource.refresh(); jobs.refresh(); }} notify={notify} />}

@@ -258,4 +258,4 @@ def test_invalid_agent_parameters_fail_episode_before_shot_submission(system, in
     episode = wait_episode(client, id)
     assert episode["status"] == "FAILED" and episode["error"]["code"] == "LLM_INVALID_OUTPUT"
     jobs = app.state.store.list("job", id)
-    assert jobs and all(j["type"].endswith("_REFERENCE") for j in jobs)
+    assert not jobs  # C57 prepares all shot contracts before spending on any reference image.
