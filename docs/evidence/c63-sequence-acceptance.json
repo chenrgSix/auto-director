@@ -1,0 +1,104 @@
+{
+  "mode": "reference_sequence",
+  "episode_id": "e20cb281-0c52-5e51-a979-b01da2a68001",
+  "comfy_prompt_id": "33f967ae-03b9-4c38-bbcd-24b947657f1d",
+  "created_at": "2026-09-13T20:04:08.383066+00:00",
+  "completed_at": "2026-09-13T20:07:41.974589+00:00",
+  "dimensions": [
+    896,
+    512
+  ],
+  "fps": 24,
+  "segment_frames": [
+    73,
+    85
+  ],
+  "total_frames": 158,
+  "actual_duration": 6.584,
+  "metrics": {
+    "llm_calls": 0,
+    "prompt_tokens": 0,
+    "completion_tokens": 0,
+    "render_jobs": 1,
+    "image_generations": 0,
+    "video_generations": 1,
+    "failed_jobs": 0
+  },
+  "reference_counts": [
+    4,
+    4
+  ],
+  "continuity_guide_frames": 22,
+  "audio_present": true,
+  "full_ffmpeg_decode": "passed",
+  "visual_review": "Boundary frames 70-75 show the same owner, bowl and scene without a hard cut. Later segment releases and reaches again; camera drifts despite static instruction. Technical integration passed, visual action adherence partial. Audio not listened to.",
+  "browser_fixture": {
+    "episode_id": "9a33c4b9-99bc-41a6-a50b-1341cd38da96",
+    "viewport": [
+      1280,
+      720
+    ],
+    "horizontal_overflow": false,
+    "console_errors": [],
+    "checks": [
+      "normal-mode workflow selection",
+      "preview hides endpoint prompts",
+      "split and rejoin groups",
+      "reference approval directly renders video",
+      "distinct segment players and complete final",
+      "select second segment expands rerun to whole group",
+      "old final retained",
+      "upload profile JSON preserves capability and bindings"
+    ]
+  },
+  "full_decode_asset_count": 4,
+  "installed_service": {
+    "old_record_count": 2001,
+    "old_asset_file_count": 1303,
+    "changed_old_records": [],
+    "changed_old_asset_files": [],
+    "added_record_ids": [
+      "f76b3afb-74a2-49e9-86f3-05ff5d491532"
+    ],
+    "new_workflow_id": "f76b3afb-74a2-49e9-86f3-05ff5d491532",
+    "dependency_validation": {
+      "valid": true,
+      "issues": [],
+      "checked_classes": 8
+    }
+  },
+  "mcp_real_review": {
+    "returned_frames": 8,
+    "verdict": "needs_changes"
+  },
+  "installed_mcp": {
+    "server": {
+      "name": "AutoDirector",
+      "title": null,
+      "version": "1.30.0",
+      "websiteUrl": null,
+      "icons": null
+    },
+    "protocol_version": "2025-11-25",
+    "tool_count": 17,
+    "tools": [
+      "list_creation_projects",
+      "create_creation_project",
+      "get_creation_context",
+      "read_creation_package",
+      "save_creation_package",
+      "validate_creation_package",
+      "submit_creation_package",
+      "list_creations_in_production",
+      "confirm_production",
+      "get_production_feedback",
+      "cancel_production",
+      "inspect_production_media",
+      "inspect_shot_continuity",
+      "record_shot_continuity_review",
+      "rerun_production_shots",
+      "inspect_preproduction_images",
+      "decide_preproduction_images"
+    ]
+  }
+}
