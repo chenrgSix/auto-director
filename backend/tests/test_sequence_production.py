@@ -409,3 +409,36 @@ def test_failed_report_continuation_does_not_resubmit_remote_group(sequence_syst
     assert client.post(f"/api/v1/episodes/{episode['id']}/generate").status_code == 202
     assert wait_episode(client, episode["id"])["status"] == "FAILED"
     assert len(comfy.prompts) == before
+
+
+def test_new_app_start_recovers_group_from_persisted_prompt(sequence_system):
+    client, app, comfy, _ = sequence_system
+    _, episode = prepare(sequence_system)
+    approve(client, episode)
+    completed = wait_episode(client, episode["id"])
+    assert completed["status"] == "COMPLETED"
+    job = next(
+        j for j in app.state.store.list("job", episode["id"]) if j["type"] == "SEQUENCE_VIDEO"
+    )
+    # Model a crash after remote acceptance, before any output is bound locally.
+    client.portal.call(app.state.generation.stop)
+    app.state.store.update("job", job["id"], {"status": "RUNNING", "output_asset_ids": []})
+    for shot in completed["shots"]:
+        shot.update(status="RENDERING_VIDEO", video_asset_id=None)
+    app.state.store.update(
+        "episode",
+        episode["id"],
+        {"status": "RENDERING_VIDEO", "shots": completed["shots"], "final_video_asset_id": None},
+    )
+    before = len(comfy.prompts)
+    restarted = create_app(
+        app.state.config, client_factory=comfy.client, provider_factory=SequenceProvider
+    )
+    with TestClient(restarted) as recovered:
+        original = restarted.state.engine.unresolved()
+        assert len(original) == 1 and original[0]["comfy_prompt_id"] == job["comfy_prompt_id"]
+        assert recovered.post(f"/api/v1/episodes/{episode['id']}/generate").status_code == 202
+        final = wait_episode(recovered, episode["id"])
+        assert final["status"] == "COMPLETED", final.get("error")
+        assert len(comfy.prompts) == before
+        assert len({s["video_asset_id"] for s in final["shots"]}) == 2

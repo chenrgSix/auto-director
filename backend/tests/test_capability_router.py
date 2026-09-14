@@ -1,5 +1,6 @@
 import pytest
 
+from app.core.config import ROOT
 from app.core.errors import AppError
 from app.db.store import Store
 from app.workflows.manager import WorkflowManager
@@ -22,9 +23,12 @@ def test_router_resolves_all_capabilities_and_keeps_explicit_ids(tmp_path):
             if capability == "IMAGE_TO_IMAGE"
             else (image_to_video_graph(base) if capability == "IMAGE_TO_VIDEO" else base)
         )
-        imported = manager.import_workflow(
-            WorkflowImport(name=capability, capability=capability, workflow=graph)
-        )
+        request = WorkflowImport(name=capability, capability=capability, workflow=graph)
+        if capability == "REFERENCE_SEQUENCE_TO_VIDEO":
+            request = WorkflowImport.model_validate_json(
+                (ROOT / "workflow_examples/codex_h3_continuous/continuous.profile.json").read_text()
+            )
+        imported = manager.import_workflow(request)
         manager.set_default(imported["id"])
         assert router.resolve(capability)["id"] == imported["id"]
         assert router.select(capability.media_type)["id"] == imported["id"]
